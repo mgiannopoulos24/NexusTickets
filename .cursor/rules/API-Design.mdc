@@ -1,0 +1,183 @@
+---
+description: REST API design conventions — routes, responses, versioning
+globs: ["backend/internal/handler/**/*.go", "backend/cmd/**/*.go"]
+alwaysApply: false
+---
+
+# REST API Design Rules
+
+## URL Conventions
+- Base path: `/api/v1/`
+- Plural nouns for collections: `/events`, `/bookings`, `/users`
+- Kebab-case for multi-word segments: `/ticket-types`
+- Nested routes only one level deep:
+  - `/events/:id/bookings` ✓
+  - `/events/:id/bookings/:bid/tickets` ✗ (too deep — use `/bookings/:bid`)
+
+## HTTP Method Semantics
+```
+GET    /events              → list (paginated, filterable)
+GET    /events/:id          → single resource
+POST   /events              → create
+PUT    /events/:id          → full replace (rare)
+PATCH  /events/:id          → partial update (preferred)
+DELETE /events/:id          → delete
+POST   /events/:id/publish  → state transition (not PATCH)
+POST   /events/:id/cancel   → state transition
+```
+
+## Route Map (complete)
+```
+# Auth (public)
+POST   /api/v1/auth/register
+POST   /api/v1/auth/login
+POST   /api/v1/auth/refresh
+POST   /api/v1/auth/logout
+
+# Events (public browse)
+GET    /api/v1/events                    ?page&size&category&title&from&to&minPrice&maxPrice&city
+GET    /api/v1/events/:id
+GET    /api/v1/events/recommended        (auth required)
+
+# Events (organizer)
+POST   /api/v1/events                    [organizer+]
+PATCH  /api/v1/events/:id                [organizer, own event]
+DELETE /api/v1/events/:id                [organizer, own event, before bookings]
+POST   /api/v1/events/:id/publish        [organizer, own event]
+POST   /api/v1/events/:id/cancel         [organizer, own event]
+GET    /api/v1/events/:id/bookings       [organizer, own event]
+
+# Ticket Types
+POST   /api/v1/events/:id/ticket-types   [organizer]
+PATCH  /api/v1/events/:id/ticket-types/:tid
+DELETE /api/v1/events/:id/ticket-types/:tid
+
+# Photos
+POST   /api/v1/events/:id/photos         [organizer] multipart/form-data
+DELETE /api/v1/events/:id/photos/:pid
+
+# Bookings
+POST   /api/v1/bookings                  [attendee+]
+GET    /api/v1/bookings/my               [attendee+]
+GET    /api/v1/bookings/:id              [attendee (own) or organizer (event owner)]
+
+# Messaging
+GET    /api/v1/messages/inbox            [auth]
+GET    /api/v1/messages/sent             [auth]
+GET    /api/v1/messages/unread-count     [auth]
+POST   /api/v1/messages                  [auth]
+DELETE /api/v1/messages/:id              [auth, own message]
+GET    /api/v1/messages/events/:id/notify [SSE, auth] — unread notification stream
+
+# Admin
+GET    /api/v1/admin/users               [admin]
+GET    /api/v1/admin/users/:id           [admin]
+PATCH  /api/v1/admin/users/:id/approve   [admin]
+PATCH  /api/v1/admin/users/:id/reject    [admin]
+GET    /api/v1/admin/events/export/xml   [admin]
+GET    /api/v1/admin/events/export/json  [admin]
+
+# User profile
+GET    /api/v1/users/me                  [auth]
+PATCH  /api/v1/users/me                  [auth]
+```
+
+## Response Envelope
+```json
+// Success — single resource
+{ "data": { "id": "...", "title": "..." }, "error": null }
+
+// Success — collection
+{
+  "data": [...],
+  "error": null,
+  "meta": {
+    "page": 1,
+    "page_size": 10,
+    "total": 243,
+    "total_pages": 25
+  }
+}
+
+// Error
+{
+  "data": null,
+  "error": "event is not open for booking",
+  "details": { "field": "validation message" }  // optional, for 422
+}
+```
+
+## HTTP Status Codes
+```
+200 OK              → successful GET, PATCH, DELETE (with body)
+201 Created         → successful POST (resource created)
+204 No Content      → successful DELETE (no body)
+400 Bad Request     → malformed JSON / missing required params
+401 Unauthorized    → missing or invalid JWT
+403 Forbidden       → authenticated but wrong role / not owner
+404 Not Found       → resource doesn't exist
+409 Conflict        → duplicate (username taken, etc.)
+422 Unprocessable   → validation errors (field-level details)
+429 Too Many Requests → rate limit hit
+500 Internal Server Error → unexpected — never leak stack traces
+```
+
+## Filtering & Search Query Params
+```
+GET /api/v1/events
+  ?page=1
+  &size=10
+  &category=Music
+  &title=jazz           (partial match, case-insensitive)
+  &q=free+text+search   (full-text via tsvector)
+  &from=2025-07-01      (ISO 8601 date)
+  &to=2025-12-31
+  &min_price=0
+  &max_price=50
+  &city=Αθήνα
+  &status=published     (default; admin can query others)
+```
+
+## Auth Response
+```json
+// POST /auth/login 200
+{
+  "data": {
+    "access_token": "eyJ...",
+    "refresh_token": "eyJ...",
+    "expires_in": 900,
+    "user": {
+      "id": "...",
+      "username": "...",
+      "role": "organizer",
+      "status": "approved"
+    }
+  },
+  "error": null
+}
+```
+
+## CORS Configuration
+```go
+app.Use(cors.New(cors.Config{
+    AllowOrigins:     "https://yourdomain.com,http://localhost:4200",
+    AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+    AllowHeaders:     "Content-Type,Authorization",
+    AllowCredentials: true,
+    MaxAge:           86400,
+}))
+```
+
+## File Upload Rules
+- Photos: `multipart/form-data`, max 5MB per file, accepted MIME: `image/jpeg`, `image/png`, `image/webp`
+- Store on filesystem or object storage (configurable via env); never in DB as BLOB
+- Return relative URL path in response; frontend constructs full URL from `MEDIA_BASE_URL`
+
+## Streaming Export (Admin)
+```go
+// XML export — stream directly, don't buffer all records
+c.Set("Content-Type", "application/xml; charset=utf-8")
+c.Set("Content-Disposition", `attachment; filename="events.xml"`)
+encoder := xml.NewEncoder(c.Response().BodyWriter())
+// write records in batches of 100
+```

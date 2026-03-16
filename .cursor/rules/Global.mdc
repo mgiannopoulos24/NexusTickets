@@ -1,0 +1,62 @@
+---
+description: Global project rules — apply to all files in the monorepo
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# Project: NexusTickets
+## Stack Overview
+- **Backend**: Go (Fiber v2 + GORM + Wire) → REST API + JWT auth
+- **Database**: PostgreSQL 16 (primary) + Redis 7 (cache / sessions)
+- **Frontend**: React 19 + Vite + Bun + TypeScript + Tailwind CSS v4 + shadcn/ui + Lucide React + React Router v7 + Redux Toolkit + RTK Query
+- **Auth**: JWT (access + refresh tokens), role-based (admin / organizer / attendee / guest)
+
+## Repository Structure
+```
+/
+├── backend/          # Go service
+│   ├── cmd/server/
+│   ├── internal/
+│   │   ├── config/
+│   │   ├── domain/
+│   │   ├── repository/
+│   │   ├── service/
+│   │   ├── handler/
+│   │   ├── middleware/
+│   │   └── wire/
+│   ├── migrations/
+│   └── pkg/
+└── frontend/         # React app
+    ├── src/
+    │   ├── app/           # Redux store, root providers
+    │   ├── features/      # Feature slices (events, bookings, auth, admin, messaging)
+    │   ├── components/    # Shared UI components
+    │   ├── hooks/         # Shared custom hooks
+    │   ├── lib/           # Utilities, API client, helpers
+    │   ├── types/         # Global TypeScript types
+    │   └── routes/        # React Router route definitions
+    └── ...
+```
+
+## Universal Conventions
+- English for all code, comments, commit messages
+- Greek only in UI-facing strings
+- Never commit secrets, credentials, `.env` files
+- All API responses follow `{ data, error, meta }` envelope
+- Dates/times always UTC in storage; format for display on frontend
+- IDs are UUIDs v7 everywhere
+- Feature branch naming: `feat/<scope>/<short-desc>`
+
+## Code Quality Non-Negotiables
+- No `any` type — ever
+- No dead code or commented-out blocks in committed code
+- All errors handled explicitly — no silent swallows
+- Functions have a single responsibility
+- No magic strings — use constants or enums
+
+## Security Baseline
+- Public routes: login, register, `/events` browse, `/events/:id` detail
+- All other routes require authentication + correct role
+- Input validation on every form — never trust data before sending to API
+- XSS prevention: never use `dangerouslySetInnerHTML` with user data
+- HTTPS enforced in production

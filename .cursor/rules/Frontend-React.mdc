@@ -1,0 +1,455 @@
+---
+description: React 19 frontend rules — Vite, Bun, Tailwind v4, shadcn/ui, Lucide React, React Router v7, Redux Toolkit
+globs: ["frontend/**/*.tsx", "frontend/**/*.ts", "frontend/**/*.css"]
+alwaysApply: false
+---
+
+# React Frontend Rules
+
+## Toolchain
+- **Runtime / Package Manager**: Bun
+- **Build Tool**: Vite 8+
+- **React**: 19+
+- **Language**: TypeScript 5+ strict mode
+- **Styling**: Tailwind CSS v4 — no `tailwind.config.js`, CSS-first configuration
+- **UI Components**: shadcn/ui (Radix primitives + Tailwind)
+- **Icons**: Lucide React — always import individually, never the full bundle
+- **Routing**: React Router v7 (framework mode with `createBrowserRouter`)
+- **State**: Redux Toolkit (global/auth state) + RTK Query (server state / API calls)
+- **Forms**: React Hook Form + Zod validation
+
+## Project Structure
+```
+src/
+  app/
+    store.ts              # Redux store configuration
+    hooks.ts              # Typed useAppDispatch, useAppSelector
+  features/
+    auth/
+      authSlice.ts        # JWT, current user, role
+      authApi.ts          # RTK Query endpoints (login, register, refresh)
+      LoginPage.tsx
+      RegisterPage.tsx
+      PendingApprovalPage.tsx
+    events/
+      eventsApi.ts        # RTK Query endpoints
+      eventsSlice.ts      # UI state (filters, pagination)
+      EventsPage.tsx
+      EventDetailPage.tsx
+      EventCard.tsx
+    bookings/
+      bookingsApi.ts
+      MyBookingsPage.tsx
+    organizer/
+      OrganizerEventsPage.tsx
+      CreateEventPage.tsx
+      EditEventPage.tsx
+      EventBookingsPage.tsx
+    messaging/
+      messagingApi.ts
+      messagingSlice.ts
+      InboxPage.tsx
+      SentPage.tsx
+    admin/
+      adminApi.ts
+      UsersPage.tsx
+      UserDetailPage.tsx
+  components/
+    ui/                   # shadcn/ui generated components (never edit manually)
+    layout/
+      Navbar.tsx
+      AppShell.tsx
+    shared/
+      EventCard.tsx
+      Pagination.tsx
+      LoadingSpinner.tsx
+      ErrorMessage.tsx
+      EmptyState.tsx
+      SkeletonList.tsx
+      MapEmbed.tsx        # Leaflet OpenStreetMap
+  hooks/
+    useAuth.ts
+    useUnreadCount.ts
+  lib/
+    api.ts                # Axios base instance with interceptors
+    utils.ts              # cn(), formatDate(), formatCurrency()
+    constants.ts
+  types/
+    api.ts                # ApiResponse<T>, PaginationMeta
+    models.ts             # Event, Booking, User, TicketType, Message
+    enums.ts              # EventStatus, BookingStatus, UserRole etc.
+  routes/
+    index.tsx             # createBrowserRouter
+    ProtectedRoute.tsx    # auth + role guard component
+  main.tsx
+```
+
+## TypeScript Rules
+- `"strict": true` in `tsconfig.json` — no exceptions
+- No `any` — use `unknown` and narrow with type guards
+- All API shapes typed in `src/types/models.ts`
+- Use `satisfies` operator for object literals where possible
+- Enums as `as const` objects:
+```typescript
+// BAD
+enum EventStatus { DRAFT = 'DRAFT' }
+
+// GOOD
+export const EventStatus = {
+  DRAFT: 'DRAFT',
+  PUBLISHED: 'PUBLISHED',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type EventStatus = typeof EventStatus[keyof typeof EventStatus];
+```
+
+## Component Rules
+```tsx
+// ALWAYS functional components with explicit return type
+// ALWAYS named exports (not default exports) for components used in routes
+// Exception: default export required for lazy() — add named export too
+
+// Good component structure
+interface EventCardProps {
+  event: Event;
+  onBook?: (eventId: string) => void;
+}
+
+export function EventCard({ event, onBook }: EventCardProps) {
+  return (
+    <div className="...">
+      ...
+    </div>
+  );
+}
+
+// Lazy loaded page components
+const EventsPage = lazy(() =>
+  import('@/features/events/EventsPage').then(m => ({ default: m.EventsPage }))
+);
+```
+
+## Redux Toolkit Rules
+```typescript
+// app/store.ts
+import { configureStore } from '@reduxjs/toolkit';
+import { authReducer } from '@/features/auth/authSlice';
+import { eventsReducer } from '@/features/events/eventsSlice';
+import { baseApi } from '@/lib/api';
+
+export const store = configureStore({
+  reducer: {
+    auth: authReducer,
+    events: eventsReducer,
+    [baseApi.reducerPath]: baseApi.reducer,
+  },
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware().concat(baseApi.middleware),
+});
+
+export type RootState = ReturnType<typeof store.getState>;
+export type AppDispatch = typeof store.dispatch;
+
+// app/hooks.ts — ALWAYS use these, never raw useSelector/useDispatch
+export const useAppDispatch = () => useDispatch<AppDispatch>();
+export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;
+```
+
+## RTK Query Rules
+```typescript
+// lib/api.ts — single base API instance
+import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import type { RootState } from '@/app/store';
+
+export const baseApi = createApi({
+  reducerPath: 'api',
+  baseQuery: fetchBaseQuery({
+    baseUrl: import.meta.env.VITE_API_BASE_URL,
+    prepareHeaders: (headers, { getState }) => {
+      const token = (getState() as RootState).auth.accessToken;
+      if (token) headers.set('Authorization', `Bearer ${token}`);
+      return headers;
+    },
+  }),
+  tagTypes: ['Event', 'Booking', 'User', 'Message'],
+  endpoints: () => ({}),
+});
+
+// features/events/eventsApi.ts — inject endpoints
+export const eventsApi = baseApi.injectEndpoints({
+  endpoints: (build) => ({
+    getEvents: build.query<ApiResponse<Event[]>, EventFilters>({
+      query: (filters) => ({ url: '/events', params: filters }),
+      providesTags: ['Event'],
+    }),
+    getEvent: build.query<ApiResponse<Event>, string>({
+      query: (id) => `/events/${id}`,
+      providesTags: (_result, _err, id) => [{ type: 'Event', id }],
+    }),
+    createEvent: build.mutation<ApiResponse<Event>, CreateEventRequest>({
+      query: (body) => ({ url: '/events', method: 'POST', body }),
+      invalidatesTags: ['Event'],
+    }),
+  }),
+});
+
+export const { useGetEventsQuery, useGetEventQuery, useCreateEventMutation } = eventsApi;
+```
+
+## React Router v7 Rules
+```tsx
+// routes/index.tsx
+import { createBrowserRouter } from 'react-router';
+import { AppShell } from '@/components/layout/AppShell';
+import { ProtectedRoute } from './ProtectedRoute';
+
+export const router = createBrowserRouter([
+  {
+    path: '/',
+    element: <AppShell />,
+    children: [
+      { index: true, lazy: () => import('@/features/events/EventsPage') },
+      { path: 'events/:id', lazy: () => import('@/features/events/EventDetailPage') },
+      {
+        path: 'bookings',
+        element: <ProtectedRoute roles={['attendee', 'organizer']} />,
+        children: [
+          { index: true, lazy: () => import('@/features/bookings/MyBookingsPage') },
+        ],
+      },
+      {
+        path: 'organizer',
+        element: <ProtectedRoute roles={['organizer']} />,
+        children: [
+          { index: true, lazy: () => import('@/features/organizer/OrganizerEventsPage') },
+          { path: 'events/new', lazy: () => import('@/features/organizer/CreateEventPage') },
+          { path: 'events/:id/edit', lazy: () => import('@/features/organizer/EditEventPage') },
+        ],
+      },
+      {
+        path: 'admin',
+        element: <ProtectedRoute roles={['admin']} />,
+        children: [
+          { index: true, lazy: () => import('@/features/admin/UsersPage') },
+          { path: 'users/:id', lazy: () => import('@/features/admin/UserDetailPage') },
+        ],
+      },
+      {
+        path: 'messages',
+        element: <ProtectedRoute roles={['attendee', 'organizer']} />,
+        children: [
+          { index: true, lazy: () => import('@/features/messaging/InboxPage') },
+          { path: 'sent', lazy: () => import('@/features/messaging/SentPage') },
+        ],
+      },
+    ],
+  },
+  { path: '/login', lazy: () => import('@/features/auth/LoginPage') },
+  { path: '/register', lazy: () => import('@/features/auth/RegisterPage') },
+  { path: '/pending', lazy: () => import('@/features/auth/PendingApprovalPage') },
+  { path: '/unauthorized', lazy: () => import('@/pages/UnauthorizedPage') },
+]);
+
+// routes/ProtectedRoute.tsx
+export function ProtectedRoute({ roles }: { roles: UserRole[] }) {
+  const { user, isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!roles.includes(user.role)) return <Navigate to="/unauthorized" replace />;
+  return <Outlet />;
+}
+```
+
+## React Hook Form + Zod
+```tsx
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+
+const loginSchema = z.object({
+  username: z.string().min(1, 'Υποχρεωτικό πεδίο'),
+  password: z.string().min(6, 'Τουλάχιστον 6 χαρακτήρες'),
+});
+type LoginFormData = z.infer<typeof loginSchema>;
+
+export function LoginPage() {
+  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+  });
+
+  const onSubmit = async (data: LoginFormData) => { ... };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <input {...register('username')} />
+      {errors.username && <p>{errors.username.message}</p>}
+      <button type="submit" disabled={isSubmitting}>Σύνδεση</button>
+    </form>
+  );
+}
+```
+
+## shadcn/ui Rules
+- Components live in `src/components/ui/` — generated by `bunx shadcn add <component>`
+- Never manually edit files in `src/components/ui/` — re-generate instead
+- Always use shadcn components for: Button, Input, Card, Dialog, Table, Badge, Tabs, Sheet, Toast, Select, Popover, Calendar
+- Compose shadcn primitives into feature-specific components in `src/components/shared/`
+
+```tsx
+// Good — compose shadcn into feature component
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { MapPin, Calendar } from 'lucide-react';
+
+export function EventCard({ event }: { event: Event }) {
+  return (
+    <Card className="hover:shadow-lg transition-shadow">
+      <CardHeader>
+        <CardTitle>{event.title}</CardTitle>
+        <Badge variant={event.status === 'published' ? 'default' : 'secondary'}>
+          {event.status}
+        </Badge>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <MapPin className="w-4 h-4" />
+          <span>{event.venue}, {event.city}</span>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Calendar className="w-4 h-4" />
+          <span>{formatDate(event.startAt)}</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+```
+
+## Lucide React
+```tsx
+// GOOD — import individually
+import { MapPin, Calendar, Ticket, Users, Mail } from 'lucide-react';
+
+// BAD — never import all
+import * as Icons from 'lucide-react';
+```
+
+## Auth Slice
+```typescript
+// features/auth/authSlice.ts
+interface AuthState {
+  user: User | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  isAuthenticated: boolean;
+}
+
+const authSlice = createSlice({
+  name: 'auth',
+  initialState: loadFromStorage(), // rehydrate from localStorage on init
+  reducers: {
+    setCredentials: (state, action: PayloadAction<LoginResponse>) => {
+      state.user = action.payload.user;
+      state.accessToken = action.payload.accessToken;
+      state.isAuthenticated = true;
+      localStorage.setItem('auth', JSON.stringify(state));
+    },
+    logout: (state) => {
+      state.user = null;
+      state.accessToken = null;
+      state.isAuthenticated = false;
+      localStorage.removeItem('auth');
+    },
+  },
+});
+```
+
+## Token Refresh (RTK Query baseQuery wrapper)
+```typescript
+// lib/api.ts — handle 401 and refresh automatically
+const baseQueryWithReauth: BaseQueryFn = async (args, api, extraOptions) => {
+  let result = await baseQuery(args, api, extraOptions);
+  if (result.error?.status === 401) {
+    const refreshResult = await baseQuery('/auth/refresh', api, extraOptions);
+    if (refreshResult.data) {
+      api.dispatch(setCredentials(refreshResult.data as LoginResponse));
+      result = await baseQuery(args, api, extraOptions);
+    } else {
+      api.dispatch(logout());
+    }
+  }
+  return result;
+};
+```
+
+## Tailwind v4 Rules
+- No `tailwind.config.js` — configure in CSS with `@theme`
+- CSS variables for design tokens:
+```css
+/* src/index.css */
+@import "tailwindcss";
+
+@theme {
+  --color-primary: oklch(0.5 0.2 250);
+  --color-background: oklch(1 0 0);
+  --color-foreground: oklch(0.1 0 0);
+  --color-muted-foreground: oklch(0.5 0 0);
+}
+```
+- Use `cn()` utility (from `clsx` + `tailwind-merge`) for conditional classes:
+```typescript
+// lib/utils.ts
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+export function cn(...inputs: ClassValue[]) { return twMerge(clsx(inputs)); }
+```
+
+## Data Fetching Patterns
+```tsx
+// GOOD — RTK Query with all states handled
+export function EventsPage() {
+  const [filters, setFilters] = useState<EventFilters>({});
+  const { data, isLoading, isError, error } = useGetEventsQuery(filters);
+
+  if (isLoading) return <SkeletonList />;
+  if (isError) return <ErrorMessage error={error} />;
+  if (!data?.data.length) return <EmptyState message="Δεν βρέθηκαν εκδηλώσεις" />;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {data.data.map(event => (
+        <EventCard key={event.id} event={event} />
+      ))}
+    </div>
+  );
+}
+```
+
+## OpenStreetMap (Requirement 9)
+- Use `react-leaflet` + `leaflet`
+- Lazy load the map component — it's heavy
+- Always set explicit height on container before mounting
+```tsx
+const MapEmbed = lazy(() => import('@/components/shared/MapEmbed'));
+
+// In EventDetailPage:
+<Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
+  <MapEmbed lat={event.latitude} lng={event.longitude} title={event.venue} />
+</Suspense>
+```
+
+## Performance Rules
+- All route-level components lazy loaded via `lazy()` or React Router's `lazy`
+- `React.memo` for expensive list items (EventCard in large lists)
+- `useMemo` / `useCallback` only when profiling shows a real problem — not preemptively
+- Images: use explicit `width` and `height` to avoid layout shift
+
+## Error Boundaries
+```tsx
+// Wrap each major route section in an ErrorBoundary
+import { ErrorBoundary } from 'react-error-boundary';
+
+<ErrorBoundary fallback={<ErrorMessage message="Κάτι πήγε στραβά" />}>
+  <EventsPage />
+</ErrorBoundary>
+```

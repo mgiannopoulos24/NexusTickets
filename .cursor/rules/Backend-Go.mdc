@@ -1,0 +1,216 @@
+---
+description: Go backend rules — Fiber v2, GORM, Wire, PostgreSQL
+globs: ["backend/**/*.go"]
+alwaysApply: false
+---
+
+# Go Backend Rules
+
+## Framework & Library Versions (pin these)
+- **Go**: 1.22+
+- **Fiber**: `github.com/gofiber/fiber/v2` v2.52+
+- **GORM**: `gorm.io/gorm` + `gorm.io/driver/postgres`
+- **Wire**: `github.com/google/wire` for DI
+- **JWT**: `github.com/golang-jwt/jwt/v5`
+- **Validator**: `github.com/go-playground/validator/v10`
+- **Redis**: `github.com/redis/go-redis/v9`
+- **Migrate**: `github.com/golang-migrate/migrate/v4`
+- **Zap**: `go.uber.org/zap` for structured logging
+- **Testify**: `github.com/stretchr/testify` for tests
+
+## Project Layout (Clean Architecture)
+```
+internal/
+  domain/           # Pure Go structs — NO framework imports here
+    entities/       # Event, User, Booking, TicketType, Message …
+    valueobjects/   # BookingStatus, EventStatus, UserRole …
+    errors.go       # Domain-specific sentinel errors
+  repository/
+    interfaces.go   # Repository interfaces (contracts)
+    postgres/       # GORM implementations
+  service/
+    interfaces.go   # Service interfaces
+    event_service.go
+    booking_service.go
+    user_service.go
+    recommendation_service.go  # Biased Matrix Factorization
+    messaging_service.go
+  handler/
+    v1/             # /api/v1/...
+      event_handler.go
+      booking_handler.go
+      auth_handler.go
+      admin_handler.go
+      messaging_handler.go
+  middleware/
+    auth.go         # JWT validation + role extraction
+    ratelimit.go
+    logger.go
+    cors.go
+  dto/              # Request/Response structs (separate from domain)
+    request/
+    response/
+```
+
+## Domain Entities — Style Rules
+```go
+// GOOD — domain entity, no framework tags in struct itself
+type Event struct {
+    ID          uuid.UUID
+    Title       string
+    Status      EventStatus
+    Organizer   User
+    TicketTypes []TicketType
+    Bookings    []Booking
+    CreatedAt   time.Time
+    UpdatedAt   time.Time
+}
+
+// GOOD — GORM model in repository layer, separate from domain
+type EventModel struct {
+    ID    uuid.UUID `gorm:"type:uuid;primaryKey"`
+    Title string    `gorm:"not null;size:255"`
+    // ...
+}
+
+// BAD — mixing GORM tags directly into domain entity
+```
+
+## Handler Rules
+```go
+// ALWAYS use DTO structs — never bind directly to domain entities
+type CreateEventRequest struct {
+    Title       string    `json:"title"       validate:"required,min=3,max=255"`
+    Description string    `json:"description" validate:"required"`
+    StartAt     time.Time `json:"start_at"    validate:"required"`
+    // ...
+}
+
+// ALWAYS validate before doing anything
+func (h *EventHandler) CreateEvent(c *fiber.Ctx) error {
+    var req dto.CreateEventRequest
+    if err := c.BodyParser(&req); err != nil {
+        return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+    }
+    if err := h.validator.Struct(&req); err != nil {
+        return fiber.NewError(fiber.StatusUnprocessableEntity, err.Error())
+    }
+    // ...
+}
+
+// ALWAYS return structured error responses
+type ErrorResponse struct {
+    Error   string            `json:"error"`
+    Details map[string]string `json:"details,omitempty"`
+}
+
+// ALWAYS use fiber.NewError for HTTP errors — never panic
+```
+
+## Service Layer Rules
+- Services MUST NOT import Fiber or any HTTP framework
+- Services MUST NOT import GORM directly — only repository interfaces
+- Business logic validation lives in the service layer
+- Repository calls are wrapped in service transactions where needed
+```go
+// GOOD
+func (s *BookingService) CreateBooking(ctx context.Context, req CreateBookingInput) (*Booking, error) {
+    event, err := s.eventRepo.FindByID(ctx, req.EventID)
+    if err != nil {
+        return nil, fmt.Errorf("booking: find event: %w", err)
+    }
+    if event.Status != domain.EventStatusPublished {
+        return nil, domain.ErrEventNotBookable
+    }
+    // capacity check, atomic decrement via DB transaction ...
+}
+```
+
+## Repository Rules
+- All DB operations accept `context.Context` as first parameter
+- Use `db.WithContext(ctx)` on every GORM call
+- Transactions for any multi-table write (booking creation, capacity update)
+- Never return GORM-specific errors to service layer — wrap them
+```go
+func (r *eventRepo) FindByID(ctx context.Context, id uuid.UUID) (*domain.Event, error) {
+    var model EventModel
+    if err := r.db.WithContext(ctx).First(&model, "id = ?", id).Error; err != nil {
+        if errors.Is(err, gorm.ErrRecordNotFound) {
+            return nil, domain.ErrNotFound
+        }
+        return nil, fmt.Errorf("eventRepo.FindByID: %w", err)
+    }
+    return mapper.EventModelToDomain(&model), nil
+}
+```
+
+## Error Handling Rules
+- Use `fmt.Errorf("context: %w", err)` for error wrapping
+- Define domain sentinel errors in `domain/errors.go`
+- Handler maps domain errors → HTTP status codes via a central `errorMapper`
+```go
+// domain/errors.go
+var (
+    ErrNotFound          = errors.New("not found")
+    ErrUnauthorized      = errors.New("unauthorized")
+    ErrEventNotBookable  = errors.New("event is not open for booking")
+    ErrCapacityExceeded  = errors.New("requested tickets exceed available capacity")
+    ErrUsernameTaken     = errors.New("username already taken")
+)
+```
+
+## Authentication & Authorization
+- JWT middleware extracts claims and sets `c.Locals("user", claims)`
+- Role guard is a separate middleware factory:
+```go
+func RequireRole(roles ...domain.UserRole) fiber.Handler {
+    return func(c *fiber.Ctx) error {
+        claims := c.Locals("user").(*jwt.Claims)
+        for _, r := range roles {
+            if claims.Role == r { return c.Next() }
+        }
+        return fiber.ErrForbidden
+    }
+}
+// Usage: app.Post("/events", authMiddleware, RequireRole(domain.RoleOrganizer, domain.RoleAdmin), handler.CreateEvent)
+```
+
+## Database Migrations
+- All schema changes via numbered SQL migration files: `migrations/000001_init.up.sql`
+- Never use `AutoMigrate` in production code — only in tests
+- Always write corresponding `.down.sql` files
+
+## Concurrency & Capacity Management
+- Booking creation MUST use `SELECT ... FOR UPDATE` or atomic `UPDATE ... WHERE available >= requested`
+- Use Redis distributed lock (`SETNX` + TTL) for high-contention scenarios
+- Optimistic locking with version column as fallback
+
+## Logging
+```go
+// Always structured, never fmt.Println
+logger.Info("booking created",
+    zap.String("booking_id", booking.ID.String()),
+    zap.String("event_id", req.EventID.String()),
+    zap.Int("tickets", req.NumberOfTickets),
+)
+// Errors always log at Error level with full context
+logger.Error("failed to create booking", zap.Error(err), zap.String("user_id", userID))
+```
+
+## Testing Rules
+- Unit tests for all service methods — mock repositories with interfaces
+- Integration tests for handlers using `fiber.Test()`
+- Table-driven tests preferred
+- Test file naming: `event_service_test.go` next to `event_service.go`
+- Use `testify/assert` and `testify/require` (require for fatal assertions)
+
+## XML / JSON Export (Requirement 12)
+- XML marshaling uses `encoding/xml` with proper struct tags matching the DTD
+- Streaming export for large datasets via `xml.Encoder` / `json.Encoder` — never load all records into memory at once
+
+## Recommendation Engine (Requirement 13)
+- Implement in `service/recommendation/` as a self-contained package
+- Biased Matrix Factorization: user bias + item bias + latent factors
+- Train on startup from dataset; periodically retrain (cron via `robfig/cron`)
+- Fallback to popularity-based ranking for cold-start users (no booking history)
+- Expose via `GET /api/v1/events/recommended` (authenticated)

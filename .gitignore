@@ -1,0 +1,9 @@
+## Backend
+backend/tmp/
+
+## Frontend
+frontend/node_modules/
+frontend/dist/
+
+## Other
+.env
