@@ -75,7 +75,9 @@ nexustickets/
 │   │   ├── hooks/           # Κοινόχρηστα custom hooks
 │   │   ├── lib/             # API client, utilities, i18n strings
 │   │   ├── types/           # Global TypeScript types και models
-│   │   └── routes/          # React Router configuration, ProtectedRoute
+│   │   ├── routes/          # React Router configuration, ProtectedRoute
+│   │   ├── pages/           # Page components
+│   │   └── utils/           # Utility functions
 │   └── ...
 ├── docs/                    # Τεχνική τεκμηρίωση
 ├── report/                  # Ακαδημαϊκή αναφορά (PDF)
