@@ -13,8 +13,8 @@ RUN bun run build
 FROM nginx:1.27-alpine
 
 COPY --from=builder /app/dist/ /usr/share/nginx/html/
-COPY ../nginx/nginx.conf /etc/nginx/nginx.conf
+COPY nginx.conf /etc/nginx/nginx.conf
 
-EXPOSE 80
+EXPOSE 5173
 
-HEALTHCHECK --interval=10s --timeout=3s --retries=12 CMD wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1
+HEALTHCHECK --interval=10s --timeout=3s --retries=12 CMD wget -qO- http://127.0.0.1:5173/ >/dev/null 2>&1 || exit 1

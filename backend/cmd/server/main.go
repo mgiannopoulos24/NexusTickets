@@ -1,53 +1,46 @@
 package main
 
 import (
-	"log"
-	"os"
+	"fmt"
 
 	"github.com/gofiber/fiber/v2"
-	"go.uber.org/zap"
+
+	"nexustickets/internal/config"
+	"nexustickets/pkg/logger"
+	"nexustickets/pkg/response"
 )
 
 func main() {
-	// Logger
-	logger, err := zap.NewDevelopment()
+	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
-	defer logger.Sync()
 
-	// App
+	log, err := logger.New(cfg.AppEnv)
+	if err != nil {
+		panic(err)
+	}
+	defer func() { _ = log.Sync() }()
+
 	app := fiber.New(fiber.Config{
 		AppName: "NexusTickets API",
 	})
 
-	// Routes
 	app.Get("/health", func(c *fiber.Ctx) error {
-		return c.Status(fiber.StatusOK).JSON(fiber.Map{
-			"status": "ok\n",
-		})
+		return response.OK(c, fiber.Map{"status": "ok"})
 	})
 
 	app.Get("/ping", func(c *fiber.Ctx) error {
 		return c.SendString("pong!\n")
 	})
 
-	// Startup message
 	app.Hooks().OnListen(func(data fiber.ListenData) error {
-		logger.Info("server ready to accept connections",
-			zap.String("host", data.Host),
-			zap.String("port", data.Port),
-		)
+		log.Info("server ready")
 		return nil
 	})
 
-	// Start
-	port := os.Getenv("APP_PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	if err := app.Listen(":" + port); err != nil {
-		logger.Fatal("server failed", zap.Error(err))
+	addr := fmt.Sprintf(":%d", cfg.AppPort)
+	if err := app.Listen(addr); err != nil {
+		log.Fatal(err.Error())
 	}
 }

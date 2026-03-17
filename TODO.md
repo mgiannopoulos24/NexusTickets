@@ -27,9 +27,9 @@
 - [X] Add named volumes for postgres and redis data
 
 ### 1.2 Database
-- [ ] `[!]` Provision PostgreSQL 16 container with persistent volume
-- [ ] `[!]` Create database `nexustickets` and dedicated user
-- [ ] `[!]` Provision Redis 7 container with password and `appendonly yes`
+- [X] `[!]` Provision PostgreSQL 16 container with persistent volume
+- [X] `[!]` Create database `nexustickets` and dedicated user
+- [X] `[!]` Provision Redis 7 container with password and `appendonly yes`
 
 ### 1.3 CI Pipeline
 - [X] Workflow: `lint.yml` — `golangci-lint` + `eslint` + `tsc` on every PR
@@ -41,14 +41,14 @@
 ## 2. Backend — Foundation
 
 ### 2.1 Project Skeleton
-- [ ] `[!]` `go mod init github.com/yourorg/nexustickets`
-- [ ] `[!]` Add all dependencies: Fiber v2, GORM, Wire, JWT, Validator, Redis, Migrate, Zap, Testify, UUID, bcrypt, Cron
-- [ ] `[!]` Create full directory structure
-- [ ] `[!]` Implement `internal/config/config.go` — load + validate all env vars on startup
-- [ ] `[!]` Set up structured logger (zap)
-- [ ] Implement `pkg/response/response.go` — `OK`, `Created`, `Paginated`, `Error` helpers
-- [ ] Implement `pkg/pagination/pagination.go`
-- [ ] Implement `cmd/server/main.go` — bootstrap chain
+- [X] `[!]` `go mod init github.com/yourorg/nexustickets`
+- [X] `[!]` Add all dependencies: Fiber v2, GORM, Wire, JWT, Validator, Redis, Migrate, Zap, Testify, UUID, bcrypt, Cron
+- [X] `[!]` Create full directory structure
+- [X] `[!]` Implement `internal/config/config.go` — load + validate all env vars on startup
+- [X] `[!]` Set up structured logger (zap)
+- [X] Implement `pkg/response/response.go` — `OK`, `Created`, `Paginated`, `Error` helpers
+- [X] Implement `pkg/pagination/pagination.go`
+- [X] Implement `cmd/server/main.go` — bootstrap chain
 
 ### 2.2 Database & Migrations
 - [ ] `[!]` GORM PostgreSQL connection with pool settings

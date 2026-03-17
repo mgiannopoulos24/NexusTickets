@@ -7,8 +7,12 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-nexustickets}
       POSTGRES_USER: ${POSTGRES_USER:-nexus}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexus_dev_password_change_me}
+      POSTGRES_APP_DB: ${POSTGRES_APP_DB:-nexustickets}
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-nexustickets_app}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:-nexus_app_dev_password_change_me}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
@@ -47,8 +51,8 @@ services:
       DB_HOST: ${DB_HOST:-postgres}
       DB_PORT: ${DB_PORT:-5432}
       DB_NAME: ${DB_NAME:-${POSTGRES_DB:-nexustickets}}
-      DB_USER: ${DB_USER:-${POSTGRES_USER:-nexus}}
-      DB_PASSWORD: ${DB_PASSWORD:-${POSTGRES_PASSWORD:-nexus_dev_password_change_me}}
+      DB_USER: ${DB_USER:-${POSTGRES_APP_USER:-nexustickets_app}}
+      DB_PASSWORD: ${DB_PASSWORD:-${POSTGRES_APP_PASSWORD:-nexus_app_dev_password_change_me}}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password_change_me}
@@ -73,10 +77,9 @@ services:
     environment:
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
     depends_on:
-      backend:
-        condition: service_healthy
+      - backend
     ports:
-      - "${FRONTEND_HTTP_PORT:-3000}:80"
+      - "80:5173"
     networks:
       - app
 
