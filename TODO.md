@@ -32,9 +32,9 @@
 - [ ] `[!]` Provision Redis 7 container with password and `appendonly yes`
 
 ### 1.3 CI Pipeline
-- [ ] Workflow: `lint.yml` — `golangci-lint` + `eslint` + `tsc` on every PR
-- [ ] Workflow: `test.yml` — Go tests + frontend tests on every PR
-- [ ] Workflow: `security.yml` — `govulncheck`, `gitleaks`, `trivy`
+- [X] Workflow: `lint.yml` — `golangci-lint` + `eslint` + `tsc` on every PR
+- [X] Workflow: `test.yml` — Go tests + frontend tests on every PR
+- [X] Workflow: `security.yml` — `govulncheck`, `gitleaks`, `trivy`
 
 ---
 
