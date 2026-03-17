@@ -1,0 +1,42 @@
+services:
+  postgres:
+    ports:
+      - "${POSTGRES_EXPOSED_PORT:-5432}:5432"
+
+  redis:
+    ports:
+      - "${REDIS_EXPOSED_PORT:-6379}:6379"
+
+  backend:
+    volumes:
+      - ./backend:/app
+      - backend_go_cache:/go/pkg/mod
+      - backend_go_build_cache:/root/.cache/go-build
+    ports:
+      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
+    command:
+      - sh
+      - -c
+      - >
+        go env -w GOMODCACHE=/go/pkg/mod &&
+        go env -w GOCACHE=/root/.cache/go-build &&
+        go install github.com/air-verse/air@latest &&
+        air -c .air.toml
+
+  frontend:
+    volumes:
+      - ./frontend:/app
+      - frontend_bun_cache:/root/.bun
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    command:
+      - sh
+      - -c
+      - >
+        bun install &&
+        bun run dev --host 0.0.0.0 --port 5173
+
+volumes:
+  backend_go_cache:
+  backend_go_build_cache:
+  frontend_bun_cache:

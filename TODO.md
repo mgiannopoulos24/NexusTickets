@@ -6,13 +6,13 @@
 
 ## 0. Project Bootstrap
 
-- [ ] `[!]` Initialize monorepo root with `git init`
-- [ ] `[!]` Create root `.gitignore` (Go binaries, `dist/`, `.env*`, `uploads/`, `node_modules/`, `*.log`, `.DS_Store`)
-- [ ] `[!]` Create root `docker-compose.yml` with services: `postgres`, `redis`, `backend`, `frontend`
-- [ ] `[!]` Create root `docker-compose.dev.yml` override (hot reload, exposed ports)
-- [ ] Create `.env.example` with all required env vars
-- [ ] Create `Makefile` with targets: `dev`, `build`, `test`, `lint`, `migrate-up`, `migrate-down`, `seed`, `wire`
-- [ ] Set up `pre-commit` hooks: `golangci-lint`, `eslint`, `tsc --noEmit`, `gitleaks`
+- [X] `[!]` Initialize monorepo root with `git init`
+- [X] `[!]` Create root `.gitignore` (Go binaries, `dist/`, `.env*`, `uploads/`, `node_modules/`, `*.log`, `.DS_Store`)
+- [X] `[!]` Create root `docker-compose.yml` with services: `postgres`, `redis`, `backend`, `frontend`
+- [X] `[!]` Create root `docker-compose.dev.yml` override (hot reload, exposed ports)
+- [X] Create `.env.example` with all required env vars
+- [X] Create `Makefile` with targets: `dev`, `build`, `test`, `lint`, `migrate-up`, `migrate-down`, `seed`, `wire`
+- [X] Set up `pre-commit` hooks: `golangci-lint`, `eslint`, `tsc --noEmit`, `gitleaks`
 
 ---
 

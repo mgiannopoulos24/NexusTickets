@@ -1,0 +1,29 @@
+minimum_pre_commit_version: "3.7.0"
+
+repos:
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.64.8
+    hooks:
+      - id: golangci-lint
+        args: ["--timeout=5m"]
+        files: ^backend/
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.28.0
+    hooks:
+      - id: gitleaks
+
+  - repo: local
+    hooks:
+      - id: frontend-eslint
+        name: frontend eslint (bun)
+        entry: bun --cwd frontend run lint
+        language: system
+        pass_filenames: false
+
+      - id: frontend-tsc
+        name: frontend tsc --noEmit (bun)
+        entry: bun --cwd frontend x tsc --noEmit
+        language: system
+        pass_filenames: false
+

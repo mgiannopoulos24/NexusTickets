@@ -1,0 +1,79 @@
+name: nexustickets
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nexustickets}
+      POSTGRES_USER: ${POSTGRES_USER:-nexus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexus_dev_password_change_me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - app
+
+  redis:
+    image: redis:7-alpine
+    command:
+      - sh
+      - -c
+      - >
+        exec redis-server
+        --appendonly yes
+        --requirepass "$${REDIS_PASSWORD}"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password_change_me}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - app
+
+  backend:
+    image: golang:1.22-alpine
+    working_dir: /app
+    environment:
+      APP_PORT: ${APP_PORT:-8080}
+      # DB / Redis placeholders (used as the backend grows).
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-${POSTGRES_DB:-nexustickets}}
+      DB_USER: ${DB_USER:-${POSTGRES_USER:-nexus}}
+      DB_PASSWORD: ${DB_PASSWORD:-${POSTGRES_PASSWORD:-nexus_dev_password_change_me}}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password_change_me}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app
+
+  frontend:
+    image: oven/bun:1.2.22-alpine
+    working_dir: /app
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+    depends_on:
+      - backend
+    networks:
+      - app
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  app:
+    driver: bridge
