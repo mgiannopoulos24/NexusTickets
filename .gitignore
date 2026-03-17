@@ -4,6 +4,7 @@ backend/tmp/
 ## Frontend
 frontend/node_modules/
 frontend/dist/
+frontend/bun.lockb
 
 ## Other
 .env

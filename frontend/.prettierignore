@@ -1,0 +1,29 @@
+# Build output
+dist/
+
+# Dependencies
+node_modules/
+
+# Bun
+bun.lockb
+
+# Vite / tooling caches
+.vite/
+.turbo/
+.cache/
+
+# Coverage / reports
+coverage/
+playwright-report/
+
+# Logs
+*.log
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Env files (handled outside formatting)
+.env
+.env.*
