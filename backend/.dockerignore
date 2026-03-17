@@ -1,0 +1,6 @@
+.air.toml
+tmp/
+testdata/
+**/*_test.go
+.git/
+**/.DS_Store

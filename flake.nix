@@ -25,6 +25,7 @@
             curl
             jq
             gnumake
+            pre-commit
 
             # Backend (Go 1.22+)
             go_1_22

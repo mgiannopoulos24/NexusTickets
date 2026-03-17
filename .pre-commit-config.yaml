@@ -23,7 +23,7 @@ repos:
 
       - id: frontend-tsc
         name: frontend tsc --noEmit (bun)
-        entry: bun --cwd frontend x tsc --noEmit
+        entry: bun --cwd frontend run typecheck
         language: system
         pass_filenames: false
 

@@ -19,12 +19,12 @@
 ## 1. Infrastructure & DevOps
 
 ### 1.1 Docker
-- [ ] `[!]` Write `backend/Dockerfile` (multi-stage, scratch final image)
-- [ ] `[!]` Write `frontend/Dockerfile` (Bun builder + nginx)
-- [ ] Write `nginx/nginx.conf` — reverse proxy to backend, static files for frontend
-- [ ] Configure nginx TLS (self-signed dev, Let's Encrypt prod)
-- [ ] Add `healthcheck` directives to all Docker services
-- [ ] Add named volumes for postgres and redis data
+- [X] `[!]` Write `backend/Dockerfile` (multi-stage, scratch final image)
+- [X] `[!]` Write `frontend/Dockerfile` (Bun builder + nginx)
+- [X] Write `nginx/nginx.conf` — reverse proxy to backend, static files for frontend
+- [X] Configure nginx TLS (self-signed dev, Let's Encrypt prod)
+- [X] Add `healthcheck` directives to all Docker services
+- [X] Add named volumes for postgres and redis data
 
 ### 1.2 Database
 - [ ] `[!]` Provision PostgreSQL 16 container with persistent volume
