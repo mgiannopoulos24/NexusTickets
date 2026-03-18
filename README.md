@@ -141,6 +141,14 @@ The frontend is available at `http://localhost:80`.
 The backend API is available at `http://localhost:8080/api/v1`.  
 API documentation is at `http://localhost:8080/api/v1/docs`.
 
+> Note about PostgreSQL credentials: the init scripts run **only** when the `postgres_data` volume is empty.
+> If you change `POSTGRES_APP_PASSWORD` / `DB_PASSWORD` after the volume has already been created, the backend will fail with `password authentication failed`.
+> In that case, reset the volumes with:
+>
+> ```bash
+> make db-reset
+> ```
+
 ### Running Without Docker
 
 ```bash

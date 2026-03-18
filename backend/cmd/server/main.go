@@ -15,7 +15,10 @@ import (
 	"go.uber.org/zap"
 
 	"nexustickets/internal/config"
+	"nexustickets/internal/db"
 	"nexustickets/internal/middleware"
+	"nexustickets/internal/migrate"
+	"nexustickets/internal/redis"
 	"nexustickets/pkg/logger"
 	"nexustickets/pkg/response"
 )
@@ -31,6 +34,22 @@ func main() {
 		panic(err)
 	}
 	defer func() { _ = log.Sync() }()
+
+	postgres, err := db.NewPostgres(cfg)
+	if err != nil {
+		log.Fatal("postgres init failed", zap.Error(err))
+	}
+	defer func() { _ = postgres.SQL.Close() }()
+
+	redisClient, err := redis.New(cfg)
+	if err != nil {
+		log.Fatal("redis init failed", zap.Error(err))
+	}
+	defer func() { _ = redisClient.Raw.Close() }()
+
+	if err := migrate.Up(cfg); err != nil {
+		log.Fatal("migrations failed", zap.Error(err))
+	}
 
 	app := fiber.New(fiber.Config{
 		AppName: "NexusTickets API",

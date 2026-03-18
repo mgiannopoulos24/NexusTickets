@@ -54,19 +54,19 @@
 - [X] Complete `cmd/server/main.go` bootstrap chain (beyond health/ping)
 
 ### 2.2 Database & Migrations
-- [ ] `[!]` GORM PostgreSQL connection with pool settings
-- [ ] `[!]` Redis client initialization
-- [ ] `[!]` Run migrations at startup before accepting traffic
-- [ ] `[!]` Migration `000001`: users table
-- [ ] `[!]` Migration `000002`: events table + search_vector + indexes
-- [ ] `[!]` Migration `000003`: categories + event_categories
-- [ ] `[!]` Migration `000004`: ticket_types
-- [ ] `[!]` Migration `000005`: bookings
-- [ ] `[!]` Migration `000006`: messages
-- [ ] `[!]` Migration `000007`: event_photos
-- [ ] `[!]` Migration `000008`: user_event_views
-- [ ] Migration `000009`: seed admin user
-- [ ] Migration `000010`: seed initial categories
+- [X] `[!]` GORM PostgreSQL connection with pool settings
+- [X] `[!]` Redis client initialization
+- [X] `[!]` Run migrations at startup before accepting traffic
+- [X] `[!]` Migration `000001`: users table
+- [X] `[!]` Migration `000002`: events table + search_vector + indexes
+- [X] `[!]` Migration `000003`: categories + event_categories
+- [X] `[!]` Migration `000004`: ticket_types
+- [X] `[!]` Migration `000005`: bookings
+- [X] `[!]` Migration `000006`: messages
+- [X] `[!]` Migration `000007`: event_photos
+- [X] `[!]` Migration `000008`: user_event_views
+- [X] Migration `000009`: seed admin user
+- [X] Migration `000010`: seed initial categories
 - [ ] All indexes from database ruleset
 
 ### 2.3 Domain Layer

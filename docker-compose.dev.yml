@@ -24,6 +24,9 @@ services:
         air -c .air.toml
 
   frontend:
+    build:
+      context: ./frontend
+      target: builder
     volumes:
       - ./frontend:/app
       - frontend_bun_cache:/root/.bun

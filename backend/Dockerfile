@@ -25,6 +25,7 @@ WORKDIR /
 COPY --from=builder /out/nexustickets-api /nexustickets-api
 COPY --from=builder /out/busybox /busybox
 COPY --from=builder /out/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=builder /src/migrations /migrations
 
 ENV APP_PORT=8080
 EXPOSE 8080
