@@ -67,18 +67,18 @@
 - [X] `[!]` Migration `000008`: user_event_views
 - [X] Migration `000009`: seed admin user
 - [X] Migration `000010`: seed initial categories
-- [ ] All indexes from database ruleset
+- [X] All indexes from database ruleset
 
 ### 2.3 Domain Layer
-- [ ] `[!]` Entities: User, Event, TicketType, Booking, Message, Category, EventPhoto
-- [ ] `[!]` Constants: UserRole, AccountStatus, EventStatus, BookingStatus
-- [ ] `[!]` `domain/errors.go` — all sentinel errors
+- [X] `[!]` Entities: User, Event, TicketType, Booking, Message, Category, EventPhoto
+- [X] `[!]` Constants: UserRole, AccountStatus, EventStatus, BookingStatus
+- [X] `[!]` `domain/errors.go` — all sentinel errors
 
 ### 2.4 Repository Layer
-- [ ] `[!]` Define all repository interfaces
-- [ ] `[!]` Implement: UserRepository, EventRepository, TicketTypeRepository, BookingRepository, MessageRepository, CategoryRepository
-- [ ] Implement: EventPhotoRepository, UserEventViewRepository
-- [ ] GORM model structs + mapper functions for all entities
+- [X] `[!]` Define all repository interfaces
+- [X] `[!]` Implement: UserRepository, EventRepository, TicketTypeRepository, BookingRepository, MessageRepository, CategoryRepository
+- [X] Implement: EventPhotoRepository, UserEventViewRepository
+- [X] `[!]` GORM model structs + mapper functions for all entities
 
 ### 2.5 Middleware
 - [ ] `[!]` JWT auth middleware
@@ -193,10 +193,10 @@
 - [X] `[!]` Install shadcn/ui (`bunx shadcn init`)
 - [X] `[!]` Configure Tailwind v4 (`@import "tailwindcss"` + `@tailwindcss/vite` plugin)
 - [X] `[!]` Configure path alias `@/` → `src/`
-- [ ] `[!]` Install remaining dependencies: Redux Toolkit, RTK Query, React Router v7, React Hook Form, Zod, Lucide React, clsx, tailwind-merge
-- [ ] `[!]` Install react-leaflet + leaflet + @types/leaflet
-- [ ] `[!]` `tsconfig.json`: `strict: true`
-- [ ] Configure `VITE_API_BASE_URL` and `VITE_WS_URL` in `.env` and `.env.example`
+- [X] `[!]` Install remaining dependencies: Redux Toolkit, RTK Query, React Router v7, React Hook Form, Zod, Lucide React, clsx, tailwind-merge
+- [X] `[!]` Install react-leaflet + leaflet + @types/leaflet
+- [X] `[!]` `tsconfig.json`: `strict: true`
+- [X] Configure `VITE_API_BASE_URL` and `VITE_WS_URL` in `.env` and `.env.example`
 
 ### 5.2 Core Setup
 - [ ] `[!]` `src/app/store.ts` — Redux store with messaging reducer + RTK Query middleware

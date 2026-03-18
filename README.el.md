@@ -136,13 +136,13 @@ cp .env.example .env
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
-Το frontend είναι διαθέσιμο στο `http://localhost:80`.  
+Το frontend είναι διαθέσιμο στο `http://localhost:5173`.  
 Το backend API είναι διαθέσιμο στο `http://localhost:8080/api/v1`.  
 Η τεκμηρίωση API βρίσκεται στο `http://localhost:8080/api/v1/docs`.
 
 > Σημείωση για PostgreSQL credentials: τα init scripts τρέχουν **μόνο** όταν το volume `postgres_data` είναι άδειο.
-> Αν αλλάξεις `POSTGRES_APP_PASSWORD` / `DB_PASSWORD` αφού έχει δημιουργηθεί το volume, ο backend θα αποτυγχάνει με `password authentication failed`.
-> Σε αυτή την περίπτωση κάνε reset τα volumes με:
+> Αν αλλάξεις `POSTGRES_APP_PASSWORD` / `DB_PASSWORD` αφού έχει δημιουργηθεί το volume, το backend θα αποτυγχάνει με `password authentication failed`.
+> Σε αυτή την περίπτωση κάνετε reset τα volumes με:
 >
 > ```bash
 > make db-reset

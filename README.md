@@ -137,7 +137,7 @@ cp .env.example .env
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
-The frontend is available at `http://localhost:80`.  
+The frontend is available at `http://localhost:5173`.  
 The backend API is available at `http://localhost:8080/api/v1`.  
 API documentation is at `http://localhost:8080/api/v1/docs`.
 
