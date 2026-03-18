@@ -49,9 +49,9 @@
 - [X] `[!]` `GET /health` — returns `{ status: ok }`
 - [X] `[!]` `GET /ping` — returns `pong`
 - [X] `[!]` air hot reload configured (`.air.toml` with correct `cmd`)
-- [ ] Implement `pkg/response/response.go` — `OK`, `Created`, `Paginated`, `Error` helpers
-- [ ] Implement `pkg/pagination/pagination.go`
-- [ ] Complete `cmd/server/main.go` bootstrap chain (beyond health/ping)
+- [X] Implement `pkg/response/response.go` — `OK`, `Created`, `Paginated`, `Error` helpers
+- [X] Implement `pkg/pagination/pagination.go`
+- [X] Complete `cmd/server/main.go` bootstrap chain (beyond health/ping)
 
 ### 2.2 Database & Migrations
 - [ ] `[!]` GORM PostgreSQL connection with pool settings

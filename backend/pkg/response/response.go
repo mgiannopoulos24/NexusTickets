@@ -28,4 +28,3 @@ func Paginated[T any](c *fiber.Ctx, data T, meta any) error {
 func Error(c *fiber.Ctx, status int, code, message string) error {
 	return c.Status(status).JSON(Envelope[any]{Data: nil, Error: &APIError{Code: code, Message: message}, Meta: nil})
 }
-

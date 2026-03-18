@@ -57,4 +57,3 @@ func BuildMeta(p Params, totalItems int) Meta {
 		TotalPages: totalPages,
 	}
 }
-
