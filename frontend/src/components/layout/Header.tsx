@@ -29,14 +29,14 @@ export function Header({ className }: { className?: string }) {
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
         <a
           href="/"
-          className="flex items-baseline gap-1 font-semibold tracking-tight text-white"
+          className="flex items-baseline gap-1 tracking-tight text-white"
           aria-label="NexusTickets"
         >
-          <span className="text-lg italic">ticket</span>
-          <span className="text-lg font-black italic">master</span>
+          <span className="comfortaa-semibold text-lg italic">ticket</span>
+          <span className="comfortaa-bold text-lg italic">master</span>
         </a>
 
-        <nav className="hidden flex-1 items-center justify-center gap-5 text-[13px] font-medium text-white/90 lg:flex">
+        <nav className="comfortaa-medium hidden flex-1 items-center justify-center gap-5 text-[13px] text-white/90 lg:flex">
           {primaryLinks.map((l) => (
             <a
               key={l.href}
@@ -59,7 +59,7 @@ export function Header({ className }: { className?: string }) {
 
           <a
             href="/auth"
-            className="hidden items-center gap-2 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 sm:inline-flex"
+            className="comfortaa-semibold hidden items-center gap-2 rounded-full bg-white/10 px-3 py-2 text-xs text-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 sm:inline-flex"
           >
             <User className="size-4" />
             <span>Σύνδεση / Εγγραφή</span>
@@ -77,4 +77,3 @@ export function Header({ className }: { className?: string }) {
     </header>
   );
 }
-

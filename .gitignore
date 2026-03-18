@@ -9,3 +9,4 @@ frontend/bun.lockb
 
 ## Other
 .env
+*.zip

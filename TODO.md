@@ -41,22 +41,32 @@
 ## 2. Backend — Foundation
 
 ### 2.1 Project Skeleton
-- [X] `[!]` `go mod init github.com/yourorg/nexustickets`
-- [X] `[!]` Add all dependencies: Fiber v2, GORM, Wire, JWT, Validator, Redis, Migrate, Zap, Testify, UUID, bcrypt, Cron
+- [X] `[!]` `go mod init nexustickets`
+- [X] `[!]` Add all dependencies: Fiber v2, gofiber/websocket, GORM, Wire, JWT, Validator, Redis, Migrate, Zap, Testify, UUID, bcrypt, Cron
 - [X] `[!]` Create full directory structure
 - [X] `[!]` Implement `internal/config/config.go` — load + validate all env vars on startup
 - [X] `[!]` Set up structured logger (zap)
-- [X] Implement `pkg/response/response.go` — `OK`, `Created`, `Paginated`, `Error` helpers
-- [X] Implement `pkg/pagination/pagination.go`
-- [X] Implement `cmd/server/main.go` — bootstrap chain
+- [X] `[!]` `GET /health` — returns `{ status: ok }`
+- [X] `[!]` `GET /ping` — returns `pong`
+- [X] `[!]` air hot reload configured (`.air.toml` with correct `cmd`)
+- [ ] Implement `pkg/response/response.go` — `OK`, `Created`, `Paginated`, `Error` helpers
+- [ ] Implement `pkg/pagination/pagination.go`
+- [ ] Complete `cmd/server/main.go` bootstrap chain (beyond health/ping)
 
 ### 2.2 Database & Migrations
 - [ ] `[!]` GORM PostgreSQL connection with pool settings
 - [ ] `[!]` Redis client initialization
 - [ ] `[!]` Run migrations at startup before accepting traffic
-- [ ] `[!]` Migrations: users, events, categories, event_categories, ticket_types, bookings, messages, event_photos, user_event_views
-- [ ] Migration: seed admin user
-- [ ] Migration: seed initial categories
+- [ ] `[!]` Migration `000001`: users table
+- [ ] `[!]` Migration `000002`: events table + search_vector + indexes
+- [ ] `[!]` Migration `000003`: categories + event_categories
+- [ ] `[!]` Migration `000004`: ticket_types
+- [ ] `[!]` Migration `000005`: bookings
+- [ ] `[!]` Migration `000006`: messages
+- [ ] `[!]` Migration `000007`: event_photos
+- [ ] `[!]` Migration `000008`: user_event_views
+- [ ] Migration `000009`: seed admin user
+- [ ] Migration `000010`: seed initial categories
 - [ ] All indexes from database ruleset
 
 ### 2.3 Domain Layer
@@ -72,11 +82,12 @@
 
 ### 2.5 Middleware
 - [ ] `[!]` JWT auth middleware
+- [ ] `[!]` WebSocket JWT auth middleware (`ws_auth.go` — token via query param)
 - [ ] `[!]` Role guard factory `RequireRole(...roles)`
 - [ ] Request logger with request ID
 - [ ] Rate limiter (Redis sliding window)
 - [ ] Global error handler — map domain errors to HTTP status codes
-- [ ] CORS middleware
+- [ ] CORS middleware (AllowOrigins includes `localhost:5173`)
 
 ---
 
@@ -85,12 +96,12 @@
 ### 3.1 Authentication
 - [ ] `[!]` `auth_service.go`: Register, Login, RefreshToken, Logout
 - [ ] `[!]` Handlers: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`
-- [ ] `[!]` RegisterRequest DTO with full validation
-- [ ] `[!]` JWT generation (access + refresh) with all claims
+- [ ] `[!]` RegisterRequest DTO — username, password, confirm_password, first_name, last_name, email, phone, address, city, country, vat_number
+- [ ] `[!]` JWT generation (access + refresh) with all claims (sub, role, jti, exp, iat)
 - [ ] `[!]` Store refresh JTI in Redis with TTL
 - [ ] Implement token refresh + rotation
 - [ ] bcrypt cost 12 for password hashing
-- [ ] Rate limiting on auth endpoints
+- [ ] Rate limiting on auth endpoints (5 req/min per IP)
 
 ### 3.2 User Management
 - [ ] `[!]` `user_service.go`: ListUsers, GetUser, ApproveUser, RejectUser, UpdateProfile
@@ -101,16 +112,16 @@
 ### 3.3 Events — Organizer CRUD
 - [ ] `[!]` `event_service.go`: Create, Get, List, Search, Update, Delete, Publish, Cancel, GetOrganizerEvents
 - [ ] `[!]` All event handlers
-- [ ] `[!]` Validate ticket type quantities vs capacity on every write
-- [ ] `[!]` Enforce deletion rules (draft only or no bookings yet)
-- [ ] `[!]` Enforce cancellation rules (mark CANCELLED, block new bookings)
+- [ ] `[!]` Validate sum of ticket type quantities ≤ event capacity on every write
+- [ ] `[!]` Enforce deletion rules: DRAFT only, or PUBLISHED with zero bookings
+- [ ] `[!]` Enforce cancellation rules: PUBLISHED only → CANCELLED, block new bookings, keep all data
 - [ ] CreateEventRequest + UpdateEventRequest DTOs
-- [ ] Support multiple categories per event
+- [ ] Support multiple categories per event (create category if not exists)
 
 ### 3.4 Ticket Types
 - [ ] `[!]` AddTicketType, UpdateTicketType, DeleteTicketType
 - [ ] Validate capacity constraints on every create/update
-- [ ] Block modification if bookings exist
+- [ ] Block modification if bookings exist for that ticket type
 
 ### 3.5 Event Photos
 - [ ] Upload handler (multipart, validate MIME from bytes, max 5MB)
@@ -120,43 +131,46 @@
 
 ### 3.6 Bookings
 - [ ] `[!]` `booking_service.go`: CreateBooking, GetBooking, GetMyBookings, GetEventBookings
-- [ ] `[!]` Atomic capacity decrement: `UPDATE ... WHERE available >= ?`
+- [ ] `[!]` Atomic capacity decrement: `UPDATE ticket_types SET available = available - $1 WHERE id = $2 AND available >= $1`
 - [ ] `[!]` Return `ErrCapacityExceeded` when 0 rows affected
-- [ ] `[!]` Validate event is PUBLISHED before booking
-- [ ] Calculate total_cost server-side
+- [ ] `[!]` Validate event is PUBLISHED before allowing booking
+- [ ] Calculate total_cost server-side (never trust client value)
 
-### 3.7 Messaging
-- [ ] `[!]` SendMessage, GetInbox, GetSent, DeleteForUser, MarkAsRead, GetUnreadCount, NotifyEventCancellation
-- [ ] `[!]` SSE or polling endpoint for unread count
-- [ ] Cache unread count per user in Redis
-- [ ] Bulk notify all attendees on event cancellation
+### 3.7 Messaging — REST + WebSocket (Requirement 10)
+- [ ] `[!]` `messaging_service.go`: SendMessage, GetInbox, GetSent, DeleteForUser, MarkAsRead, GetUnreadCount, NotifyEventCancellation
+- [ ] `[!]` REST handlers: `GET /messages/inbox`, `GET /messages/sent`, `GET /messages/unread-count`, `POST /messages`, `DELETE /messages/:id`
+- [ ] `[!]` WebSocket Hub (`handler/ws/hub.go`) — userID → set of clients, broadcast channel, register/unregister
+- [ ] `[!]` WebSocket Client (`handler/ws/client.go`) — ReadPump, WritePump, ping/pong keepalive, max message size
+- [ ] `[!]` WebSocket upgrade handler: `GET /api/v1/ws/messages?token=<jwt>`
+- [ ] `[!]` After SendMessage: broadcast `new_message` + `unread_count` to recipient via Hub
+- [ ] `[!]` Cache unread count in Redis (`INCR nexustickets:unread:{user_id}` on send, `SET 0` on inbox open)
+- [ ] `[!]` `NotifyEventCancellation`: bulk INSERT messages + WS broadcast to all attendees with confirmed bookings
 
 ### 3.8 Search & Browse
-- [ ] `[!]` Full-text search via PostgreSQL `tsvector` + `plainto_tsquery('greek', ...)`
-- [ ] `[!]` Filtering: category, title, date range, price range, city
+- [ ] `[!]` Full-text search via `tsvector` + `plainto_tsquery('greek', ...)`
+- [ ] `[!]` Filtering: category, title (ILIKE), free-text (q), date range, price range, city
 - [ ] `[!]` Keyset pagination
-- [ ] Record event view for authenticated users
+- [ ] Record event view in `user_event_views` for authenticated users
 
-### 3.9 XML / JSON Export
-- [ ] `[!]` Streaming XML export matching assignment DTD exactly
+### 3.9 XML / JSON Export (Requirement 12)
+- [ ] `[!]` Streaming XML export — struct tags match assignment DTD exactly
 - [ ] `[!]` Streaming JSON export
-- [ ] Batch DB reads (100 at a time)
+- [ ] Batch DB reads (100 records at a time)
 - [ ] `Content-Disposition: attachment` headers
 
-### 3.10 Recommendation Engine
-- [ ] `[!]` BMF model struct + hyperparameters
-- [ ] `[!]` SGD training loop (user bias, item bias, latent factors)
+### 3.10 Recommendation Engine (Requirement 13)
+- [ ] `[!]` BMF model struct + hyperparameters (K=20, lr=0.005, lambda=0.02, epochs=50)
+- [ ] `[!]` SGD training loop: R̂(u,i) = μ + b_u + b_i + P_u·Q_i^T
 - [ ] Implicit feedback encoding from bookings + views
-- [ ] Cold-start fallback (popularity + recency)
+- [ ] Cold-start fallback (popularity + recency scoring)
 - [ ] Periodic retraining every 6h via cron
-- [ ] Redis cache (1h TTL) per user
+- [ ] Redis cache per user (1h TTL)
 - [ ] Atomic model swap with `sync.RWMutex`
 - [ ] `GET /events/recommended` handler
 
-### 3.11 Wire DI + Health Check
-- [ ] `[!]` Wire providers for all repositories, services, handlers
+### 3.11 Wire DI
+- [ ] `[!]` Wire providers for all repositories, services, handlers, WebSocket Hub
 - [ ] `[!]` Run `wire` to generate `wire_gen.go`
-- [ ] `GET /health` — DB + Redis ping
 
 ---
 
@@ -166,6 +180,7 @@
 - [ ] Unit tests: messaging_service, recommendation engine
 - [ ] Integration tests: auth handlers, event CRUD, booking creation (concurrent)
 - [ ] Integration tests: XML export validates against DTD
+- [ ] WebSocket integration test: connect, send message, verify broadcast to recipient
 - [ ] Test helpers: testcontainers DB setup, fixtures
 
 ---
@@ -173,133 +188,139 @@
 ## 5. Frontend — Foundation
 
 ### 5.1 Project Setup
-- [ ] `[!]` Scaffold: `bun create vite frontend --template react-ts`
-- [ ] `[!]` Install dependencies: Redux Toolkit, RTK Query, React Router v7, React Hook Form, Zod, Lucide React, clsx, tailwind-merge
-- [ ] `[!]` Install shadcn/ui: `bunx shadcn init`
+- [X] `[!]` Scaffold with Vite + React + TypeScript
+- [X] `[!]` Bun as package manager
+- [X] `[!]` Install shadcn/ui (`bunx shadcn init`)
+- [X] `[!]` Configure Tailwind v4 (`@import "tailwindcss"` + `@tailwindcss/vite` plugin)
+- [X] `[!]` Configure path alias `@/` → `src/`
+- [ ] `[!]` Install remaining dependencies: Redux Toolkit, RTK Query, React Router v7, React Hook Form, Zod, Lucide React, clsx, tailwind-merge
 - [ ] `[!]` Install react-leaflet + leaflet + @types/leaflet
-- [ ] `[!]` Configure Tailwind v4: `@import "tailwindcss"` in `src/index.css`
-- [ ] `[!]` Configure path alias `@/` → `src/` in `vite.config.ts` and `tsconfig.json`
 - [ ] `[!]` `tsconfig.json`: `strict: true`
-- [ ] Configure `VITE_API_BASE_URL` in `.env` and `.env.example`
+- [ ] Configure `VITE_API_BASE_URL` and `VITE_WS_URL` in `.env` and `.env.example`
 
 ### 5.2 Core Setup
-- [ ] `[!]` `src/app/store.ts` — Redux store with RTK Query middleware
+- [ ] `[!]` `src/app/store.ts` — Redux store with messaging reducer + RTK Query middleware
 - [ ] `[!]` `src/app/hooks.ts` — `useAppDispatch`, `useAppSelector`
-- [ ] `[!]` `src/lib/api.ts` — RTK Query `baseApi` with auth header + token refresh
+- [ ] `[!]` `src/lib/api.ts` — RTK Query `baseApi` with auth header + 401 reauth wrapper
+- [ ] `[!]` `src/lib/wsClient.ts` — WebSocket singleton with auto-reconnect + subscriber pattern
+- [ ] `[!]` `src/hooks/useWebSocket.ts` — connect on auth, dispatch to Redux on incoming WS messages
 - [ ] `[!]` `src/lib/utils.ts` — `cn()`, `formatDate()`, `formatDateTime()`, `formatShortDate()`, `formatCurrency()`, `formatNumber()`
 - [ ] `[!]` `src/lib/i18n/ui.ts`, `errors.ts`, `messages.ts` — all Greek strings
 - [ ] `[!]` `src/types/models.ts` — all TypeScript interfaces
-- [ ] `[!]` `src/types/enums.ts` — EventStatus, BookingStatus, UserRole, AccountStatus as const objects
-- [ ] `[!]` `src/routes/index.tsx` — `createBrowserRouter` with all routes lazy loaded
+- [ ] `[!]` `src/types/enums.ts` — EventStatus, BookingStatus, UserRole, AccountStatus as const
+- [ ] `[!]` `src/types/ws.ts` — WSEnvelope, WSMessageType, WSNewMessagePayload, WSUnreadCountPayload
+- [ ] `[!]` `src/routes/index.tsx` — `createBrowserRouter`, all routes lazy loaded
 - [ ] `[!]` `src/routes/ProtectedRoute.tsx` — auth + role check
 - [ ] `[!]` `src/main.tsx` — `<Provider store>`, `<RouterProvider>`
 
 ### 5.3 Layout & Shared Components
-- [ ] `[!]` `Navbar.tsx` — logo, nav links, user menu, unread badge
-- [ ] `[!]` `AppShell.tsx` — Navbar + `<Outlet />`
+- [ ] `[!]` `Navbar.tsx` — logo, nav links, user menu, unread badge (from Redux)
+- [ ] `[!]` `AppShell.tsx` — mounts `useWebSocket()`, renders Navbar + `<Outlet />`
 - [ ] `LoadingSpinner.tsx`
 - [ ] `ErrorMessage.tsx`
 - [ ] `EmptyState.tsx`
 - [ ] `SkeletonList.tsx`
 - [ ] `[!]` `Pagination.tsx` — shadcn-based page controls
-- [ ] Add shadcn components: `bun x shadcn add button input card dialog table badge tabs sheet select`
+- [ ] Add shadcn components: `bunx shadcn add button input card dialog table badge tabs sheet select sonner`
 
 ---
 
 ## 6. Frontend — Features
 
 ### 6.1 Auth
-- [ ] `[!]` `authSlice.ts` — user, tokens, isAuthenticated, localStorage rehydration
+- [ ] `[!]` `authSlice.ts` — user, accessToken, isAuthenticated, localStorage rehydration
 - [ ] `[!]` `authApi.ts` — login, register, refresh, logout RTK Query endpoints
-- [ ] `[!]` `useAuth.ts` hook — convenience wrapper over auth store
-- [ ] `[!]` `LoginPage.tsx` — form with React Hook Form + Zod
-- [ ] `[!]` `RegisterPage.tsx` — full registration form, all required fields
+- [ ] `[!]` `useAuth.ts` — convenience wrapper over auth store
+- [ ] `[!]` `LoginPage.tsx` — React Hook Form + Zod
+- [ ] `[!]` `RegisterPage.tsx` — all fields: username, password, confirm_password, first_name, last_name, email, phone, address, city, country, vat_number
 - [ ] `[!]` `PendingApprovalPage.tsx`
 - [ ] `UnauthorizedPage.tsx`
 - [ ] Token refresh on 401 in `baseApi` reauth wrapper
-- [ ] Rehydrate auth state on app load from localStorage
+- [ ] `wsClient.disconnect()` called on logout
 
 ### 6.2 Event Browse
-- [ ] `[!]` `eventsApi.ts` — getEvents, getEvent, getRecommended RTK Query endpoints
+- [ ] `[!]` `eventsApi.ts` — getEvents, getEvent, getRecommended
 - [ ] `[!]` `eventsSlice.ts` — filters, pagination UI state
 - [ ] `[!]` `EventsPage.tsx` — paginated grid + filter sidebar
 - [ ] `[!]` `EventCard.tsx` — title, date, venue, city, categories, price, availability
 - [ ] `[!]` Filter sidebar — category, date range, price range, city, free text
-- [ ] `[!]` URL search params sync with filters (deep-linkable)
+- [ ] `[!]` URL search params sync with active filters
 - [ ] `[!]` `EventDetailPage.tsx` — full info, photo gallery, map, ticket selector, booking button
-- [ ] `[!]` `MapEmbed.tsx` — Leaflet map, lazy loaded, event marker
-- [ ] Recommended events section (authenticated users)
-- [ ] Record event view on detail page load
-- [ ] Guest: replace booking button with "Σύνδεση για κράτηση" prompt
+- [ ] `[!]` `MapEmbed.tsx` — react-leaflet, lazy loaded, event marker
+- [ ] Recommended events section (authenticated users only)
+- [ ] Record event view on detail page load (authenticated)
+- [ ] Guest: show "Σύνδεση για κράτηση" instead of booking button
 
 ### 6.3 Bookings
 - [ ] `[!]` `bookingsApi.ts` — createBooking, getMyBookings
-- [ ] `[!]` Booking form — ticket type select, quantity, live cost preview
-- [ ] `[!]` Confirmation dialog — summary + explicit confirm (shadcn Dialog)
+- [ ] `[!]` Booking form — ticket type select, quantity input, live cost preview
+- [ ] `[!]` Confirmation dialog before submit (booking cannot be reversed)
 - [ ] `[!]` `MyBookingsPage.tsx` — list with event title, date, status, cost
-- [ ] Success toast after confirmed booking
+- [ ] Success toast (Sonner) after confirmed booking
 
 ### 6.4 Organizer
-- [ ] `[!]` `OrganizerEventsPage.tsx` — my events list, status badges, actions
-- [ ] `[!]` `CreateEventPage.tsx` — full form: all DTD fields, categories multi-select, ticket types (dynamic add/remove), photo upload
-- [ ] `[!]` `EditEventPage.tsx` — same as create, pre-populated
-- [ ] `[!]` Live capacity validator (sum of ticket quantities vs capacity)
-- [ ] `[!]` Publish action with confirmation dialog
-- [ ] `[!]` Cancel action with confirmation + warning about notifying attendees
-- [ ] `[!]` Delete action (only shown when allowed)
+- [ ] `[!]` `OrganizerEventsPage.tsx` — my events, status badges, action buttons
+- [ ] `[!]` `CreateEventPage.tsx` — all DTD fields, multi-select categories, dynamic ticket types, photo upload
+- [ ] `[!]` `EditEventPage.tsx` — pre-populated, same as create
+- [ ] `[!]` Live capacity validator (sum of ticket quantities vs capacity, client-side)
+- [ ] `[!]` Publish action — confirmation dialog
+- [ ] `[!]` Cancel action — confirmation dialog, warn about bulk notification to attendees
+- [ ] `[!]` Delete action — only shown when allowed (DRAFT or no bookings)
 - [ ] `EventBookingsPage.tsx` — all bookings for an event, paginated
-- [ ] Photo upload component — drag & drop, preview, delete
+- [ ] Photo upload — drag & drop, preview, delete
 
-### 6.5 Messaging
-- [ ] `[!]` `messagingApi.ts` — getInbox, getSent, sendMessage, deleteMessage, markRead, getUnreadCount
-- [ ] `[!]` `messagingSlice.ts` — unread count, polling interval
-- [ ] `[!]` `useUnreadCount.ts` — poll every 30s, update navbar badge
-- [ ] `[!]` `InboxPage.tsx` — list with unread highlight, pagination
-- [ ] `[!]` `SentPage.tsx`
-- [ ] Message detail view — full body, reply button
-- [ ] Compose form — recipient, subject, body
-- [ ] Delete action for inbox/sent
-- [ ] Unread badge in Navbar
+### 6.5 Messaging — WebSocket (Requirement 10)
+- [ ] `[!]` `messagingSlice.ts` — unreadCount, pendingMessages (incoming WS buffer)
+- [ ] `[!]` `messagingApi.ts` — getInbox, getSent, sendMessage, deleteMessage, markRead (REST)
+- [ ] `[!]` `InboxPage.tsx` — list, unread highlighted, pagination; reset unread on open
+- [ ] `[!]` `SentPage.tsx` — sent messages list, pagination
+- [ ] `[!]` `MessageDetailPage.tsx` — full body, reply button
+- [ ] `[!]` Compose/reply form — recipient, subject, body
+- [ ] `[!]` Delete action for inbox/sent
+- [ ] `[!]` Unread badge in Navbar — sourced from `state.messaging.unreadCount` (WebSocket-driven)
+- [ ] On inbox open: call markRead REST + dispatch `setUnreadCount(0)` in Redux
 
 ### 6.6 Admin
 - [ ] `[!]` `adminApi.ts` — getUsers, approveUser, rejectUser, exportXml, exportJson
-- [ ] `[!]` `UsersPage.tsx` — table with username, name, email, role, status; pagination; filter by status
-- [ ] `[!]` `UserDetailPage.tsx` — all fields, approve/reject buttons for pending
-- [ ] `[!]` Export XML button — triggers file download
-- [ ] `[!]` Export JSON button — triggers file download
+- [ ] `[!]` `UsersPage.tsx` — table: username, name, email, role, status; pagination; filter by status
+- [ ] `[!]` `UserDetailPage.tsx` — all fields, approve/reject for pending accounts
+- [ ] `[!]` Export XML — triggers file download from `GET /admin/events/export/xml`
+- [ ] `[!]` Export JSON — triggers file download from `GET /admin/events/export/json`
 
 ---
 
 ## 7. Frontend — Testing
 
-- [ ] Unit tests for `authSlice`, `eventsSlice`
-- [ ] Unit tests for `useAuth`, `useUnreadCount`
+- [ ] Unit tests: `authSlice`, `eventsSlice`, `messagingSlice`
+- [ ] Unit tests: `useAuth`, `useWebSocket`
 - [ ] Component tests: EventCard, Pagination, BookingForm (React Testing Library)
 - [ ] ProtectedRoute tests
 - [ ] E2E (Playwright): register → pending → login → browse → book → my bookings
-- [ ] E2E: organizer create event → publish → attendee books → organizer views booking
+- [ ] E2E: organizer create → publish → attendee books → organizer views booking
 - [ ] E2E: admin approves user → exports XML
+- [ ] E2E: send message → recipient receives via WebSocket → unread badge updates
 
 ---
 
 ## 8. Integration & System Testing
 
-- [ ] `[!]` Concurrent booking test — verify capacity not exceeded under load
-- [ ] XML export validation against assignment DTD (`xmllint`)
+- [ ] `[!]` Concurrent booking — verify capacity not exceeded under load
+- [ ] XML export validates against assignment DTD (`xmllint`)
 - [ ] Full-text search with Greek text
 - [ ] JWT expiry + refresh rotation
 - [ ] Rate limiting on auth endpoints
-- [ ] Event cancellation bulk messaging
-- [ ] Recommendation endpoint (cold-start + returning user)
+- [ ] Event cancellation: bulk message INSERT + WS broadcast to all attendees
+- [ ] Recommendation endpoint (cold-start user + returning user)
+- [ ] WebSocket reconnect after server restart
 
 ---
 
 ## 9. Report (`./report/`)
 
-- [ ] Cover page — title, team, student IDs, date
+- [ ] Cover page — title, team names, student IDs, date
 - [ ] Table of contents
 - [ ] Chapter 1: Introduction
-- [ ] Chapter 2: Architecture overview
+- [ ] Chapter 2: Architecture overview (REST + WebSocket)
 - [ ] Chapter 3: Database design + ER diagram
 - [ ] Chapter 4: Backend implementation
 - [ ] Chapter 5: Frontend implementation
@@ -315,7 +336,7 @@
 
 - [ ] `docs/setup.md`
 - [ ] `docs/deployment.md`
-- [ ] `docs/api.md` (or generate from Swagger)
+- [ ] `docs/api.md` (REST + WebSocket protocol)
 - [ ] `docs/database.md` + ER diagram
 - [ ] `docs/architecture.md`
 - [ ] `docs/recommendation.md`
@@ -339,7 +360,15 @@
 - [ ] App runs following `docs/setup.md` on a fresh machine
 - [ ] XML export validates against assignment DTD
 - [ ] OpenStreetMap renders on event detail
+- [ ] WebSocket connects and delivers messages in realtime
 - [ ] Recommendation endpoint returns results
 - [ ] Report PDF in `./report/`
 - [ ] Source zip excludes `node_modules`, `dist`, `.env`, `uploads/`
 - [ ] Zip + PDF uploaded to e-class before deadline
+
+---
+
+## Submission Deadline
+
+**June session**: 28 June 2026, 23:59
+**September session**: 20 September 2026, 23:59

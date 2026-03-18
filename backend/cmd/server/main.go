@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"nexustickets/internal/config"
+	"nexustickets/internal/middleware"
 	"nexustickets/pkg/logger"
 	"nexustickets/pkg/response"
 )
@@ -25,6 +26,8 @@ func main() {
 	app := fiber.New(fiber.Config{
 		AppName: "NexusTickets API",
 	})
+
+	app.Use(middleware.CORS(cfg.CORSAllowedOrigins))
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return response.OK(c, fiber.Map{"status": "ok"})

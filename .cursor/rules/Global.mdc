@@ -6,10 +6,28 @@ alwaysApply: true
 
 # Project: NexusTickets
 ## Stack Overview
-- **Backend**: Go (Fiber v2 + GORM + Wire) → REST API + JWT auth
-- **Database**: PostgreSQL 16 (primary) + Redis 7 (cache / sessions)
-- **Frontend**: React 19 + Vite + Bun + TypeScript + Tailwind CSS v4 + shadcn/ui + Lucide React + React Router v7 + Redux Toolkit + RTK Query
+- **Backend**: Go (Fiber v2 + GORM + Wire) → REST API + JWT auth + WebSocket (gorilla/websocket)
+- **Database**: PostgreSQL 16 (primary) + Redis 7 (cache / sessions / pub-sub)
+- **Frontend**: React 19 + Vite 6 + Bun + TypeScript + Tailwind CSS v4 + shadcn/ui + Lucide React + React Router v7 + Redux Toolkit + RTK Query
 - **Auth**: JWT (access + refresh tokens), role-based (admin / organizer / attendee / guest)
+- **Realtime**: WebSocket for messaging (requirement 10) — gorilla/websocket on backend, native WebSocket API on frontend
+
+## Assignment Requirements Checklist
+> Every feature must trace back to a requirement number.
+
+- **Req 1**: Welcome page — login + register, SSL/TLS
+- **Req 2**: Registration form — username, password, confirm password, first name, last name, email, phone, address, geo location, VAT number. Username uniqueness check. Redirect to pending page after submit.
+- **Req 3**: Seeded admin user. Admin login → user management page.
+- **Req 4**: Admin: list users, view user details, approve/reject registrations.
+- **Req 5**: Registered user login → home/events page.
+- **Req 6**: Home page → event management OR event browse/search.
+- **Req 7**: Event management — create (DTD schema), browse own events + their bookings, edit/cancel/delete with rules, capacity + ticket type management.
+- **Req 8**: Event browse/search — by category, title, description (full-text), date range, price, location. Paginated results.
+- **Req 9**: Event detail — OpenStreetMap embed, booking form with confirmation dialog, availability checks, update available count after booking.
+- **Req 10**: Post-booking messaging — realtime WebSocket chat, inbox/sent organization, unread indicator in navbar, delete messages, bulk cancel notification.
+- **Req 11**: Guest can browse/search but cannot book.
+- **Req 12**: Admin XML export (matching DTD) + JSON export.
+- **Req 13**: Biased Matrix Factorization recommendation engine, from scratch, cold-start fallback.
 
 ## Repository Structure
 ```
@@ -32,7 +50,7 @@ alwaysApply: true
     │   ├── features/      # Feature slices (events, bookings, auth, admin, messaging)
     │   ├── components/    # Shared UI components
     │   ├── hooks/         # Shared custom hooks
-    │   ├── lib/           # Utilities, API client, helpers
+    │   ├── lib/           # Utilities, API client, WebSocket client, helpers
     │   ├── types/         # Global TypeScript types
     │   └── routes/        # React Router route definitions
     └── ...
@@ -42,7 +60,8 @@ alwaysApply: true
 - English for all code, comments, commit messages
 - Greek only in UI-facing strings
 - Never commit secrets, credentials, `.env` files
-- All API responses follow `{ data, error, meta }` envelope
+- All REST API responses follow `{ data, error, meta }` envelope
+- WebSocket messages follow `{ type, payload }` envelope
 - Dates/times always UTC in storage; format for display on frontend
 - IDs are UUIDs v7 everywhere
 - Feature branch naming: `feat/<scope>/<short-desc>`
@@ -57,6 +76,7 @@ alwaysApply: true
 ## Security Baseline
 - Public routes: login, register, `/events` browse, `/events/:id` detail
 - All other routes require authentication + correct role
+- WebSocket connections authenticated via JWT query param on handshake
 - Input validation on every form — never trust data before sending to API
 - XSS prevention: never use `dangerouslySetInnerHTML` with user data
-- HTTPS enforced in production
+- HTTPS / WSS enforced in production

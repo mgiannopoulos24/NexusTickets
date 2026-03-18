@@ -16,6 +16,8 @@ const (
 	envDatabaseURL = "DATABASE_URL"
 	envRedisURL    = "REDIS_URL"
 
+	envCORSAllowedOrigins = "CORS_ALLOWED_ORIGINS"
+
 	envDBHost     = "DB_HOST"
 	envDBPort     = "DB_PORT"
 	envDBName     = "DB_NAME"
@@ -30,6 +32,8 @@ const (
 type Config struct {
 	AppEnv  string `validate:"oneof=development staging production"`
 	AppPort int    `validate:"min=1,max=65535"`
+
+	CORSAllowedOrigins string
 
 	// Preferred connection strings.
 	DatabaseURL string
@@ -50,6 +54,7 @@ type Config struct {
 func Load() (Config, error) {
 	cfg := Config{
 		AppEnv:      getEnv(envAppEnv, "development"),
+		CORSAllowedOrigins: getEnv(envCORSAllowedOrigins, "http://localhost,http://localhost:5173"),
 		DatabaseURL: strings.TrimSpace(os.Getenv(envDatabaseURL)),
 		RedisURL:    strings.TrimSpace(os.Getenv(envRedisURL)),
 

@@ -1,5 +1,5 @@
 ---
-description: React 19 frontend rules — Vite, Bun, Tailwind v4, shadcn/ui, Lucide React, React Router v7, Redux Toolkit
+description: React 19 frontend rules — Vite 6, Bun, Tailwind v4, shadcn/ui, Lucide React, React Router v7, Redux Toolkit, WebSocket
 globs: ["frontend/**/*.tsx", "frontend/**/*.ts", "frontend/**/*.css"]
 alwaysApply: false
 ---
@@ -8,32 +8,38 @@ alwaysApply: false
 
 ## Toolchain
 - **Runtime / Package Manager**: Bun
-- **Build Tool**: Vite 8+
+- **Build Tool**: Vite 6
 - **React**: 19+
 - **Language**: TypeScript 5+ strict mode
-- **Styling**: Tailwind CSS v4 — no `tailwind.config.js`, CSS-first configuration
+- **Styling**: Tailwind CSS v4 — CSS-first, no `tailwind.config.js`
 - **UI Components**: shadcn/ui (Radix primitives + Tailwind)
-- **Icons**: Lucide React — always import individually, never the full bundle
-- **Routing**: React Router v7 (framework mode with `createBrowserRouter`)
-- **State**: Redux Toolkit (global/auth state) + RTK Query (server state / API calls)
-- **Forms**: React Hook Form + Zod validation
+- **Icons**: Lucide React — always import individually
+- **Routing**: React Router v7 (`createBrowserRouter`)
+- **State**: Redux Toolkit (global/auth state) + RTK Query (server state)
+- **Forms**: React Hook Form + Zod
+- **Realtime**: Native WebSocket API wrapped in a custom hook (no library needed)
+
+## Typography / Fonts
+- Use the predefined typography classes from `frontend/src/styles/typography.css` for **font family + font weight**:
+  - `comfortaa-light`, `comfortaa-regular`, `comfortaa-medium`, `comfortaa-semibold`, `comfortaa-bold`
+- Use Tailwind utilities for everything else (e.g. text color, size, tracking, leading, spacing, layout).
 
 ## Project Structure
 ```
 src/
   app/
-    store.ts              # Redux store configuration
-    hooks.ts              # Typed useAppDispatch, useAppSelector
+    store.ts
+    hooks.ts
   features/
     auth/
-      authSlice.ts        # JWT, current user, role
-      authApi.ts          # RTK Query endpoints (login, register, refresh)
+      authSlice.ts
+      authApi.ts
       LoginPage.tsx
       RegisterPage.tsx
       PendingApprovalPage.tsx
     events/
-      eventsApi.ts        # RTK Query endpoints
-      eventsSlice.ts      # UI state (filters, pagination)
+      eventsApi.ts
+      eventsSlice.ts
       EventsPage.tsx
       EventDetailPage.tsx
       EventCard.tsx
@@ -46,18 +52,19 @@ src/
       EditEventPage.tsx
       EventBookingsPage.tsx
     messaging/
-      messagingApi.ts
-      messagingSlice.ts
+      messagingApi.ts          # RTK Query: inbox, sent, send, delete (REST)
+      messagingSlice.ts        # unread count, active conversation state
       InboxPage.tsx
       SentPage.tsx
+      MessageDetailPage.tsx
     admin/
       adminApi.ts
       UsersPage.tsx
       UserDetailPage.tsx
   components/
-    ui/                   # shadcn/ui generated components (never edit manually)
+    ui/                        # shadcn/ui — never edit manually
     layout/
-      Navbar.tsx
+      Navbar.tsx               # includes unread badge
       AppShell.tsx
     shared/
       EventCard.tsx
@@ -66,35 +73,36 @@ src/
       ErrorMessage.tsx
       EmptyState.tsx
       SkeletonList.tsx
-      MapEmbed.tsx        # Leaflet OpenStreetMap
+      MapEmbed.tsx
   hooks/
     useAuth.ts
-    useUnreadCount.ts
+    useWebSocket.ts            # WebSocket connection lifecycle
+    useUnreadCount.ts          # reads from messagingSlice, driven by WS
   lib/
-    api.ts                # Axios base instance with interceptors
-    utils.ts              # cn(), formatDate(), formatCurrency()
+    api.ts                     # RTK Query baseApi
+    wsClient.ts                # WebSocket client singleton
+    utils.ts
     constants.ts
+    i18n/
+      ui.ts
+      errors.ts
+      messages.ts
   types/
-    api.ts                # ApiResponse<T>, PaginationMeta
-    models.ts             # Event, Booking, User, TicketType, Message
-    enums.ts              # EventStatus, BookingStatus, UserRole etc.
+    api.ts
+    models.ts
+    enums.ts
+    ws.ts                      # WebSocket message type definitions
   routes/
-    index.tsx             # createBrowserRouter
-    ProtectedRoute.tsx    # auth + role guard component
+    index.tsx
+    ProtectedRoute.tsx
   main.tsx
 ```
 
 ## TypeScript Rules
-- `"strict": true` in `tsconfig.json` — no exceptions
-- No `any` — use `unknown` and narrow with type guards
-- All API shapes typed in `src/types/models.ts`
-- Use `satisfies` operator for object literals where possible
+- `"strict": true` in `tsconfig.json`
+- No `any` — use `unknown` with type guards
 - Enums as `as const` objects:
 ```typescript
-// BAD
-enum EventStatus { DRAFT = 'DRAFT' }
-
-// GOOD
 export const EventStatus = {
   DRAFT: 'DRAFT',
   PUBLISHED: 'PUBLISHED',
@@ -104,44 +112,192 @@ export const EventStatus = {
 export type EventStatus = typeof EventStatus[keyof typeof EventStatus];
 ```
 
-## Component Rules
-```tsx
-// ALWAYS functional components with explicit return type
-// ALWAYS named exports (not default exports) for components used in routes
-// Exception: default export required for lazy() — add named export too
+## WebSocket Client (Requirement 10)
 
-// Good component structure
-interface EventCardProps {
-  event: Event;
-  onBook?: (eventId: string) => void;
+### Message Types
+```typescript
+// types/ws.ts
+export const WSMessageType = {
+  NEW_MESSAGE:   'new_message',
+  DELETED:       'message_deleted',
+  UNREAD_COUNT:  'unread_count',
+  ERROR:         'error',
+} as const;
+export type WSMessageType = typeof WSMessageType[keyof typeof WSMessageType];
+
+export interface WSEnvelope {
+  type: WSMessageType;
+  payload: unknown;
 }
 
-export function EventCard({ event, onBook }: EventCardProps) {
+export interface WSNewMessagePayload {
+  id: string;
+  senderId: string;
+  senderName: string;
+  subject: string;
+  body: string;
+  eventId: string | null;
+  sentAt: string;
+}
+
+export interface WSUnreadCountPayload {
+  count: number;
+}
+```
+
+### WS Client Singleton
+```typescript
+// lib/wsClient.ts
+const WS_URL = import.meta.env.VITE_WS_URL; // ws://localhost:8080/api/v1/ws/messages
+
+type MessageHandler = (envelope: WSEnvelope) => void;
+
+class WebSocketClient {
+  private ws: WebSocket | null = null;
+  private handlers = new Set<MessageHandler>();
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private token: string | null = null;
+
+  connect(token: string) {
+    this.token = token;
+    this.ws = new WebSocket(`${WS_URL}?token=${token}`);
+
+    this.ws.onmessage = (event) => {
+      try {
+        const envelope: WSEnvelope = JSON.parse(event.data);
+        this.handlers.forEach(h => h(envelope));
+      } catch { /* ignore malformed */ }
+    };
+
+    this.ws.onclose = () => {
+      // reconnect with exponential backoff
+      this.reconnectTimer = setTimeout(() => {
+        if (this.token) this.connect(this.token);
+      }, 3000);
+    };
+
+    this.ws.onerror = () => this.ws?.close();
+  }
+
+  disconnect() {
+    this.token = null;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.ws?.close();
+    this.ws = null;
+  }
+
+  subscribe(handler: MessageHandler) {
+    this.handlers.add(handler);
+    return () => this.handlers.delete(handler);
+  }
+}
+
+export const wsClient = new WebSocketClient();
+```
+
+### useWebSocket Hook
+```typescript
+// hooks/useWebSocket.ts
+export function useWebSocket() {
+  const dispatch = useAppDispatch();
+  const { accessToken, isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    if (!isAuthenticated || !accessToken) return;
+
+    wsClient.connect(accessToken);
+
+    const unsubscribe = wsClient.subscribe((envelope) => {
+      switch (envelope.type) {
+        case WSMessageType.NEW_MESSAGE:
+          dispatch(messagingSlice.actions.addIncomingMessage(
+            envelope.payload as WSNewMessagePayload
+          ));
+          break;
+        case WSMessageType.UNREAD_COUNT:
+          dispatch(messagingSlice.actions.setUnreadCount(
+            (envelope.payload as WSUnreadCountPayload).count
+          ));
+          break;
+        case WSMessageType.DELETED:
+          // invalidate RTK Query cache
+          dispatch(baseApi.util.invalidateTags(['Message']));
+          break;
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      wsClient.disconnect();
+    };
+  }, [isAuthenticated, accessToken]);
+}
+```
+
+### Where to Mount the Hook
+```tsx
+// components/layout/AppShell.tsx
+export function AppShell() {
+  useWebSocket(); // single mount point — runs for entire session
+
   return (
-    <div className="...">
-      ...
-    </div>
+    <>
+      <Navbar />
+      <main>
+        <Outlet />
+      </main>
+    </>
   );
 }
+```
 
-// Lazy loaded page components
-const EventsPage = lazy(() =>
-  import('@/features/events/EventsPage').then(m => ({ default: m.EventsPage }))
-);
+### messagingSlice
+```typescript
+// features/messaging/messagingSlice.ts
+interface MessagingState {
+  unreadCount: number;
+  pendingMessages: WSNewMessagePayload[]; // buffered until inbox is opened
+}
+
+const messagingSlice = createSlice({
+  name: 'messaging',
+  initialState: { unreadCount: 0, pendingMessages: [] } as MessagingState,
+  reducers: {
+    setUnreadCount: (state, action: PayloadAction<number>) => {
+      state.unreadCount = action.payload;
+    },
+    addIncomingMessage: (state, action: PayloadAction<WSNewMessagePayload>) => {
+      state.unreadCount += 1;
+      state.pendingMessages.push(action.payload);
+    },
+    clearPending: (state) => {
+      state.pendingMessages = [];
+    },
+  },
+});
+```
+
+### Unread Badge in Navbar
+```tsx
+// components/layout/Navbar.tsx
+const unreadCount = useAppSelector(s => s.messaging.unreadCount);
+
+// In JSX:
+{unreadCount > 0 && (
+  <Badge variant="destructive" className="absolute -top-1 -right-1 text-xs px-1.5 min-w-[1.25rem]">
+    {unreadCount > 99 ? '99+' : unreadCount}
+  </Badge>
+)}
 ```
 
 ## Redux Toolkit Rules
 ```typescript
 // app/store.ts
-import { configureStore } from '@reduxjs/toolkit';
-import { authReducer } from '@/features/auth/authSlice';
-import { eventsReducer } from '@/features/events/eventsSlice';
-import { baseApi } from '@/lib/api';
-
 export const store = configureStore({
   reducer: {
     auth: authReducer,
     events: eventsReducer,
+    messaging: messagingReducer,
     [baseApi.reducerPath]: baseApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>
@@ -151,17 +307,14 @@ export const store = configureStore({
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 
-// app/hooks.ts — ALWAYS use these, never raw useSelector/useDispatch
+// app/hooks.ts
 export const useAppDispatch = () => useDispatch<AppDispatch>();
 export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;
 ```
 
 ## RTK Query Rules
 ```typescript
-// lib/api.ts — single base API instance
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { RootState } from '@/app/store';
-
+// lib/api.ts
 export const baseApi = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({
@@ -175,48 +328,21 @@ export const baseApi = createApi({
   tagTypes: ['Event', 'Booking', 'User', 'Message'],
   endpoints: () => ({}),
 });
-
-// features/events/eventsApi.ts — inject endpoints
-export const eventsApi = baseApi.injectEndpoints({
-  endpoints: (build) => ({
-    getEvents: build.query<ApiResponse<Event[]>, EventFilters>({
-      query: (filters) => ({ url: '/events', params: filters }),
-      providesTags: ['Event'],
-    }),
-    getEvent: build.query<ApiResponse<Event>, string>({
-      query: (id) => `/events/${id}`,
-      providesTags: (_result, _err, id) => [{ type: 'Event', id }],
-    }),
-    createEvent: build.mutation<ApiResponse<Event>, CreateEventRequest>({
-      query: (body) => ({ url: '/events', method: 'POST', body }),
-      invalidatesTags: ['Event'],
-    }),
-  }),
-});
-
-export const { useGetEventsQuery, useGetEventQuery, useCreateEventMutation } = eventsApi;
 ```
 
 ## React Router v7 Rules
 ```tsx
-// routes/index.tsx
-import { createBrowserRouter } from 'react-router';
-import { AppShell } from '@/components/layout/AppShell';
-import { ProtectedRoute } from './ProtectedRoute';
-
 export const router = createBrowserRouter([
   {
     path: '/',
-    element: <AppShell />,
+    element: <AppShell />,    // useWebSocket() lives here
     children: [
       { index: true, lazy: () => import('@/features/events/EventsPage') },
       { path: 'events/:id', lazy: () => import('@/features/events/EventDetailPage') },
       {
         path: 'bookings',
         element: <ProtectedRoute roles={['attendee', 'organizer']} />,
-        children: [
-          { index: true, lazy: () => import('@/features/bookings/MyBookingsPage') },
-        ],
+        children: [{ index: true, lazy: () => import('@/features/bookings/MyBookingsPage') }],
       },
       {
         path: 'organizer',
@@ -241,6 +367,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, lazy: () => import('@/features/messaging/InboxPage') },
           { path: 'sent', lazy: () => import('@/features/messaging/SentPage') },
+          { path: ':id', lazy: () => import('@/features/messaging/MessageDetailPage') },
         ],
       },
     ],
@@ -250,103 +377,32 @@ export const router = createBrowserRouter([
   { path: '/pending', lazy: () => import('@/features/auth/PendingApprovalPage') },
   { path: '/unauthorized', lazy: () => import('@/pages/UnauthorizedPage') },
 ]);
-
-// routes/ProtectedRoute.tsx
-export function ProtectedRoute({ roles }: { roles: UserRole[] }) {
-  const { user, isAuthenticated } = useAuth();
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (!roles.includes(user.role)) return <Navigate to="/unauthorized" replace />;
-  return <Outlet />;
-}
-```
-
-## React Hook Form + Zod
-```tsx
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-
-const loginSchema = z.object({
-  username: z.string().min(1, 'Υποχρεωτικό πεδίο'),
-  password: z.string().min(6, 'Τουλάχιστον 6 χαρακτήρες'),
-});
-type LoginFormData = z.infer<typeof loginSchema>;
-
-export function LoginPage() {
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
-  });
-
-  const onSubmit = async (data: LoginFormData) => { ... };
-
-  return (
-    <form onSubmit={handleSubmit(onSubmit)}>
-      <input {...register('username')} />
-      {errors.username && <p>{errors.username.message}</p>}
-      <button type="submit" disabled={isSubmitting}>Σύνδεση</button>
-    </form>
-  );
-}
 ```
 
 ## shadcn/ui Rules
-- Components live in `src/components/ui/` — generated by `bunx shadcn add <component>`
-- Never manually edit files in `src/components/ui/` — re-generate instead
-- Always use shadcn components for: Button, Input, Card, Dialog, Table, Badge, Tabs, Sheet, Toast, Select, Popover, Calendar
-- Compose shadcn primitives into feature-specific components in `src/components/shared/`
-
-```tsx
-// Good — compose shadcn into feature component
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { MapPin, Calendar } from 'lucide-react';
-
-export function EventCard({ event }: { event: Event }) {
-  return (
-    <Card className="hover:shadow-lg transition-shadow">
-      <CardHeader>
-        <CardTitle>{event.title}</CardTitle>
-        <Badge variant={event.status === 'published' ? 'default' : 'secondary'}>
-          {event.status}
-        </Badge>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <MapPin className="w-4 h-4" />
-          <span>{event.venue}, {event.city}</span>
-        </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Calendar className="w-4 h-4" />
-          <span>{formatDate(event.startAt)}</span>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-```
+- Components in `src/components/ui/` — generated by `bunx shadcn add <component>`
+- Never manually edit `src/components/ui/` files
+- Use for: Button, Input, Card, Dialog, Table, Badge, Tabs, Sheet, Sonner (toasts), Select, Popover, Calendar
 
 ## Lucide React
 ```tsx
-// GOOD — import individually
-import { MapPin, Calendar, Ticket, Users, Mail } from 'lucide-react';
-
-// BAD — never import all
+// GOOD
+import { MapPin, Calendar, Ticket, Users, Mail, Bell } from 'lucide-react';
+// BAD
 import * as Icons from 'lucide-react';
 ```
 
 ## Auth Slice
 ```typescript
-// features/auth/authSlice.ts
 interface AuthState {
   user: User | null;
   accessToken: string | null;
-  refreshToken: string | null;
   isAuthenticated: boolean;
 }
 
 const authSlice = createSlice({
   name: 'auth',
-  initialState: loadFromStorage(), // rehydrate from localStorage on init
+  initialState: loadFromStorage() as AuthState,
   reducers: {
     setCredentials: (state, action: PayloadAction<LoginResponse>) => {
       state.user = action.payload.user;
@@ -359,44 +415,15 @@ const authSlice = createSlice({
       state.accessToken = null;
       state.isAuthenticated = false;
       localStorage.removeItem('auth');
+      wsClient.disconnect(); // always disconnect WS on logout
     },
   },
 });
 ```
 
-## Token Refresh (RTK Query baseQuery wrapper)
-```typescript
-// lib/api.ts — handle 401 and refresh automatically
-const baseQueryWithReauth: BaseQueryFn = async (args, api, extraOptions) => {
-  let result = await baseQuery(args, api, extraOptions);
-  if (result.error?.status === 401) {
-    const refreshResult = await baseQuery('/auth/refresh', api, extraOptions);
-    if (refreshResult.data) {
-      api.dispatch(setCredentials(refreshResult.data as LoginResponse));
-      result = await baseQuery(args, api, extraOptions);
-    } else {
-      api.dispatch(logout());
-    }
-  }
-  return result;
-};
-```
-
 ## Tailwind v4 Rules
-- No `tailwind.config.js` — configure in CSS with `@theme`
-- CSS variables for design tokens:
-```css
-/* src/index.css */
-@import "tailwindcss";
-
-@theme {
-  --color-primary: oklch(0.5 0.2 250);
-  --color-background: oklch(1 0 0);
-  --color-foreground: oklch(0.1 0 0);
-  --color-muted-foreground: oklch(0.5 0 0);
-}
-```
-- Use `cn()` utility (from `clsx` + `tailwind-merge`) for conditional classes:
+- No `tailwind.config.js` — configure via `@theme` in CSS
+- Use `cn()` from `clsx` + `tailwind-merge`
 ```typescript
 // lib/utils.ts
 import { clsx, type ClassValue } from 'clsx';
@@ -404,51 +431,42 @@ import { twMerge } from 'tailwind-merge';
 export function cn(...inputs: ClassValue[]) { return twMerge(clsx(inputs)); }
 ```
 
-## Data Fetching Patterns
-```tsx
-// GOOD — RTK Query with all states handled
-export function EventsPage() {
-  const [filters, setFilters] = useState<EventFilters>({});
-  const { data, isLoading, isError, error } = useGetEventsQuery(filters);
-
-  if (isLoading) return <SkeletonList />;
-  if (isError) return <ErrorMessage error={error} />;
-  if (!data?.data.length) return <EmptyState message="Δεν βρέθηκαν εκδηλώσεις" />;
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {data.data.map(event => (
-        <EventCard key={event.id} event={event} />
-      ))}
-    </div>
-  );
-}
-```
-
 ## OpenStreetMap (Requirement 9)
-- Use `react-leaflet` + `leaflet`
-- Lazy load the map component — it's heavy
-- Always set explicit height on container before mounting
 ```tsx
+// Lazy load — Leaflet is heavy
 const MapEmbed = lazy(() => import('@/components/shared/MapEmbed'));
 
-// In EventDetailPage:
 <Suspense fallback={<div className="h-64 bg-muted animate-pulse rounded-lg" />}>
   <MapEmbed lat={event.latitude} lng={event.longitude} title={event.venue} />
 </Suspense>
 ```
 
+## Booking Confirmation (Requirement 9)
+- Always show a Dialog before submitting a booking
+- Booking cannot be undone — make this clear in the dialog copy
+```tsx
+<Dialog>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>{UI.actions.confirm}</DialogTitle>
+    </DialogHeader>
+    <p>{MESSAGES.confirmBooking}</p>
+    <DialogFooter>
+      <Button variant="outline" onClick={onCancel}>{UI.actions.cancel}</Button>
+      <Button onClick={onConfirm} disabled={isLoading}>{UI.actions.bookNow}</Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+```
+
 ## Performance Rules
-- All route-level components lazy loaded via `lazy()` or React Router's `lazy`
-- `React.memo` for expensive list items (EventCard in large lists)
-- `useMemo` / `useCallback` only when profiling shows a real problem — not preemptively
-- Images: use explicit `width` and `height` to avoid layout shift
+- All route-level components lazy loaded
+- `React.memo` for EventCard in large grids
+- `useMemo`/`useCallback` only after profiling confirms a problem
+- Explicit image dimensions to avoid layout shift
 
 ## Error Boundaries
 ```tsx
-// Wrap each major route section in an ErrorBoundary
-import { ErrorBoundary } from 'react-error-boundary';
-
 <ErrorBoundary fallback={<ErrorMessage message="Κάτι πήγε στραβά" />}>
   <EventsPage />
 </ErrorBoundary>

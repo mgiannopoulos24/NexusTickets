@@ -1,6 +1,31 @@
 @font-face {
-    font-family: 'Comfortaa';
-    src: url('/fonts/Comfortaa-VariableFont.woff2') format('woff2');
-    font-weight: 300 700;
-    font-display: swap;
+  font-family: 'Comfortaa';
+  src: url('/fonts/Comfortaa-VariableFont.woff2') format('woff2');
+  font-weight: 300 700;
+  font-display: swap;
+}
+
+.comfortaa-light {
+  font-family: 'Comfortaa', sans-serif;
+  font-weight: 300;
+}
+
+.comfortaa-regular {
+  font-family: 'Comfortaa', sans-serif;
+  font-weight: 400;
+}
+
+.comfortaa-medium {
+  font-family: 'Comfortaa', sans-serif;
+  font-weight: 500;
+}
+
+.comfortaa-semibold {
+  font-family: 'Comfortaa', sans-serif;
+  font-weight: 600;
+}
+
+.comfortaa-bold {
+  font-family: 'Comfortaa', sans-serif;
+  font-weight: 700;
 }

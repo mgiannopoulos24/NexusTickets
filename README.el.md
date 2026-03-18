@@ -136,7 +136,7 @@ cp .env.example .env
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
-Το frontend είναι διαθέσιμο στο `http://localhost:5173`.  
+Το frontend είναι διαθέσιμο στο `http://localhost:80`.  
 Το backend API είναι διαθέσιμο στο `http://localhost:8080/api/v1`.  
 Η τεκμηρίωση API βρίσκεται στο `http://localhost:8080/api/v1/docs`.
 
