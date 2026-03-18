@@ -4,6 +4,7 @@ import { Tabs as TabsPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
+/* eslint-disable react-refresh/only-export-components */
 function Tabs({
   className,
   orientation = "horizontal",
