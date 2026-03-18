@@ -36,6 +36,7 @@ alwaysApply: true
 │   ├── cmd/server/
 │   ├── internal/
 │   │   ├── config/
+│   │   ├── dto/          # Request/response DTOs (handler layer)
 │   │   ├── domain/
 │   │   ├── repository/
 │   │   ├── service/
@@ -62,6 +63,7 @@ alwaysApply: true
 - Never commit secrets, credentials, `.env` files
 - All REST API responses follow `{ data, error, meta }` envelope
 - WebSocket messages follow `{ type, payload }` envelope
+- Backend handlers parse/return DTOs from `backend/internal/dto/` (never bind domain entities directly)
 - Dates/times always UTC in storage; format for display on frontend
 - IDs are UUIDs v7 everywhere
 - Feature branch naming: `feat/<scope>/<short-desc>`
