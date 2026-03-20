@@ -147,6 +147,14 @@ func authUserID(c *fiber.Ctx) (uuid.UUID, error) {
 	return userID, nil
 }
 
+func authUserRole(c *fiber.Ctx) (domain.UserRole, error) {
+	raw, ok := c.Locals("role").(string)
+	if !ok || raw == "" {
+		return "", fiber.NewError(fiber.StatusUnauthorized, "missing role in auth context")
+	}
+	return domain.UserRole(raw), nil
+}
+
 func parsePage(rawLimit, rawOffset string) (int, int, error) {
 	limit := 20
 	offset := 0

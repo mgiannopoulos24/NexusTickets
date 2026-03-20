@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -62,14 +63,29 @@ func main() {
 	app.Use(recover.New())
 	app.Use(middleware.RequestLogger())
 	app.Use(middleware.RateLimiter(redisClient.Raw, cfg.RateLimitMaxReqs, cfg.RateLimitWindow))
+	app.Static("/media", cfg.MediaStoragePath)
 
 	userRepo := postgres.NewUserRepositoryPostgres(pg.Gorm)
+	eventRepo := postgres.NewEventRepositoryPostgres(pg.Gorm)
+	bookingRepo := postgres.NewBookingRepositoryPostgres(pg.Gorm)
+	categoryRepo := postgres.NewCategoryRepositoryPostgres(pg.Gorm)
+	eventPhotoRepo := postgres.NewEventPhotoRepositoryPostgres(pg.Gorm)
+	ticketTypeRepo := postgres.NewTicketTypeRepositoryPostgres(pg.Gorm)
 	authService := service.NewAuthService(userRepo, redisClient.Raw, cfg.JWTSecret)
 	authHandler := handler.NewAuthHandler(authService)
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService)
+	if err := os.MkdirAll(filepath.Clean(cfg.MediaStoragePath), 0o755); err != nil {
+		log.Fatal("create media storage path failed", zap.Error(err))
+	}
+	eventService := service.NewEventService(eventRepo, bookingRepo, categoryRepo, eventPhotoRepo, cfg.MediaStoragePath)
+	eventHandler := handler.NewEventHandler(eventService)
+	bookingService := service.NewBookingService(eventRepo, ticketTypeRepo, bookingRepo)
+	bookingHandler := handler.NewBookingHandler(bookingService)
 	handler.RegisterAuthRoutes(app, authHandler, redisClient.Raw)
 	handler.RegisterUserRoutes(app, userHandler, cfg.JWTSecret)
+	handler.RegisterEventRoutes(app, eventHandler, cfg.JWTSecret)
+	handler.RegisterBookingRoutes(app, bookingHandler, cfg.JWTSecret)
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return response.OK(c, fiber.Map{"status": "ok"})

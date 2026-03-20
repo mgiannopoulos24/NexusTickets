@@ -74,11 +74,13 @@ type TicketTypeRepository interface {
 
 type BookingRepository interface {
 	Create(ctx context.Context, booking domain.Booking) (domain.Booking, error)
+	CreateBookingWithDecrement(ctx context.Context, booking domain.Booking, ticketTypeID uuid.UUID, quantity int) (domain.Booking, error)
 	GetByID(ctx context.Context, id uuid.UUID) (domain.Booking, error)
 
 	ListByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Booking, error)
 	ListByEvent(ctx context.Context, eventID uuid.UUID, limit, offset int) ([]domain.Booking, error)
 	ListConfirmedByEvent(ctx context.Context, eventID uuid.UUID, limit, offset int) ([]domain.Booking, error)
+	CountByTicketType(ctx context.Context, ticketTypeID uuid.UUID) (int, error)
 
 	SetStatus(ctx context.Context, bookingID uuid.UUID, status domain.BookingStatus) error
 }
@@ -112,4 +114,3 @@ type UserEventViewRepository interface {
 	Record(ctx context.Context, userID, eventID uuid.UUID) error
 	CountByEvent(ctx context.Context, eventID uuid.UUID) (int, error)
 }
-

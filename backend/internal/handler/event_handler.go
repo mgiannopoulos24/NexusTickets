@@ -1,0 +1,504 @@
+package handler
+
+import (
+	"bytes"
+	"io"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
+
+	"nexustickets/internal/domain"
+	"nexustickets/internal/dto"
+	"nexustickets/internal/service"
+	"nexustickets/pkg/response"
+)
+
+const maxPhotoUploadBytes = 5 * 1024 * 1024
+
+type EventHandler struct {
+	service *service.EventService
+}
+
+func NewEventHandler(eventService *service.EventService) *EventHandler {
+	return &EventHandler{service: eventService}
+}
+
+func (h *EventHandler) Create(c *fiber.Ctx) error {
+	organizerID, err := authUserID(c)
+	if err != nil {
+		return err
+	}
+
+	var req dto.CreateEventRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+
+	startAt, err := time.Parse(time.RFC3339, strings.TrimSpace(req.StartAt))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid start_at (expected RFC3339)")
+	}
+	endAt, err := time.Parse(time.RFC3339, strings.TrimSpace(req.EndAt))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid end_at (expected RFC3339)")
+	}
+
+	event, cats, err := h.service.Create(c.Context(), organizerID, service.CreateEventInput{
+		Title:       req.Title,
+		Description: req.Description,
+		Venue:       req.Venue,
+		Address:     req.Address,
+		City:        req.City,
+		Country:     req.Country,
+		Latitude:    req.Latitude,
+		Longitude:   req.Longitude,
+		StartAt:     startAt,
+		EndAt:       endAt,
+		Capacity:    req.Capacity,
+		Categories:  req.Categories,
+		TicketTypes: toTicketTypeInputs(req.TicketTypes),
+	})
+	if err != nil {
+		return err
+	}
+	return response.Created(c, toEventResponse(event, cats))
+}
+
+func (h *EventHandler) Get(c *fiber.Ctx) error {
+	eventID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid event id")
+	}
+	event, cats, err := h.service.Get(c.Context(), eventID)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, toEventResponse(event, cats))
+}
+
+func (h *EventHandler) List(c *fiber.Ctx) error {
+	limit, offset, err := parsePage(c.Query("limit"), c.Query("offset"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+
+	events, cats, err := h.service.List(c.Context(), limit, offset)
+	if err != nil {
+		return err
+	}
+	out := make([]dto.EventResponse, 0, len(events))
+	for i := range events {
+		out = append(out, toEventResponse(events[i], cats[i]))
+	}
+	return response.OK(c, out)
+}
+
+func (h *EventHandler) Search(c *fiber.Ctx) error {
+	limit, offset, err := parsePage(c.Query("limit"), c.Query("offset"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+
+	startAt, err := optionalRFC3339(c.Query("start_at"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid start_at (expected RFC3339)")
+	}
+	endAt, err := optionalRFC3339(c.Query("end_at"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid end_at (expected RFC3339)")
+	}
+	minPrice, err := optionalFloat(c.Query("min_price"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid min_price")
+	}
+	maxPrice, err := optionalFloat(c.Query("max_price"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid max_price")
+	}
+
+	events, cats, err := h.service.Search(c.Context(), service.SearchEventsInput{
+		CategoryIDs: parseUUIDList(c.Query("category_ids")),
+		Title:       c.Query("title"),
+		Query:       c.Query("q"),
+		City:        c.Query("city"),
+		StartAt:     startAt,
+		EndAt:       endAt,
+		MinPrice:    minPrice,
+		MaxPrice:    maxPrice,
+	}, limit, offset)
+	if err != nil {
+		return err
+	}
+	out := make([]dto.EventResponse, 0, len(events))
+	for i := range events {
+		out = append(out, toEventResponse(events[i], cats[i]))
+	}
+	return response.OK(c, out)
+}
+
+func (h *EventHandler) GetOrganizerEvents(c *fiber.Ctx) error {
+	organizerID, err := authUserID(c)
+	if err != nil {
+		return err
+	}
+	limit, offset, err := parsePage(c.Query("limit"), c.Query("offset"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+
+	events, cats, err := h.service.GetOrganizerEvents(c.Context(), organizerID, limit, offset)
+	if err != nil {
+		return err
+	}
+	out := make([]dto.EventResponse, 0, len(events))
+	for i := range events {
+		out = append(out, toEventResponse(events[i], cats[i]))
+	}
+	return response.OK(c, out)
+}
+
+func (h *EventHandler) Update(c *fiber.Ctx) error {
+	organizerID, err := authUserID(c)
+	if err != nil {
+		return err
+	}
+	eventID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid event id")
+	}
+
+	var req dto.UpdateEventRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+	in := service.UpdateEventInput{
+		Title:       req.Title,
+		Description: req.Description,
+		Venue:       req.Venue,
+		Address:     req.Address,
+		City:        req.City,
+		Country:     req.Country,
+		Latitude:    req.Latitude,
+		Longitude:   req.Longitude,
+		Capacity:    req.Capacity,
+		Categories:  req.Categories,
+	}
+	if req.StartAt != nil {
+		ts, parseErr := time.Parse(time.RFC3339, strings.TrimSpace(*req.StartAt))
+		if parseErr != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid start_at (expected RFC3339)")
+		}
+		in.StartAt = &ts
+	}
+	if req.EndAt != nil {
+		ts, parseErr := time.Parse(time.RFC3339, strings.TrimSpace(*req.EndAt))
+		if parseErr != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid end_at (expected RFC3339)")
+		}
+		in.EndAt = &ts
+	}
+	if req.TicketTypes != nil {
+		items := toTicketTypeInputs(*req.TicketTypes)
+		in.TicketTypes = &items
+	}
+
+	event, cats, err := h.service.Update(c.Context(), organizerID, eventID, in)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, toEventResponse(event, cats))
+}
+
+func (h *EventHandler) Delete(c *fiber.Ctx) error {
+	organizerID, err := authUserID(c)
+	if err != nil {
+		return err
+	}
+	eventID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid event id")
+	}
+	if err := h.service.Delete(c.Context(), organizerID, eventID); err != nil {
+		return err
+	}
+	return response.OK(c, fiber.Map{"message": "event deleted"})
+}
+
+func (h *EventHandler) Publish(c *fiber.Ctx) error {
+	organizerID, err := authUserID(c)
+	if err != nil {
+		return err
+	}
+	eventID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid event id")
+	}
+	event, cats, err := h.service.Publish(c.Context(), organizerID, eventID)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, toEventResponse(event, cats))
+}
+
+func (h *EventHandler) Cancel(c *fiber.Ctx) error {
+	organizerID, err := authUserID(c)
+	if err != nil {
+		return err
+	}
+	eventID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid event id")
+	}
+	event, cats, err := h.service.Cancel(c.Context(), organizerID, eventID)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, toEventResponse(event, cats))
+}
+
+func (h *EventHandler) AddTicketType(c *fiber.Ctx) error {
+	organizerID, err := authUserID(c)
+	if err != nil {
+		return err
+	}
+	eventID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid event id")
+	}
+
+	var req dto.TicketTypeRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+
+	event, cats, err := h.service.AddTicketType(c.Context(), organizerID, eventID, service.TicketTypeInput{
+		Name:     req.Name,
+		Price:    req.Price,
+		Quantity: req.Quantity,
+	})
+	if err != nil {
+		return err
+	}
+	return response.OK(c, toEventResponse(event, cats))
+}
+
+func (h *EventHandler) UpdateTicketType(c *fiber.Ctx) error {
+	organizerID, err := authUserID(c)
+	if err != nil {
+		return err
+	}
+	eventID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid event id")
+	}
+	ticketTypeID, err := uuid.Parse(c.Params("ticketTypeId"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid ticket type id")
+	}
+
+	var req dto.TicketTypeRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+
+	event, cats, err := h.service.UpdateTicketType(c.Context(), organizerID, eventID, ticketTypeID, service.TicketTypeInput{
+		Name:     req.Name,
+		Price:    req.Price,
+		Quantity: req.Quantity,
+	})
+	if err != nil {
+		return err
+	}
+	return response.OK(c, toEventResponse(event, cats))
+}
+
+func (h *EventHandler) DeleteTicketType(c *fiber.Ctx) error {
+	organizerID, err := authUserID(c)
+	if err != nil {
+		return err
+	}
+	eventID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid event id")
+	}
+	ticketTypeID, err := uuid.Parse(c.Params("ticketTypeId"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid ticket type id")
+	}
+
+	event, cats, err := h.service.DeleteTicketType(c.Context(), organizerID, eventID, ticketTypeID)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, toEventResponse(event, cats))
+}
+
+func (h *EventHandler) UploadPhoto(c *fiber.Ctx) error {
+	organizerID, err := authUserID(c)
+	if err != nil {
+		return err
+	}
+	eventID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid event id")
+	}
+
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "file is required")
+	}
+	if fileHeader.Size <= 0 {
+		return fiber.NewError(fiber.StatusBadRequest, "empty file")
+	}
+	if fileHeader.Size > maxPhotoUploadBytes {
+		return fiber.NewError(fiber.StatusBadRequest, "file too large (max 5MB)")
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "unable to open uploaded file")
+	}
+	defer func() { _ = file.Close() }()
+
+	sniff := make([]byte, 512)
+	n, err := io.ReadFull(file, sniff)
+	if err != nil && err != io.ErrUnexpectedEOF {
+		return fiber.NewError(fiber.StatusBadRequest, "unable to read uploaded file")
+	}
+	mimeType, ok := service.DetectImageMIME(sniff[:n])
+	if !ok {
+		return fiber.NewError(fiber.StatusBadRequest, "unsupported image type: "+mimeType)
+	}
+
+	reader := io.MultiReader(bytes.NewReader(sniff[:n]), file)
+	created, err := h.service.AddPhoto(c.Context(), organizerID, eventID, mimeType, reader)
+	if err != nil {
+		return err
+	}
+
+	return response.Created(c, fiber.Map{
+		"id":           created.ID.String(),
+		"event_id":     created.EventID.String(),
+		"storage_path": created.StoragePath,
+		"url":          "/media/" + filepath.ToSlash(created.StoragePath),
+		"position":     created.Position,
+		"created_at":   created.CreatedAt.UTC().Format(time.RFC3339),
+	})
+}
+
+func (h *EventHandler) DeletePhoto(c *fiber.Ctx) error {
+	organizerID, err := authUserID(c)
+	if err != nil {
+		return err
+	}
+	eventID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid event id")
+	}
+	photoID, err := uuid.Parse(c.Params("photoId"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid photo id")
+	}
+
+	if err := h.service.DeletePhoto(c.Context(), organizerID, eventID, photoID); err != nil {
+		return err
+	}
+	return response.OK(c, fiber.Map{"message": "photo deleted"})
+}
+
+func toEventResponse(event domain.Event, cats []domain.Category) dto.EventResponse {
+	respCats := make([]string, 0, len(cats))
+	for _, c := range cats {
+		respCats = append(respCats, c.Name)
+	}
+
+	respTickets := make([]dto.TicketTypeResponse, 0, len(event.TicketTypes))
+	for _, tt := range event.TicketTypes {
+		respTickets = append(respTickets, dto.TicketTypeResponse{
+			ID:        tt.ID.String(),
+			Name:      tt.Name,
+			Price:     tt.Price,
+			Quantity:  tt.Quantity,
+			Available: tt.Available,
+		})
+	}
+
+	return dto.EventResponse{
+		ID:          event.ID.String(),
+		OrganizerID: event.OrganizerID.String(),
+		Title:       event.Title,
+		Description: event.Description,
+		Venue:       event.Venue,
+		Address:     event.Address,
+		City:        event.City,
+		Country:     event.Country,
+		Latitude:    event.Latitude,
+		Longitude:   event.Longitude,
+		StartAt:     event.StartAt.UTC().Format(time.RFC3339),
+		EndAt:       event.EndAt.UTC().Format(time.RFC3339),
+		Capacity:    event.Capacity,
+		Status:      string(event.Status),
+		Categories:  respCats,
+		TicketTypes: respTickets,
+		CreatedAt:   event.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:   event.UpdatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+func toTicketTypeInputs(in []dto.TicketTypeRequest) []service.TicketTypeInput {
+	out := make([]service.TicketTypeInput, 0, len(in))
+	for _, tt := range in {
+		out = append(out, service.TicketTypeInput{
+			Name:     tt.Name,
+			Price:    tt.Price,
+			Quantity: tt.Quantity,
+		})
+	}
+	return out
+}
+
+func parseUUIDList(raw string) []uuid.UUID {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]uuid.UUID, 0, len(parts))
+	for _, p := range parts {
+		id, err := uuid.Parse(strings.TrimSpace(p))
+		if err != nil {
+			continue
+		}
+		out = append(out, id)
+	}
+	return out
+}
+
+func optionalRFC3339(raw string) (*time.Time, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, nil
+	}
+	ts, err := time.Parse(time.RFC3339, trimmed)
+	if err != nil {
+		return nil, err
+	}
+	ts = ts.UTC()
+	return &ts, nil
+}
+
+func optionalFloat(raw string) (*float64, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, nil
+	}
+	parsed, err := strconv.ParseFloat(trimmed, 64)
+	if err != nil {
+		return nil, err
+	}
+	return &parsed, nil
+}

@@ -26,7 +26,7 @@ func ErrorHandler(log *zap.Logger) fiber.ErrorHandler {
 			return response.Error(c, fiber.StatusNotFound, "not_found", err.Error())
 		case errors.Is(err, domain.ErrUsernameTaken), errors.Is(err, domain.ErrEmailTaken):
 			return response.Error(c, fiber.StatusConflict, "conflict", err.Error())
-		case errors.Is(err, domain.ErrEventNotBookable), errors.Is(err, domain.ErrEventNotDeletable), errors.Is(err, domain.ErrEventNotCancellable):
+		case errors.Is(err, domain.ErrEventNotBookable), errors.Is(err, domain.ErrEventNotDeletable), errors.Is(err, domain.ErrEventNotCancellable), errors.Is(err, domain.ErrInvalidEventState), errors.Is(err, domain.ErrTicketTypeLocked):
 			return response.Error(c, fiber.StatusUnprocessableEntity, "business_rule_violation", err.Error())
 		case errors.Is(err, domain.ErrCapacityExceeded):
 			return response.Error(c, fiber.StatusConflict, "capacity_exceeded", err.Error())

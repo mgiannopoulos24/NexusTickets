@@ -91,17 +91,17 @@ func (r *userRepositoryPostgres) UpdateProfile(ctx context.Context, user domain.
 		Model(&UserModel{}).
 		Where("id = ?", user.ID).
 		Updates(map[string]interface{}{
-			"first_name":     m.FirstName,
-			"last_name":      m.LastName,
-			"email":          m.Email,
-			"phone":          m.Phone,
-			"address":        m.Address,
-			"city":           m.City,
-			"country":        m.Country,
-			"latitude":       m.Latitude,
-			"longitude":      m.Longitude,
-			"vat_number":     m.VATNumber,
-			"updated_at":     m.UpdatedAt,
+			"first_name": m.FirstName,
+			"last_name":  m.LastName,
+			"email":      m.Email,
+			"phone":      m.Phone,
+			"address":    m.Address,
+			"city":       m.City,
+			"country":    m.Country,
+			"latitude":   m.Latitude,
+			"longitude":  m.Longitude,
+			"vat_number": m.VATNumber,
+			"updated_at": m.UpdatedAt,
 		}).Error
 	if err != nil {
 		return domain.User{}, fmt.Errorf("update profile: %w", err)
@@ -316,20 +316,20 @@ func (r *eventRepositoryPostgres) Update(ctx context.Context, event domain.Event
 		Model(&EventModel{}).
 		Where("id = ?", event.ID).
 		Updates(map[string]interface{}{
-			"organizer_id":  m.OrganizerID,
-			"title":         m.Title,
-			"description":   m.Description,
-			"venue":         m.Venue,
-			"address":       m.Address,
-			"city":          m.City,
-			"country":       m.Country,
-			"latitude":      m.Latitude,
-			"longitude":     m.Longitude,
-			"start_time":    m.StartAt,
-			"end_time":      m.EndAt,
-			"capacity":      m.Capacity,
-			"status":        m.Status,
-			"updated_at":    m.UpdatedAt,
+			"organizer_id": m.OrganizerID,
+			"title":        m.Title,
+			"description":  m.Description,
+			"venue":        m.Venue,
+			"address":      m.Address,
+			"city":         m.City,
+			"country":      m.Country,
+			"latitude":     m.Latitude,
+			"longitude":    m.Longitude,
+			"start_time":   m.StartAt,
+			"end_time":     m.EndAt,
+			"capacity":     m.Capacity,
+			"status":       m.Status,
+			"updated_at":   m.UpdatedAt,
 		}).Error
 	if err != nil {
 		return domain.Event{}, fmt.Errorf("update event: %w", err)
@@ -576,7 +576,7 @@ func (r *ticketTypeRepositoryPostgres) DecrementAvailabilityAtomic(ctx context.C
 	if count == 0 {
 		return false, domain.ErrNotFound
 	}
-	return false, nil
+	return false, domain.ErrCapacityExceeded
 }
 
 // NewBookingRepositoryPostgres creates a BookingRepository backed by GORM.
@@ -685,6 +685,18 @@ func (r *bookingRepositoryPostgres) ListConfirmedByEvent(ctx context.Context, ev
 		out = append(out, bookingModelToDomain(m))
 	}
 	return out, nil
+}
+
+func (r *bookingRepositoryPostgres) CountByTicketType(ctx context.Context, ticketTypeID uuid.UUID) (int, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&BookingModel{}).
+		Where("ticket_type_id = ?", ticketTypeID).
+		Count(&count).Error
+	if err != nil {
+		return 0, fmt.Errorf("count bookings by ticket type: %w", err)
+	}
+	return int(count), nil
 }
 
 func (r *bookingRepositoryPostgres) SetStatus(ctx context.Context, bookingID uuid.UUID, status domain.BookingStatus) error {
@@ -934,8 +946,8 @@ type userEventViewRepositoryPostgres struct {
 func (r *userEventViewRepositoryPostgres) Record(ctx context.Context, userID, eventID uuid.UUID) error {
 	view := UserEventViewModel{
 		ID:       uuid.New(),
-		UserID:  userID,
-		EventID: eventID,
+		UserID:   userID,
+		EventID:  eventID,
 		ViewedAt: nowUTC(),
 	}
 	if err := r.db.WithContext(ctx).Create(&view).Error; err != nil {
@@ -955,4 +967,3 @@ func (r *userEventViewRepositoryPostgres) CountByEvent(ctx context.Context, even
 	}
 	return int(count), nil
 }
-

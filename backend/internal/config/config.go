@@ -23,6 +23,7 @@ const (
 	envJWTSecret          = "JWT_SECRET"
 	envRateLimitMaxReqs   = "RATE_LIMIT_MAX_REQUESTS"
 	envRateLimitWindow    = "RATE_LIMIT_WINDOW"
+	envMediaStoragePath   = "MEDIA_STORAGE_PATH"
 
 	envDBHost     = "DB_HOST"
 	envDBPort     = "DB_PORT"
@@ -48,6 +49,7 @@ type Config struct {
 	JWTSecret          string
 	RateLimitMaxReqs   int           `validate:"min=1,max=10000"`
 	RateLimitWindow    time.Duration `validate:"min=1000000000"`
+	MediaStoragePath   string
 
 	MigrationsPath string
 
@@ -80,6 +82,7 @@ func Load() (Config, error) {
 		CORSAllowedOrigins: getEnv(envCORSAllowedOrigins, "http://localhost,http://localhost:5173"),
 		JWTSecret:          getEnv(envJWTSecret, "dev-insecure-jwt-secret-change-me"),
 		MigrationsPath:     strings.TrimSpace(getEnv(envMigrationsPath, "/migrations")),
+		MediaStoragePath:   strings.TrimSpace(getEnv(envMediaStoragePath, "./data/media")),
 		DatabaseURL:        strings.TrimSpace(os.Getenv(envDatabaseURL)),
 		RedisURL:           strings.TrimSpace(os.Getenv(envRedisURL)),
 

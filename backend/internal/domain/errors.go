@@ -18,7 +18,8 @@ var (
 	ErrEmailTaken    = errors.New("email already taken")
 
 	// Event lifecycle rules.
-	ErrEventNotDeletable    = errors.New("event cannot be deleted after first booking")
-	ErrEventNotCancellable  = errors.New("event cannot be cancelled in current state")
+	ErrEventNotDeletable   = errors.New("event cannot be deleted after first booking")
+	ErrEventNotCancellable = errors.New("event cannot be cancelled in current state")
+	ErrInvalidEventState   = errors.New("event state is invalid for this operation")
+	ErrTicketTypeLocked    = errors.New("ticket type cannot be modified because bookings exist")
 )
-
