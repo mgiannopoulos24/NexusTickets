@@ -110,31 +110,31 @@
 - [X] Never expose password hash in any response DTO
 
 ### 3.3 Events — Organizer CRUD
-- [ ] `[!]` `event_service.go`: Create, Get, List, Search, Update, Delete, Publish, Cancel, GetOrganizerEvents
-- [ ] `[!]` All event handlers
-- [ ] `[!]` Validate sum of ticket type quantities ≤ event capacity on every write
-- [ ] `[!]` Enforce deletion rules: DRAFT only, or PUBLISHED with zero bookings
-- [ ] `[!]` Enforce cancellation rules: PUBLISHED only → CANCELLED, block new bookings, keep all data
-- [ ] CreateEventRequest + UpdateEventRequest DTOs
-- [ ] Support multiple categories per event (create category if not exists)
+- [X] `[!]` `event_service.go`: Create, Get, List, Search, Update, Delete, Publish, Cancel, GetOrganizerEvents
+- [X] `[!]` All event handlers
+- [X] `[!]` Validate sum of ticket type quantities ≤ event capacity on every write
+- [X] `[!]` Enforce deletion rules: DRAFT only, or PUBLISHED with zero bookings
+- [X] `[!]` Enforce cancellation rules: PUBLISHED only → CANCELLED, block new bookings, keep all data
+- [X] CreateEventRequest + UpdateEventRequest DTOs
+- [X] Support multiple categories per event (create category if not exists)
 
 ### 3.4 Ticket Types
-- [ ] `[!]` AddTicketType, UpdateTicketType, DeleteTicketType
-- [ ] Validate capacity constraints on every create/update
-- [ ] Block modification if bookings exist for that ticket type
+- [X] `[!]` AddTicketType, UpdateTicketType, DeleteTicketType
+- [X] Validate capacity constraints on every create/update
+- [X] Block modification if bookings exist for that ticket type
 
 ### 3.5 Event Photos
-- [ ] Upload handler (multipart, validate MIME from bytes, max 5MB)
-- [ ] Delete handler
-- [ ] Store at `MEDIA_STORAGE_PATH/{event_id}/`
-- [ ] Serve via static middleware
+- [X] Upload handler (multipart, validate MIME from bytes, max 5MB)
+- [X] Delete handler
+- [X] Store at `MEDIA_STORAGE_PATH/{event_id}/`
+- [X] Serve via static middleware
 
 ### 3.6 Bookings
-- [ ] `[!]` `booking_service.go`: CreateBooking, GetBooking, GetMyBookings, GetEventBookings
-- [ ] `[!]` Atomic capacity decrement: `UPDATE ticket_types SET available = available - $1 WHERE id = $2 AND available >= $1`
-- [ ] `[!]` Return `ErrCapacityExceeded` when 0 rows affected
-- [ ] `[!]` Validate event is PUBLISHED before allowing booking
-- [ ] Calculate total_cost server-side (never trust client value)
+- [X] `[!]` `booking_service.go`: CreateBooking, GetBooking, GetMyBookings, GetEventBookings
+- [X] `[!]` Atomic capacity decrement: `UPDATE ticket_types SET available = available - $1 WHERE id = $2 AND available >= $1`
+- [X] `[!]` Return `ErrCapacityExceeded` when 0 rows affected
+- [X] `[!]` Validate event is PUBLISHED before allowing booking
+- [X] Calculate total_cost server-side (never trust client value)
 
 ### 3.7 Messaging — REST + WebSocket (Requirement 10)
 - [ ] `[!]` `messaging_service.go`: SendMessage, GetInbox, GetSent, DeleteForUser, MarkAsRead, GetUnreadCount, NotifyEventCancellation
@@ -199,19 +199,19 @@
 - [X] Configure `VITE_API_BASE_URL` and `VITE_WS_URL` in `.env` and `.env.example`
 
 ### 5.2 Core Setup
-- [ ] `[!]` `src/app/store.ts` — Redux store with messaging reducer + RTK Query middleware
-- [ ] `[!]` `src/app/hooks.ts` — `useAppDispatch`, `useAppSelector`
-- [ ] `[!]` `src/lib/api.ts` — RTK Query `baseApi` with auth header + 401 reauth wrapper
-- [ ] `[!]` `src/lib/wsClient.ts` — WebSocket singleton with auto-reconnect + subscriber pattern
-- [ ] `[!]` `src/hooks/useWebSocket.ts` — connect on auth, dispatch to Redux on incoming WS messages
-- [ ] `[!]` `src/lib/utils.ts` — `cn()`, `formatDate()`, `formatDateTime()`, `formatShortDate()`, `formatCurrency()`, `formatNumber()`
-- [ ] `[!]` `src/lib/i18n/ui.ts`, `errors.ts`, `messages.ts` — all Greek strings
-- [ ] `[!]` `src/types/models.ts` — all TypeScript interfaces
-- [ ] `[!]` `src/types/enums.ts` — EventStatus, BookingStatus, UserRole, AccountStatus as const
-- [ ] `[!]` `src/types/ws.ts` — WSEnvelope, WSMessageType, WSNewMessagePayload, WSUnreadCountPayload
-- [ ] `[!]` `src/routes/index.tsx` — `createBrowserRouter`, all routes lazy loaded
-- [ ] `[!]` `src/routes/ProtectedRoute.tsx` — auth + role check
-- [ ] `[!]` `src/main.tsx` — `<Provider store>`, `<RouterProvider>`
+- [X] `[!]` `src/app/store.ts` — Redux store with messaging reducer + RTK Query middleware
+- [X] `[!]` `src/app/hooks.ts` — `useAppDispatch`, `useAppSelector`
+- [X] `[!]` `src/utils/api.ts` — RTK Query `baseApi` with auth header + 401 reauth wrapper
+- [X] `[!]` `src/utils/wsClient.ts` — WebSocket singleton with auto-reconnect + subscriber pattern
+- [X] `[!]` `src/hooks/useWebSocket.ts` — connect on auth, dispatch to Redux on incoming WS messages
+- [X] `[!]` `src/lib/utils.ts` + `src/helpers/formatDate.ts` + `src/helpers/formatCurrency.ts` — `cn()`, `formatDate()`, `formatDateTime()`, `formatShortDate()`, `formatCurrency()`, `formatNumber()`
+- [X] `[!]` `src/locales/en.yaml` (current locale file path)
+- [X] `[!]` `src/types/models.ts` — all TypeScript interfaces
+- [X] `[!]` `src/types/enums.ts` — EventStatus, BookingStatus, UserRole, AccountStatus as const
+- [X] `[!]` `src/types/ws.ts` — WSEnvelope, WSMessageType, WSNewMessagePayload, WSUnreadCountPayload
+- [X] `[!]` `src/routes/routes.tsx` — single route config file (lazy-loaded route elements)
+- [X] `[!]` `src/components/auth/ProtectedRoute.tsx` — auth + role check
+- [X] `[!]` `src/main.tsx` — `<Provider store>`, `<BrowserRouter>`
 
 ### 5.3 Layout & Shared Components
 - [ ] `[!]` `Navbar.tsx` — logo, nav links, user menu, unread badge (from Redux)
