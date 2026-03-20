@@ -32,8 +32,10 @@
             gopls
             delve
             golangci-lint
+            govulncheck
             wire
             air
+            trivy
 
             # Frontend
             bun
