@@ -21,7 +21,7 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
       <div className="flex h-screen w-full items-center justify-center">
         <div className="text-center">
           <Loader2 className="mx-auto h-12 w-12 animate-spin text-blue-600" />
-          <p className="mt-4 text-lg text-gray-600">Verifying access...</p>
+          <p className="comfortaa-regular mt-4 text-lg text-gray-600">Verifying access...</p>
         </div>
       </div>
     );

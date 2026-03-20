@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
-@import 'typography.css';
+@import './typography.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -63,6 +63,8 @@
 
   /* Nexus colors */
   --nexus-darkgray: #475353;
+  --nexus-purple: #703EFF;
+  --nexus-lightgray: #f0f0f0;
 }
 
 @media (prefers-color-scheme: dark) {
