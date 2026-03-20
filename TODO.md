@@ -81,33 +81,33 @@
 - [X] `[!]` GORM model structs + mapper functions for all entities
 
 ### 2.5 Middleware
-- [ ] `[!]` JWT auth middleware
-- [ ] `[!]` WebSocket JWT auth middleware (`ws_auth.go` — token via query param)
-- [ ] `[!]` Role guard factory `RequireRole(...roles)`
-- [ ] Request logger with request ID
-- [ ] Rate limiter (Redis sliding window)
-- [ ] Global error handler — map domain errors to HTTP status codes
-- [ ] CORS middleware (AllowOrigins includes `localhost:5173`)
+- [X] `[!]` JWT auth middleware
+- [X] `[!]` WebSocket JWT auth middleware (`ws_auth.go` — token via query param)
+- [X] `[!]` Role guard factory `RequireRole(...roles)`
+- [X] Request logger with request ID
+- [X] Rate limiter (Redis sliding window)
+- [X] Global error handler — map domain errors to HTTP status codes
+- [X] CORS middleware (AllowOrigins includes `localhost:5173`)
 
 ---
 
 ## 3. Backend — Features
 
 ### 3.1 Authentication
-- [ ] `[!]` `auth_service.go`: Register, Login, RefreshToken, Logout
-- [ ] `[!]` Handlers: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`
-- [ ] `[!]` RegisterRequest DTO — username, password, confirm_password, first_name, last_name, email, phone, address, city, country, vat_number
-- [ ] `[!]` JWT generation (access + refresh) with all claims (sub, role, jti, exp, iat)
-- [ ] `[!]` Store refresh JTI in Redis with TTL
-- [ ] Implement token refresh + rotation
-- [ ] bcrypt cost 12 for password hashing
-- [ ] Rate limiting on auth endpoints (5 req/min per IP)
+- [X] `[!]` `auth_service.go`: Register, Login, RefreshToken, Logout
+- [X] `[!]` Handlers: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`
+- [X] `[!]` RegisterRequest DTO — username, password, confirm_password, first_name, last_name, email, phone, address, city, country, vat_number
+- [X] `[!]` JWT generation (access + refresh) with all claims (sub, role, jti, exp, iat)
+- [X] `[!]` Store refresh JTI in Redis with TTL
+- [X] Implement token refresh + rotation
+- [X] bcrypt cost 12 for password hashing
+- [X] Rate limiting on auth endpoints (5 req/min per IP)
 
 ### 3.2 User Management
-- [ ] `[!]` `user_service.go`: ListUsers, GetUser, ApproveUser, RejectUser, UpdateProfile
-- [ ] `[!]` Admin handlers: list, detail, approve, reject
-- [ ] `GET /users/me`, `PATCH /users/me`
-- [ ] Never expose password hash in any response DTO
+- [X] `[!]` `user_service.go`: ListUsers, GetUser, ApproveUser, RejectUser, UpdateProfile
+- [X] `[!]` Admin handlers: list, detail, approve, reject
+- [X] `GET /users/me`, `PATCH /users/me`
+- [X] Never expose password hash in any response DTO
 
 ### 3.3 Events — Organizer CRUD
 - [ ] `[!]` `event_service.go`: Create, Get, List, Search, Update, Delete, Publish, Cancel, GetOrganizerEvents

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -10,15 +9,17 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	fiberlogger "github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"go.uber.org/zap"
 
 	"nexustickets/internal/config"
 	"nexustickets/internal/db"
+	"nexustickets/internal/handler"
 	"nexustickets/internal/middleware"
 	"nexustickets/internal/migrate"
 	"nexustickets/internal/redis"
+	"nexustickets/internal/repository/postgres"
+	"nexustickets/internal/service"
 	"nexustickets/pkg/logger"
 	"nexustickets/pkg/response"
 )
@@ -35,11 +36,11 @@ func main() {
 	}
 	defer func() { _ = log.Sync() }()
 
-	postgres, err := db.NewPostgres(cfg)
+	pg, err := db.NewPostgres(cfg)
 	if err != nil {
 		log.Fatal("postgres init failed", zap.Error(err))
 	}
-	defer func() { _ = postgres.SQL.Close() }()
+	defer func() { _ = pg.SQL.Close() }()
 
 	redisClient, err := redis.New(cfg)
 	if err != nil {
@@ -52,22 +53,23 @@ func main() {
 	}
 
 	app := fiber.New(fiber.Config{
-		AppName: "NexusTickets API",
-		ErrorHandler: func(c *fiber.Ctx, err error) error {
-			var fe *fiber.Error
-			if errors.As(err, &fe) {
-				return response.Error(c, fe.Code, "request_error", fe.Message)
-			}
-			log.Error("unhandled error", zap.Error(err))
-			return response.Error(c, fiber.StatusInternalServerError, "internal_error", "internal server error")
-		},
+		AppName:      "NexusTickets API",
+		ErrorHandler: middleware.ErrorHandler(log),
 	})
 
 	app.Use(middleware.CORS(cfg.CORSAllowedOrigins))
+	app.Use(middleware.RequestID())
 	app.Use(recover.New())
-	app.Use(fiberlogger.New(fiberlogger.Config{
-		Format: "[${time}] ${status} - ${latency} ${method} ${path}\n",
-	}))
+	app.Use(middleware.RequestLogger())
+	app.Use(middleware.RateLimiter(redisClient.Raw, cfg.RateLimitMaxReqs, cfg.RateLimitWindow))
+
+	userRepo := postgres.NewUserRepositoryPostgres(pg.Gorm)
+	authService := service.NewAuthService(userRepo, redisClient.Raw, cfg.JWTSecret)
+	authHandler := handler.NewAuthHandler(authService)
+	userService := service.NewUserService(userRepo)
+	userHandler := handler.NewUserHandler(userService)
+	handler.RegisterAuthRoutes(app, authHandler, redisClient.Raw)
+	handler.RegisterUserRoutes(app, userHandler, cfg.JWTSecret)
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return response.OK(c, fiber.Map{"status": "ok"})

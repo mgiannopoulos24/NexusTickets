@@ -20,6 +20,9 @@ const (
 	envMigrationsPath = "MIGRATIONS_PATH"
 
 	envCORSAllowedOrigins = "CORS_ALLOWED_ORIGINS"
+	envJWTSecret          = "JWT_SECRET"
+	envRateLimitMaxReqs   = "RATE_LIMIT_MAX_REQUESTS"
+	envRateLimitWindow    = "RATE_LIMIT_WINDOW"
 
 	envDBHost     = "DB_HOST"
 	envDBPort     = "DB_PORT"
@@ -42,6 +45,9 @@ type Config struct {
 	AppPort int    `validate:"min=1,max=65535"`
 
 	CORSAllowedOrigins string
+	JWTSecret          string
+	RateLimitMaxReqs   int           `validate:"min=1,max=10000"`
+	RateLimitWindow    time.Duration `validate:"min=1000000000"`
 
 	MigrationsPath string
 
@@ -72,6 +78,7 @@ func Load() (Config, error) {
 	cfg := Config{
 		AppEnv:             getEnv(envAppEnv, "development"),
 		CORSAllowedOrigins: getEnv(envCORSAllowedOrigins, "http://localhost,http://localhost:5173"),
+		JWTSecret:          getEnv(envJWTSecret, "dev-insecure-jwt-secret-change-me"),
 		MigrationsPath:     strings.TrimSpace(getEnv(envMigrationsPath, "/migrations")),
 		DatabaseURL:        strings.TrimSpace(os.Getenv(envDatabaseURL)),
 		RedisURL:           strings.TrimSpace(os.Getenv(envRedisURL)),
@@ -108,6 +115,12 @@ func Load() (Config, error) {
 	}
 	cfg.DBMaxOpenConns = dbMaxOpen
 
+	rateLimitMaxReqs, err := parseInt(getEnv(envRateLimitMaxReqs, "120"), 1, 10000)
+	if err != nil {
+		return Config{}, fmt.Errorf("%s: %w", envRateLimitMaxReqs, err)
+	}
+	cfg.RateLimitMaxReqs = rateLimitMaxReqs
+
 	dbMaxIdle, err := parseInt(getEnv(envDBMaxIdleConns, "10"), 0, 500)
 	if err != nil {
 		return Config{}, fmt.Errorf("%s: %w", envDBMaxIdleConns, err)
@@ -125,6 +138,12 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("%s: %w", envDBConnMaxIdleTime, err)
 	}
 	cfg.DBConnMaxIdleTime = connMaxIdleTime
+
+	rateLimitWindow, err := parseDuration(getEnv(envRateLimitWindow, "1m"))
+	if err != nil {
+		return Config{}, fmt.Errorf("%s: %w", envRateLimitWindow, err)
+	}
+	cfg.RateLimitWindow = rateLimitWindow
 
 	validate := validator.New(validator.WithRequiredStructEnabled())
 	if err := validate.Struct(cfg); err != nil {
