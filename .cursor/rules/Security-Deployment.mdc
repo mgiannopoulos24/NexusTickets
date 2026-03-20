@@ -161,6 +161,6 @@ EXPOSE 80
 
 ## Git / CI Rules
 - `.env` files NEVER committed — `.gitignore` enforced
-- Pre-commit hooks: `golangci-lint` for Go, `eslint` + `tsc --noEmit` for Angular
+- Pre-commit hooks: `golangci-lint` for Go, `eslint` + `tsc --noEmit` for React
 - PR requires: passing tests + lint + no secrets detected (use `gitleaks`)
 - Dependency audit: `go mod tidy && govulncheck ./...` in CI pipeline
