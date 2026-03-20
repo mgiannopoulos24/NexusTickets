@@ -1,17 +1,17 @@
-import { Link } from "react-router-dom";
-import { Bell, ChevronDown, Search } from "lucide-react";
+import { Link } from 'react-router-dom';
+import { Bell, ChevronDown, Search } from 'lucide-react';
 
-import { Button } from "@/components/ui/button";
-import { NavbarLanguageGlobe } from "@/components/layout/NavbarLanguageGlobe";
-import { cn } from "@/lib/utils";
+import { Button } from '@/components/ui/button';
+import { NavbarLanguageGlobe } from '@/components/layout/NavbarLanguageGlobe';
+import { cn } from '@/lib/utils';
 
 const NAV_LINKS = [
-  { label: "Εκδηλώσεις", href: "/events" },
-  { label: "Θέατρο", href: "/events?category=theater" },
-  { label: "Μουσική", href: "/events?category=music" },
-  { label: "Αθλητικά", href: "/events?category=sports" },
-  { label: "Σινεμά", href: "/events?category=cinema" },
-  { label: "Συνδρομές", href: "/subscriptions" },
+  { label: 'Εκδηλώσεις', href: '/events' },
+  { label: 'Θέατρο', href: '/events?category=theater' },
+  { label: 'Μουσική', href: '/events?category=music' },
+  { label: 'Αθλητικά', href: '/events?category=sports' },
+  { label: 'Σινεμά', href: '/events?category=cinema' },
+  { label: 'Συνδρομές', href: '/subscriptions' },
 ] as const;
 
 export function Navbar() {
@@ -20,7 +20,12 @@ export function Navbar() {
       <div className="flex h-16 max-w-screen items-stretch justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 shrink-0 items-center">
           <Link to="/" className="flex cursor-pointer items-baseline">
-            <span className="text-xl comfortaa-bold tracking-tight text-[var(--nexus-purple)] sm:text-2xl">Nexus</span><span className="text-xl comfortaa-semibold tracking-tight text-[var(--nexus-purple)]/90 sm:text-2xl">Tickets</span>
+            <span className="text-xl comfortaa-bold tracking-tight text-[var(--nexus-purple)] sm:text-2xl">
+              Nexus
+            </span>
+            <span className="text-xl comfortaa-semibold tracking-tight text-[var(--nexus-purple)]/90 sm:text-2xl">
+              Tickets
+            </span>
           </Link>
         </div>
 
@@ -46,7 +51,12 @@ export function Navbar() {
 
           <div className="flex shrink-0 items-stretch gap-1 sm:gap-2">
             <NavbarLanguageGlobe />
-            <Button variant="ghost" size="icon" className="relative cursor-pointer self-center text-neutral-600" aria-label="Ειδοποιήσεις">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative cursor-pointer self-center text-neutral-600"
+              aria-label="Ειδοποιήσεις"
+            >
               <Bell className="size-5" />
               <span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-[#6d28d9] text-[10px] font-semibold text-white">
                 1
@@ -55,12 +65,17 @@ export function Navbar() {
             <Button
               asChild
               className={cn(
-                "hidden cursor-pointer self-center rounded-full bg-[#6d28d9] px-5 text-white hover:bg-[#5b21b6] sm:inline-flex",
+                'hidden cursor-pointer self-center rounded-full bg-[#6d28d9] px-5 text-white hover:bg-[#5b21b6] sm:inline-flex',
               )}
             >
               <Link to="/login">Σύνδεση</Link>
             </Button>
-            <Button variant="ghost" size="icon" className="cursor-pointer self-center lg:hidden" aria-label="Αναζήτηση">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="cursor-pointer self-center lg:hidden"
+              aria-label="Αναζήτηση"
+            >
               <Search className="size-5" />
             </Button>
           </div>

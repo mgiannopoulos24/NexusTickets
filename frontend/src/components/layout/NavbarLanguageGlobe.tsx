@@ -1,28 +1,28 @@
-import { useId, useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { useId, useState } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
-import { ButtonAlt } from "@/components/ui/button-alt";
-import { SelectAltPanelContainer, SelectAltScrollRegion } from "@/components/ui/select-alt";
-import globeIcon from "@/assets/icons/globe.svg";
+import { ButtonAlt } from '@/components/ui/button-alt';
+import { SelectAltPanelContainer, SelectAltScrollRegion } from '@/components/ui/select-alt';
+import globeIcon from '@/assets/icons/globe.svg';
 
 const LANGUAGE_OPTIONS = [
-  { value: "bg", label: "Български" },
-  { value: "hr", label: "Hrvatski" },
-  { value: "cs", label: "Čeština" },
-  { value: "da", label: "Dansk" },
-  { value: "nl", label: "Nederlands" },
-  { value: "en", label: "English" },
-  { value: "fi", label: "Suomi" },
-  { value: "fr", label: "Français" },
-  { value: "de", label: "Deutsch" },
-  { value: "el", label: "Ελληνικά" },
+  { value: 'bg', label: 'Български' },
+  { value: 'hr', label: 'Hrvatski' },
+  { value: 'cs', label: 'Čeština' },
+  { value: 'da', label: 'Dansk' },
+  { value: 'nl', label: 'Nederlands' },
+  { value: 'en', label: 'English' },
+  { value: 'fi', label: 'Suomi' },
+  { value: 'fr', label: 'Français' },
+  { value: 'de', label: 'Deutsch' },
+  { value: 'el', label: 'Ελληνικά' },
 ] as const;
 
-type Locale = (typeof LANGUAGE_OPTIONS)[number]["value"];
+type Locale = (typeof LANGUAGE_OPTIONS)[number]['value'];
 
 export function NavbarLanguageGlobe() {
   const [panelOpen, setPanelOpen] = useState(false);
-  const [locale, setLocale] = useState<Locale>("el");
+  const [locale, setLocale] = useState<Locale>('el');
   const [listOpen, setListOpen] = useState(false);
   const baseId = useId();
   const listboxId = `${baseId}-listbox`;
