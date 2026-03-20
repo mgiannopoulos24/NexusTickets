@@ -1,17 +1,24 @@
-import { Header } from './components/layout/Header';
-import { TopBar } from './components/layout/TopBar';
+import { Route, Routes } from 'react-router-dom';
+import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import routes from '@/routes/routes';
 
 function App() {
   return (
-    <>
-      <TopBar />
-      <Header />
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <div className="rounded-xl border bg-card p-6 text-card-foreground shadow-sm">
-          <p className="text-sm text-muted-foreground">Αρχική σελίδα (placeholder).</p>
-        </div>
-      </main>
-    </>
+    <Routes>
+      {routes.map((route, index) => (
+        <Route
+          key={index}
+          path={route.path}
+          element={
+            route.protected ? (
+              <ProtectedRoute allowedRoles={route.roles!}>{route.element}</ProtectedRoute>
+            ) : (
+              route.element
+            )
+          }
+        />
+      ))}
+    </Routes>
   );
 }
 
