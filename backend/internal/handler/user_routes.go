@@ -7,8 +7,8 @@ import (
 	"nexustickets/internal/middleware"
 )
 
-func RegisterUserRoutes(app *fiber.App, userHandler *UserHandler, jwtSecret string) {
-	users := app.Group("/users")
+func RegisterUserRoutes(router fiber.Router, userHandler *UserHandler, jwtSecret string) {
+	users := router.Group("/users")
 	users.Use(middleware.JWTAuth(jwtSecret))
 
 	users.Get("/me", userHandler.Me)

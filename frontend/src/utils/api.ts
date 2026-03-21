@@ -5,14 +5,41 @@ import {
   type FetchArgs,
   type FetchBaseQueryError,
 } from '@reduxjs/toolkit/query/react';
-import { setCredentials, loggedOut } from '@/utils/authSlice';
-import type { RootState } from '@/app/store';
+
+const ACCESS_TOKEN_KEY = 'access_token';
+const REFRESH_TOKEN_KEY = 'refresh_token';
+
+export const AUTH_TOKEN_UPDATED_EVENT = 'nexus-auth-token-updated';
+export const AUTH_SESSION_CLEARED_EVENT = 'nexus-auth-session-cleared';
+
+export function getAccessToken(): string | null {
+  return localStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+export function getRefreshToken(): string | null {
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function setTokens(access: string, refresh: string): void {
+  localStorage.setItem(ACCESS_TOKEN_KEY, access);
+  localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
+  window.dispatchEvent(new CustomEvent(AUTH_TOKEN_UPDATED_EVENT));
+}
+
+export function clearTokens(): void {
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+export function clearTokensAndNotify(): void {
+  clearTokens();
+  window.dispatchEvent(new CustomEvent(AUTH_SESSION_CLEARED_EVENT));
+}
 
 const rawBaseQuery = fetchBaseQuery({
-  baseUrl: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080',
-  prepareHeaders: (headers, { getState }) => {
-    const state = getState() as RootState;
-    const token = state.auth.accessToken;
+  baseUrl: '/api/v1',
+  prepareHeaders: (headers) => {
+    const token = getAccessToken();
     if (token) {
       headers.set('authorization', `Bearer ${token}`);
     }
@@ -30,9 +57,9 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
     return result;
   }
 
-  const state = api.getState() as RootState;
-  if (!state.auth.refreshToken) {
-    api.dispatch(loggedOut());
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    clearTokensAndNotify();
     return result;
   }
 
@@ -40,28 +67,23 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
     {
       url: '/auth/refresh',
       method: 'POST',
-      body: { refresh_token: state.auth.refreshToken },
+      body: { refresh_token: refreshToken },
     },
     api,
     extraOptions,
   );
 
   if (refreshResult.data) {
-    const data = refreshResult.data as {
+    const envelope = refreshResult.data as {
       data: {
         access_token: string;
         refresh_token: string;
       };
     };
-    api.dispatch(
-      setCredentials({
-        accessToken: data.data.access_token,
-        refreshToken: data.data.refresh_token,
-      }),
-    );
+    setTokens(envelope.data.access_token, envelope.data.refresh_token);
     result = await rawBaseQuery(args, api, extraOptions);
   } else {
-    api.dispatch(loggedOut());
+    clearTokensAndNotify();
   }
 
   return result;

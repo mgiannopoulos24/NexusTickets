@@ -9,8 +9,8 @@ import (
 	"nexustickets/internal/middleware"
 )
 
-func RegisterAuthRoutes(app *fiber.App, authHandler *AuthHandler, redisClient *redisv9.Client) {
-	auth := app.Group("/auth")
+func RegisterAuthRoutes(router fiber.Router, authHandler *AuthHandler, redisClient *redisv9.Client) {
+	auth := router.Group("/auth")
 	auth.Use(middleware.RateLimiter(redisClient, 5, time.Minute))
 	auth.Post("/register", authHandler.Register)
 	auth.Post("/login", authHandler.Login)

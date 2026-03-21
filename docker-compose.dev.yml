@@ -8,8 +8,13 @@ services:
       - "${REDIS_EXPOSED_PORT:-6379}:6379"
 
   backend:
+    working_dir: /app
+    environment:
+      TLS_CERT_FILE: ${TLS_CERT_FILE:-/etc/tls/cert.pem}
+      TLS_KEY_FILE: ${TLS_KEY_FILE:-/etc/tls/key.pem}
     volumes:
       - ./backend:/app
+      - ./docker/tls/local:/etc/tls:ro
       - backend_go_cache:/go/pkg/mod
       - backend_go_build_cache:/root/.cache/go-build
     ports:
@@ -27,6 +32,9 @@ services:
     build:
       context: ./frontend
       target: builder
+    environment:
+      VITE_API_PROXY_TARGET: https://backend:8080
+      VITE_HMR_CLIENT_PORT: ${FRONTEND_PORT:-5173}
     volumes:
       - ./frontend:/app
       - frontend_bun_cache:/root/.bun

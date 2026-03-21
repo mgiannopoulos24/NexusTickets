@@ -7,8 +7,8 @@ import (
 	"nexustickets/internal/middleware"
 )
 
-func RegisterBookingRoutes(app *fiber.App, bookingHandler *BookingHandler, jwtSecret string) {
-	bookings := app.Group("/bookings")
+func RegisterBookingRoutes(router fiber.Router, bookingHandler *BookingHandler, jwtSecret string) {
+	bookings := router.Group("/bookings")
 	bookings.Use(middleware.JWTAuth(jwtSecret))
 
 	bookings.Post("/", middleware.RequireRole(domain.UserRoleAttendee, domain.UserRoleOrganizer), bookingHandler.Create)

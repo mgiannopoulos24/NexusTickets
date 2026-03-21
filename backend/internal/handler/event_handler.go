@@ -77,6 +77,9 @@ func (h *EventHandler) Get(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	if uid, ok := optionalAuthUserID(c); ok {
+		_ = h.service.RecordEventView(c.Context(), uid, eventID)
+	}
 	return response.OK(c, toEventResponse(event, cats))
 }
 
@@ -103,6 +106,30 @@ func (h *EventHandler) Search(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
 
+	var afterStart *time.Time
+	var afterID *uuid.UUID
+	if raw := strings.TrimSpace(c.Query("after_start")); raw != "" {
+		ts, parseErr := time.Parse(time.RFC3339, raw)
+		if parseErr != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid after_start (expected RFC3339)")
+		}
+		u := ts.UTC()
+		afterStart = &u
+	}
+	if raw := strings.TrimSpace(c.Query("after_id")); raw != "" {
+		id, parseErr := uuid.Parse(raw)
+		if parseErr != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid after_id")
+		}
+		afterID = &id
+	}
+	if (afterStart == nil) != (afterID == nil) {
+		return fiber.NewError(fiber.StatusBadRequest, "after_start and after_id must be provided together")
+	}
+	if afterStart != nil {
+		offset = 0
+	}
+
 	startAt, err := optionalRFC3339(c.Query("start_at"))
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid start_at (expected RFC3339)")
@@ -120,15 +147,17 @@ func (h *EventHandler) Search(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid max_price")
 	}
 
-	events, cats, err := h.service.Search(c.Context(), service.SearchEventsInput{
-		CategoryIDs: parseUUIDList(c.Query("category_ids")),
-		Title:       c.Query("title"),
-		Query:       c.Query("q"),
-		City:        c.Query("city"),
-		StartAt:     startAt,
-		EndAt:       endAt,
-		MinPrice:    minPrice,
-		MaxPrice:    maxPrice,
+	events, cats, hasMore, err := h.service.Search(c.Context(), service.SearchEventsInput{
+		CategoryIDs:  parseUUIDList(c.Query("category_ids")),
+		Title:        c.Query("title"),
+		Query:        c.Query("q"),
+		City:         c.Query("city"),
+		StartAt:      startAt,
+		EndAt:        endAt,
+		MinPrice:     minPrice,
+		MaxPrice:     maxPrice,
+		AfterStartAt: afterStart,
+		AfterID:      afterID,
 	}, limit, offset)
 	if err != nil {
 		return err
@@ -137,7 +166,17 @@ func (h *EventHandler) Search(c *fiber.Ctx) error {
 	for i := range events {
 		out = append(out, toEventResponse(events[i], cats[i]))
 	}
-	return response.OK(c, out)
+	meta := fiber.Map{
+		"has_more": hasMore,
+	}
+	if hasMore && len(events) > 0 {
+		last := events[len(events)-1]
+		nextStart := last.StartAt.UTC().Format(time.RFC3339)
+		nextID := last.ID.String()
+		meta["next_after_start"] = nextStart
+		meta["next_after_id"] = nextID
+	}
+	return response.Paginated(c, out, meta)
 }
 
 func (h *EventHandler) GetOrganizerEvents(c *fiber.Ctx) error {
@@ -384,7 +423,7 @@ func (h *EventHandler) UploadPhoto(c *fiber.Ctx) error {
 		"id":           created.ID.String(),
 		"event_id":     created.EventID.String(),
 		"storage_path": created.StoragePath,
-		"url":          "/media/" + filepath.ToSlash(created.StoragePath),
+		"url":          "/uploads/media/" + filepath.ToSlash(created.StoragePath),
 		"position":     created.Position,
 		"created_at":   created.CreatedAt.UTC().Format(time.RFC3339),
 	})
@@ -459,6 +498,18 @@ func toTicketTypeInputs(in []dto.TicketTypeRequest) []service.TicketTypeInput {
 		})
 	}
 	return out
+}
+
+func optionalAuthUserID(c *fiber.Ctx) (uuid.UUID, bool) {
+	raw, ok := c.Locals("user_id").(string)
+	if !ok || strings.TrimSpace(raw) == "" {
+		return uuid.Nil, false
+	}
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		return uuid.Nil, false
+	}
+	return id, true
 }
 
 func parseUUIDList(raw string) []uuid.UUID {

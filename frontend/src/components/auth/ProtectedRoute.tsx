@@ -1,37 +1,40 @@
 import NotAuthorized from './NotAuthorized';
-import { useAuth } from '@/contexts/AuthContent';
 import { Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import type { User } from '@/types/user';
 
-type AllowedRole = Exclude<User['role'], 'guest'>;
+import { useAuth } from '@/contexts/AuthContent';
+import type { UserRole } from '@/types/enums';
 
 type ProtectedRouteProps = {
   children: ReactNode;
-  allowedRoles: AllowedRole[];
+  allowedRoles: UserRole[];
 };
 
 const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
-  const { user, isLoading } = useAuth();
   const location = useLocation();
+  const { user, accessToken, isHydrating } = useAuth();
 
-  if (isLoading) {
+  if (!accessToken) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (accessToken && !user && isHydrating) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <div className="text-center">
-          <Loader2 className="mx-auto h-12 w-12 animate-spin text-blue-600" />
-          <p className="comfortaa-regular mt-4 text-lg text-gray-600">Verifying access...</p>
+          <Loader2 className="mx-auto h-12 w-12 animate-spin text-[#6d28d9]" />
+          <p className="comfortaa-regular mt-4 text-lg text-neutral-600">Έλεγχος πρόσβασης…</p>
         </div>
       </div>
     );
   }
 
   if (!user) {
-    return <Navigate to="/" state={{ from: location }} replace />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (user.role === 'guest' || !allowedRoles.includes(user.role)) {
+  if (!allowedRoles.includes(user.role)) {
     return <NotAuthorized />;
   }
 

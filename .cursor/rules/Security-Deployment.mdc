@@ -33,7 +33,7 @@ ADMIN_PASSWORD=             # Strong password, set at deploy time
 
 # Media
 MEDIA_STORAGE_PATH=./uploads
-MEDIA_BASE_URL=https://yourdomain.com/media
+MEDIA_BASE_URL=https://yourdomain.com/uploads/media
 MEDIA_MAX_SIZE_MB=5
 
 # CORS

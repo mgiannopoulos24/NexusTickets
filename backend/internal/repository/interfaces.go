@@ -20,6 +20,11 @@ type SearchEventsParams struct {
 	MinPrice *float64
 	MaxPrice *float64
 
+	// AfterStartAt and AfterID enable keyset pagination (DESC by start_time, id).
+	// Both must be non-nil to use keyset; offset is ignored when keyset is used.
+	AfterStartAt *time.Time
+	AfterID      *uuid.UUID
+
 	// Status filter is typically used to restrict results to PUBLISHED events.
 	Status domain.EventStatus
 }
@@ -36,6 +41,7 @@ type UserRepository interface {
 	Reject(ctx context.Context, id uuid.UUID) (domain.User, error)
 
 	List(ctx context.Context, limit, offset int) ([]domain.User, error)
+	ListByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]domain.User, error)
 }
 
 type EventRepository interface {
@@ -45,7 +51,7 @@ type EventRepository interface {
 	ListOrganizer(ctx context.Context, organizerID uuid.UUID, limit, offset int) ([]domain.Event, error)
 	ListPublic(ctx context.Context, limit, offset int) ([]domain.Event, error)
 
-	Search(ctx context.Context, params SearchEventsParams, limit, offset int) ([]domain.Event, error)
+	Search(ctx context.Context, params SearchEventsParams, limit, offset int) (events []domain.Event, hasMore bool, err error)
 
 	Update(ctx context.Context, event domain.Event) (domain.Event, error)
 	Delete(ctx context.Context, id uuid.UUID) error
@@ -59,6 +65,11 @@ type EventRepository interface {
 	GetTicketTypes(ctx context.Context, eventID uuid.UUID) ([]domain.TicketType, error)
 
 	GetPhotos(ctx context.Context, eventID uuid.UUID) ([]domain.EventPhoto, error)
+
+	// ListForExport returns all events ordered by start_time, id (admin catalogue export).
+	ListForExport(ctx context.Context, limit, offset int) ([]domain.Event, error)
+	ListTicketTypesByEventIDs(ctx context.Context, eventIDs []uuid.UUID) (map[uuid.UUID][]domain.TicketType, error)
+	ListCategoriesByEventIDs(ctx context.Context, eventIDs []uuid.UUID) (map[uuid.UUID][]domain.Category, error)
 }
 
 type TicketTypeRepository interface {
@@ -80,6 +91,8 @@ type BookingRepository interface {
 	ListByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Booking, error)
 	ListByEvent(ctx context.Context, eventID uuid.UUID, limit, offset int) ([]domain.Booking, error)
 	ListConfirmedByEvent(ctx context.Context, eventID uuid.UUID, limit, offset int) ([]domain.Booking, error)
+	ListDistinctConfirmedUserIDsByEvent(ctx context.Context, eventID uuid.UUID) ([]uuid.UUID, error)
+	ListByEventIDs(ctx context.Context, eventIDs []uuid.UUID) ([]domain.Booking, error)
 	CountByTicketType(ctx context.Context, ticketTypeID uuid.UUID) (int, error)
 
 	SetStatus(ctx context.Context, bookingID uuid.UUID, status domain.BookingStatus) error
@@ -87,6 +100,7 @@ type BookingRepository interface {
 
 type MessageRepository interface {
 	Create(ctx context.Context, message domain.Message) (domain.Message, error)
+	CreateBatch(ctx context.Context, messages []domain.Message) ([]domain.Message, error)
 
 	ListInbox(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Message, error)
 	ListSent(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Message, error)

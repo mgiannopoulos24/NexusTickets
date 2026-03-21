@@ -51,8 +51,8 @@ type EventModel struct {
 	Latitude  *float64 `gorm:"type:double precision"`
 	Longitude *float64 `gorm:"type:double precision"`
 
-	StartAt  time.Time `gorm:"not null"`
-	EndAt    time.Time `gorm:"not null"`
+	StartAt  time.Time `gorm:"column:start_time;not null"`
+	EndAt    time.Time `gorm:"column:end_time;not null"`
 	Capacity int       `gorm:"not null"`
 
 	Status string `gorm:"not null;size:32;index"`

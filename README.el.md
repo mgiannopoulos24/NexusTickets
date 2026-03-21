@@ -140,6 +140,17 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 Το backend API είναι διαθέσιμο στο `http://localhost:8080/api/v1`.  
 Η τεκμηρίωση API βρίσκεται στο `http://localhost:8080/api/v1/docs`.
 
+### Τοπικό HTTPS (αυτοπεποιθησιακό πιστοποιητικό, production stack)
+
+Για να τρέξει το **δημιουργημένο** SPA πίσω από nginx με TLS τοπικά:
+
+```bash
+make local-tls
+docker compose up --build
+```
+
+Ανοίξτε `https://localhost`. Ο browser θα εμφανίσει προειδοποίηση πιστοποιητικού (αναμενόμενο για self-signed). Το frontend image χτίζεται με **ίδια προέλευση** (κενά `VITE_*`) ώστε API και WebSocket να περνούν από nginx μέσω HTTPS.
+
 > Σημείωση για PostgreSQL credentials: τα init scripts τρέχουν **μόνο** όταν το volume `postgres_data` είναι άδειο.
 > Αν αλλάξεις `POSTGRES_APP_PASSWORD` / `DB_PASSWORD` αφού έχει δημιουργηθεί το volume, το backend θα αποτυγχάνει με `password authentication failed`.
 > Σε αυτή την περίπτωση κάνετε reset τα volumes με:
@@ -176,6 +187,7 @@ make migrate-up     Εφαρμογή όλων των εκκρεμών μεταν
 make migrate-down   Αναίρεση τελευταίας μετανάστευσης
 make seed           Αρχικοποίηση βάσης με δεδομένα
 make wire           Αναγέννηση κώδικα έγχυσης εξαρτήσεων Wire
+make local-tls      Δημιουργία self-signed TLS για nginx (`docker/tls/local`)
 ```
 
 ---
@@ -195,11 +207,11 @@ JWT_ACCESS_SECRET       Μυστικό για υπογραφή access tokens
 JWT_REFRESH_SECRET      Μυστικό για υπογραφή refresh tokens
 ADMIN_USERNAME          Προεπιλεγμένο όνομα χρήστη διαχειριστή
 ADMIN_PASSWORD          Προεπιλεγμένος κωδικός διαχειριστή
-MEDIA_STORAGE_PATH      Κατάλογος για ανεβασμένες φωτογραφίες εκδηλώσεων
+MEDIA_STORAGE_PATH      Κατάλογος για ανεβασμένες φωτογραφίες εκδηλώσεων (προεπιλογή: `backend/uploads/media`)
 CORS_ALLOWED_ORIGINS    Λίστα επιτρεπόμενων origins χωρισμένη με κόμμα
 
 # Frontend
-VITE_API_BASE_URL       Base URL του backend API (π.χ. http://localhost:8080/api/v1)
+VITE_API_BASE_URL       Μόνο origin του backend ή κενό για same-origin (π.χ. http://localhost:8080). Η εφαρμογή καλεί `/api/v1/...` σε αυτό το origin.
 ```
 
 ---
@@ -211,11 +223,11 @@ VITE_API_BASE_URL       Base URL του backend API (π.χ. http://localhost:808
 Δημόσια endpoints (χωρίς απαίτηση αυθεντικοποίησης):
 
 ```
-POST   /auth/register
-POST   /auth/login
-POST   /auth/refresh
-GET    /events
-GET    /events/:id
+POST   /api/v1/auth/register
+POST   /api/v1/auth/login
+POST   /api/v1/auth/refresh
+GET    /api/v1/events
+GET    /api/v1/events/:id
 ```
 
 Όλα τα υπόλοιπα endpoints απαιτούν έγκυρο JWT και κατάλληλο ρόλο. Βλέπε `docs/api.md` για τον πλήρη χάρτη διαδρομών.

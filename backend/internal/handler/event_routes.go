@@ -7,12 +7,12 @@ import (
 	"nexustickets/internal/middleware"
 )
 
-func RegisterEventRoutes(app *fiber.App, eventHandler *EventHandler, jwtSecret string) {
-	events := app.Group("/events")
+func RegisterEventRoutes(router fiber.Router, eventHandler *EventHandler, jwtSecret string) {
+	events := router.Group("/events")
 
 	events.Get("/", eventHandler.List)
 	events.Get("/search", eventHandler.Search)
-	events.Get("/:id", eventHandler.Get)
+	events.Get("/:id", middleware.OptionalJWTAuth(jwtSecret), eventHandler.Get)
 
 	organizer := events.Group("/organizer")
 	organizer.Use(middleware.JWTAuth(jwtSecret))

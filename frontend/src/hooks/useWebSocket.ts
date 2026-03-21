@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
-import { useAppDispatch, useAppSelector } from '@/app/hooks';
+import { useAppDispatch } from '@/app/hooks';
+import { useAuth } from '@/contexts/AuthContent';
 import { wsClient } from '@/utils/wsClient';
-import { pushIncomingMessage, setUnreadCount } from '@/utils/messagingSlice';
+import { pushIncomingMessage, setUnreadCount } from '@/app/messagingSlice';
 import {
   WSMessageTypes,
   type WSEnvelope,
@@ -11,15 +12,15 @@ import {
 
 export function useWebSocket(): void {
   const dispatch = useAppDispatch();
-  const token = useAppSelector((state) => state.auth.accessToken);
+  const { accessToken } = useAuth();
 
   useEffect(() => {
-    if (!token) {
+    if (!accessToken) {
       wsClient.disconnect();
       return;
     }
 
-    wsClient.connect(token);
+    wsClient.connect(accessToken);
     const unsubscribe = wsClient.subscribe((envelope: WSEnvelope) => {
       if (envelope.type === WSMessageTypes.new_message) {
         dispatch(pushIncomingMessage(envelope.payload as WSNewMessagePayload));
@@ -35,5 +36,5 @@ export function useWebSocket(): void {
       unsubscribe();
       wsClient.disconnect();
     };
-  }, [dispatch, token]);
+  }, [dispatch, accessToken]);
 }

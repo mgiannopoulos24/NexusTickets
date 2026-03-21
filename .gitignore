@@ -1,5 +1,6 @@
 ## Backend
 backend/tmp/
+backend/uploads/
 .go/
 
 ## Frontend
@@ -7,6 +8,17 @@ frontend/node_modules/
 frontend/dist/
 frontend/bun.lockb
 
-## Other
+## OS / Editor
+.DS_Store
+*.log
+
+## Env / Secrets
 .env
+.env.*
+!.env.example
+
+## Archives
 *.zip
+
+# Local self-signed TLS (see scripts/generate-local-tls.sh)
+docker/tls/local/*.pem

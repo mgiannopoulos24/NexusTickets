@@ -155,6 +155,22 @@ func (r *userRepositoryPostgres) List(ctx context.Context, limit, offset int) ([
 	return out, nil
 }
 
+func (r *userRepositoryPostgres) ListByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]domain.User, error) {
+	if len(ids) == 0 {
+		return map[uuid.UUID]domain.User{}, nil
+	}
+	var models []UserModel
+	err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&models).Error
+	if err != nil {
+		return nil, fmt.Errorf("list users by ids: %w", err)
+	}
+	out := make(map[uuid.UUID]domain.User, len(models))
+	for _, m := range models {
+		out[m.ID] = userModelToDomain(m)
+	}
+	return out, nil
+}
+
 // NewEventRepositoryPostgres creates an EventRepository backed by GORM.
 func NewEventRepositoryPostgres(db *gorm.DB) repo.EventRepository {
 	return &eventRepositoryPostgres{db: db}
@@ -240,13 +256,16 @@ func (r *eventRepositoryPostgres) ListPublic(ctx context.Context, limit, offset 
 	return out, nil
 }
 
-func (r *eventRepositoryPostgres) Search(ctx context.Context, params repo.SearchEventsParams, limit, offset int) ([]domain.Event, error) {
+func (r *eventRepositoryPostgres) Search(ctx context.Context, params repo.SearchEventsParams, limit, offset int) ([]domain.Event, bool, error) {
 	if limit < 1 {
 		limit = 20
 	}
 	if offset < 0 {
 		offset = 0
 	}
+
+	useKeyset := params.AfterStartAt != nil && params.AfterID != nil
+	fetchLimit := limit + 1
 
 	q := r.db.WithContext(ctx).Model(&EventModel{}).Distinct()
 	if params.Status != "" {
@@ -261,11 +280,14 @@ func (r *eventRepositoryPostgres) Search(ctx context.Context, params repo.Search
 	if params.City != "" {
 		q = q.Where("city ILIKE ?", "%"+params.City+"%")
 	}
-	if params.StartAt != nil {
-		q = q.Where("start_time >= ?", *params.StartAt)
-	}
-	if params.EndAt != nil {
-		q = q.Where("end_time <= ?", *params.EndAt)
+
+	// Date range: events whose time window overlaps the filter window [StartAt, EndAt].
+	if params.StartAt != nil && params.EndAt != nil {
+		q = q.Where("start_time <= ? AND end_time >= ?", *params.EndAt, *params.StartAt)
+	} else if params.StartAt != nil {
+		q = q.Where("end_time >= ?", *params.StartAt)
+	} else if params.EndAt != nil {
+		q = q.Where("start_time <= ?", *params.EndAt)
 	}
 
 	// Price filters apply if any ticket type matches the range.
@@ -292,15 +314,108 @@ func (r *eventRepositoryPostgres) Search(ctx context.Context, params repo.Search
 			Where("ec.category_id IN ?", params.CategoryIDs)
 	}
 
+	if useKeyset {
+		q = q.Where(
+			"(start_time < ? OR (start_time = ? AND id < ?))",
+			*params.AfterStartAt, *params.AfterStartAt, *params.AfterID,
+		)
+	}
+
+	q = q.Order("start_time DESC, id DESC")
+
 	var models []EventModel
-	err := q.Limit(limit).Offset(offset).Order("start_time DESC").Find(&models).Error
+	var err error
+	if useKeyset {
+		err = q.Limit(fetchLimit).Find(&models).Error
+	} else {
+		err = q.Limit(fetchLimit).Offset(offset).Find(&models).Error
+	}
 	if err != nil {
-		return nil, fmt.Errorf("search events: %w", err)
+		return nil, false, fmt.Errorf("search events: %w", err)
+	}
+
+	hasMore := len(models) > limit
+	if hasMore {
+		models = models[:limit]
 	}
 
 	out := make([]domain.Event, 0, len(models))
 	for _, m := range models {
 		out = append(out, eventModelToDomain(m))
+	}
+	return out, hasMore, nil
+}
+
+func (r *eventRepositoryPostgres) ListForExport(ctx context.Context, limit, offset int) ([]domain.Event, error) {
+	if limit < 1 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	var models []EventModel
+	err := r.db.WithContext(ctx).
+		Order("start_time ASC, id ASC").
+		Limit(limit).
+		Offset(offset).
+		Find(&models).Error
+	if err != nil {
+		return nil, fmt.Errorf("list events for export: %w", err)
+	}
+	out := make([]domain.Event, 0, len(models))
+	for _, m := range models {
+		out = append(out, eventModelToDomain(m))
+	}
+	return out, nil
+}
+
+func (r *eventRepositoryPostgres) ListTicketTypesByEventIDs(ctx context.Context, eventIDs []uuid.UUID) (map[uuid.UUID][]domain.TicketType, error) {
+	if len(eventIDs) == 0 {
+		return map[uuid.UUID][]domain.TicketType{}, nil
+	}
+	var models []TicketTypeModel
+	err := r.db.WithContext(ctx).
+		Where("event_id IN ?", eventIDs).
+		Order("event_id ASC, created_at ASC").
+		Find(&models).Error
+	if err != nil {
+		return nil, fmt.Errorf("list ticket types by event ids: %w", err)
+	}
+	out := make(map[uuid.UUID][]domain.TicketType)
+	for _, m := range models {
+		tt := ticketTypeModelToDomain(m)
+		out[tt.EventID] = append(out[tt.EventID], tt)
+	}
+	return out, nil
+}
+
+func (r *eventRepositoryPostgres) ListCategoriesByEventIDs(ctx context.Context, eventIDs []uuid.UUID) (map[uuid.UUID][]domain.Category, error) {
+	if len(eventIDs) == 0 {
+		return map[uuid.UUID][]domain.Category{}, nil
+	}
+	type row struct {
+		EventID    uuid.UUID `gorm:"column:event_id"`
+		CategoryID uuid.UUID `gorm:"column:category_id"`
+		Name       string
+		CreatedAt  time.Time
+	}
+	var rows []row
+	err := r.db.WithContext(ctx).
+		Table("event_categories AS ec").
+		Select("ec.event_id, c.id AS category_id, c.name, c.created_at").
+		Joins("JOIN categories c ON c.id = ec.category_id").
+		Where("ec.event_id IN ?", eventIDs).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("list categories by event ids: %w", err)
+	}
+	out := make(map[uuid.UUID][]domain.Category)
+	for _, rrow := range rows {
+		out[rrow.EventID] = append(out[rrow.EventID], domain.Category{
+			ID:        rrow.CategoryID,
+			Name:      rrow.Name,
+			CreatedAt: rrow.CreatedAt,
+		})
 	}
 	return out, nil
 }
@@ -687,6 +802,38 @@ func (r *bookingRepositoryPostgres) ListConfirmedByEvent(ctx context.Context, ev
 	return out, nil
 }
 
+func (r *bookingRepositoryPostgres) ListDistinctConfirmedUserIDsByEvent(ctx context.Context, eventID uuid.UUID) ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := r.db.WithContext(ctx).
+		Model(&BookingModel{}).
+		Where("event_id = ? AND status = ?", eventID, string(domain.BookingStatusConfirmed)).
+		Distinct("user_id").
+		Pluck("user_id", &ids).Error
+	if err != nil {
+		return nil, fmt.Errorf("list distinct confirmed user ids: %w", err)
+	}
+	return ids, nil
+}
+
+func (r *bookingRepositoryPostgres) ListByEventIDs(ctx context.Context, eventIDs []uuid.UUID) ([]domain.Booking, error) {
+	if len(eventIDs) == 0 {
+		return nil, nil
+	}
+	var models []BookingModel
+	err := r.db.WithContext(ctx).
+		Where("event_id IN ?", eventIDs).
+		Order("event_id ASC, created_at ASC").
+		Find(&models).Error
+	if err != nil {
+		return nil, fmt.Errorf("list bookings by event ids: %w", err)
+	}
+	out := make([]domain.Booking, 0, len(models))
+	for _, m := range models {
+		out = append(out, bookingModelToDomain(m))
+	}
+	return out, nil
+}
+
 func (r *bookingRepositoryPostgres) CountByTicketType(ctx context.Context, ticketTypeID uuid.UUID) (int, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
@@ -730,6 +877,28 @@ func (r *messageRepositoryPostgres) Create(ctx context.Context, message domain.M
 		return domain.Message{}, fmt.Errorf("create message: %w", err)
 	}
 	return messageModelToDomain(m), nil
+}
+
+func (r *messageRepositoryPostgres) CreateBatch(ctx context.Context, messages []domain.Message) ([]domain.Message, error) {
+	if len(messages) == 0 {
+		return nil, nil
+	}
+	for i := range messages {
+		messages[i].ID = ensureID(messages[i].ID)
+		messages[i].CreatedAt = nowUTC()
+	}
+	models := make([]MessageModel, len(messages))
+	for i := range messages {
+		models[i] = messageDomainToModel(messages[i])
+	}
+	if err := r.db.WithContext(ctx).Create(&models).Error; err != nil {
+		return nil, fmt.Errorf("create batch messages: %w", err)
+	}
+	out := make([]domain.Message, len(models))
+	for i := range models {
+		out[i] = messageModelToDomain(models[i])
+	}
+	return out, nil
 }
 
 func (r *messageRepositoryPostgres) ListInbox(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Message, error) {

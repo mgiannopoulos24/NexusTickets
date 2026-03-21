@@ -65,6 +65,7 @@
   --nexus-darkgray: #475353;
   --nexus-purple: #703eff;
   --nexus-lightgray: #f0f0f0;
+  --nexus-red: #da2424;
 }
 
 @media (prefers-color-scheme: dark) {

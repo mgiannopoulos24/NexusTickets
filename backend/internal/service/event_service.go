@@ -22,7 +22,9 @@ type EventService struct {
 	bookings    repo.BookingRepository
 	categories  repo.CategoryRepository
 	eventPhotos repo.EventPhotoRepository
+	views       repo.UserEventViewRepository
 	mediaRoot   string
+	messaging   *MessagingService
 }
 
 type TicketTypeInput struct {
@@ -72,6 +74,9 @@ type SearchEventsInput struct {
 	EndAt       *time.Time
 	MinPrice    *float64
 	MaxPrice    *float64
+
+	AfterStartAt *time.Time
+	AfterID      *uuid.UUID
 }
 
 func NewEventService(
@@ -79,14 +84,18 @@ func NewEventService(
 	bookings repo.BookingRepository,
 	categories repo.CategoryRepository,
 	eventPhotos repo.EventPhotoRepository,
+	views repo.UserEventViewRepository,
 	mediaRoot string,
+	messaging *MessagingService,
 ) *EventService {
 	return &EventService{
 		events:      events,
 		bookings:    bookings,
 		categories:  categories,
 		eventPhotos: eventPhotos,
+		views:       views,
 		mediaRoot:   strings.TrimSpace(mediaRoot),
+		messaging:   messaging,
 	}
 }
 
@@ -157,22 +166,32 @@ func (s *EventService) List(ctx context.Context, limit, offset int) ([]domain.Ev
 	return s.hydrateMany(ctx, events)
 }
 
-func (s *EventService) Search(ctx context.Context, in SearchEventsInput, limit, offset int) ([]domain.Event, [][]domain.Category, error) {
-	events, err := s.events.Search(ctx, repo.SearchEventsParams{
-		CategoryIDs: in.CategoryIDs,
-		Title:       strings.TrimSpace(in.Title),
-		FullText:    strings.TrimSpace(in.Query),
-		City:        strings.TrimSpace(in.City),
-		StartAt:     in.StartAt,
-		EndAt:       in.EndAt,
-		MinPrice:    in.MinPrice,
-		MaxPrice:    in.MaxPrice,
-		Status:      domain.EventStatusPublished,
+func (s *EventService) Search(ctx context.Context, in SearchEventsInput, limit, offset int) ([]domain.Event, [][]domain.Category, bool, error) {
+	events, hasMore, err := s.events.Search(ctx, repo.SearchEventsParams{
+		CategoryIDs:  in.CategoryIDs,
+		Title:        strings.TrimSpace(in.Title),
+		FullText:     strings.TrimSpace(in.Query),
+		City:         strings.TrimSpace(in.City),
+		StartAt:      in.StartAt,
+		EndAt:        in.EndAt,
+		MinPrice:     in.MinPrice,
+		MaxPrice:     in.MaxPrice,
+		AfterStartAt: in.AfterStartAt,
+		AfterID:      in.AfterID,
+		Status:       domain.EventStatusPublished,
 	}, limit, offset)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
-	return s.hydrateMany(ctx, events)
+	ev, cats, err := s.hydrateMany(ctx, events)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	return ev, cats, hasMore, nil
+}
+
+func (s *EventService) RecordEventView(ctx context.Context, userID, eventID uuid.UUID) error {
+	return s.views.Record(ctx, userID, eventID)
 }
 
 func (s *EventService) GetOrganizerEvents(ctx context.Context, organizerID uuid.UUID, limit, offset int) ([]domain.Event, [][]domain.Category, error) {
@@ -329,6 +348,9 @@ func (s *EventService) Cancel(ctx context.Context, organizerID, eventID uuid.UUI
 	}
 	if err := s.events.SetStatus(ctx, eventID, domain.EventStatusCancelled); err != nil {
 		return domain.Event{}, nil, err
+	}
+	if s.messaging != nil {
+		_ = s.messaging.NotifyEventCancellation(ctx, eventID)
 	}
 	return s.Get(ctx, eventID)
 }

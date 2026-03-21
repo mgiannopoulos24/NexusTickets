@@ -10,7 +10,7 @@ import (
 func CORS(allowedOrigins string) fiber.Handler {
 	origins := strings.TrimSpace(allowedOrigins)
 	if origins == "" {
-		origins = "http://localhost,http://localhost:5173"
+		origins = "http://localhost,http://localhost:5173,https://localhost,https://localhost:5173"
 	}
 
 	return cors.New(cors.Config{

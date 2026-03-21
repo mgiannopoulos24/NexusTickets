@@ -1,4 +1,4 @@
-.PHONY: dev build test lint migrate-up migrate-down seed db-reset wire
+.PHONY: dev build test lint migrate-up migrate-down seed db-reset wire local-tls
 
 COMPOSE = docker compose -f docker-compose.yml
 COMPOSE_DEV = docker compose -f docker-compose.yml -f docker-compose.dev.yml
@@ -35,4 +35,8 @@ db-reset:
 
 wire:
 	@cd backend && wire ./...
+
+local-tls:
+	@chmod +x scripts/generate-local-tls.sh
+	@./scripts/generate-local-tls.sh
 

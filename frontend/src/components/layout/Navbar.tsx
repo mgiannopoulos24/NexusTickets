@@ -3,7 +3,15 @@ import { Bell, ChevronDown, Search } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { NavbarLanguageGlobe } from '@/components/layout/NavbarLanguageGlobe';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContent';
 
 const NAV_LINKS = [
   { label: 'Εκδηλώσεις', href: '/events' },
@@ -14,7 +22,20 @@ const NAV_LINKS = [
   { label: 'Συνδρομές', href: '/subscriptions' },
 ] as const;
 
+function userInitial(firstName: string, username: string): string {
+  const c = firstName.trim().charAt(0) || username.trim().charAt(0);
+  return c ? c.toLocaleUpperCase('el-GR') : '?';
+}
+
 export function Navbar() {
+  const { user, accessToken, isHydrating, logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+  };
+
+  const showLoginButton = !user && !accessToken && !isHydrating;
+
   return (
     <header className="sticky top-0 z-50 border-b-0 bg-white/95 shadow-[0_1px_2px_0_rgba(60,64,67,0.3),0_1px_3px_1px_rgba(60,64,67,0.15)] backdrop-blur supports-[backdrop-filter]:bg-white/80">
       <div className="flex h-16 max-w-screen items-stretch justify-between gap-4 px-4 sm:px-6 lg:px-8">
@@ -62,14 +83,88 @@ export function Navbar() {
                 1
               </span>
             </Button>
-            <Button
-              asChild
-              className={cn(
-                'hidden cursor-pointer self-center rounded-full bg-[#6d28d9] px-5 text-white hover:bg-[#5b21b6] sm:inline-flex',
-              )}
-            >
-              <Link to="/login">Σύνδεση</Link>
-            </Button>
+
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      'flex cursor-pointer items-center gap-1 rounded-full outline-none',
+                      'focus-visible:ring-2 focus-visible:ring-[#6d28d9]/40',
+                    )}
+                    aria-label="Μενού λογαριασμού"
+                  >
+                    <span
+                      className="flex size-9 items-center justify-center rounded-full bg-[#5c4033] text-sm font-semibold text-white"
+                      aria-hidden
+                    >
+                      {userInitial(user.first_name, user.username)}
+                    </span>
+                    <ChevronDown className="hidden size-4 text-neutral-600 sm:block" aria-hidden />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[220px]">
+                  <DropdownMenuItem asChild>
+                    <Link to="/account" className="cursor-pointer">
+                      Ο λογαριασμός μου
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/orders" className="cursor-pointer">
+                      Παραγγελίες
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/favorites" className="cursor-pointer">
+                      Αγαπημένα
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/settings" className="cursor-pointer">
+                      Ρυθμίσεις χρήστη
+                    </Link>
+                  </DropdownMenuItem>
+                  {user.role === 'admin' && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link
+                          to="/admin"
+                          className="cursor-pointer font-medium text-[var(--nexus-red)] focus:text-[var(--nexus-red)]"
+                        >
+                          Admin panel
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="cursor-pointer text-neutral-800 focus:text-neutral-900"
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      void handleLogout();
+                    }}
+                  >
+                    Αποσύνδεση
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : accessToken && isHydrating ? (
+              <span
+                className="flex size-9 shrink-0 self-center rounded-full bg-neutral-200 animate-pulse"
+                aria-hidden
+              />
+            ) : showLoginButton ? (
+              <Button
+                asChild
+                className={cn(
+                  'hidden cursor-pointer self-center rounded-full bg-[#6d28d9] px-5 text-white hover:bg-[#5b21b6] sm:inline-flex',
+                )}
+              >
+                <Link to="/login">Σύνδεση</Link>
+              </Button>
+            ) : null}
             <Button
               variant="ghost"
               size="icon"

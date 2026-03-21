@@ -1,52 +1,82 @@
-import { createContext, useState, useEffect, useContext } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
-import axios from 'axios';
-import { useNavigate, useLocation } from 'react-router-dom';
-import type { User } from '@/types/user';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
-interface LoginResponse {
-  data: User;
-  token: string;
-}
+import type { User } from '@/types/models';
+import {
+  AUTH_SESSION_CLEARED_EVENT,
+  AUTH_TOKEN_UPDATED_EVENT,
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+  setTokens,
+} from '@/utils/api';
 
-interface MeResponse {
-  data: User;
-}
+type ApiEnvelope<T> = {
+  data: T | null;
+  error?: { code: string; message: string } | null;
+};
 
-interface RegisterRequest {
+export type RegisterRequest = {
   username: string;
   password: string;
   confirm_password: string;
   first_name: string;
   last_name: string;
   email: string;
-  phone_number: string | null;
+  phone: string | null;
   address: string | null;
   city: string | null;
   country: string | null;
-  latitude: number | null;
-  longitude: number | null;
   vat_number: string | null;
+};
+
+type AuthTokens = {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  access_expires_in: number;
+  refresh_expires_in: number;
+};
+
+type LocationState = {
+  from?: { pathname?: string };
+  pendingApproval?: boolean;
+};
+
+function assertData<T>(res: Response, body: ApiEnvelope<T>): T {
+  if (!res.ok || body.error) {
+    throw new Error(body.error?.message ?? 'Σφάλμα αιτήματος');
+  }
+  if (body.data === null || body.data === undefined) {
+    throw new Error('Άκυρη απάντηση');
+  }
+  return body.data;
 }
 
-interface LocationState {
-  from?: {
-    pathname?: string;
-  };
+async function fetchUserMe(accessToken: string): Promise<User> {
+  const res = await fetch('/api/v1/users/me', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  const json = (await res.json()) as ApiEnvelope<User>;
+  return assertData(res, json);
 }
 
 interface AuthContextType {
   isAuthenticated: boolean;
   user: User | null;
-  token: string | null;
-  isLoading: boolean;
-  login: (identifier: string, password: string) => Promise<void>;
+  accessToken: string | null;
+  isHydrating: boolean;
+  login: (username: string, password: string) => Promise<void>;
   register: (userData: RegisterRequest) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   setUser: Dispatch<SetStateAction<User | null>>;
 }
 
-/* eslint-disable react-refresh/only-export-components */
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 interface AuthProviderProps {
@@ -55,93 +85,137 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [accessToken, setAccessToken] = useState<string | null>(getAccessToken);
+  const [isHydrating, setIsHydrating] = useState<boolean>(() => !!getAccessToken());
   const navigate = useNavigate();
   const location = useLocation();
-  const locationState = location.state as LocationState | null;
 
-  const logout = async () => {
+  const clearClientSession = useCallback(() => {
+    clearTokens();
     setUser(null);
-    setToken(null);
-    sessionStorage.removeItem('auth_token');
-    delete axios.defaults.headers.common['Authorization'];
-    navigate('/');
-  };
-
-  useEffect(() => {
-    const checkAuthStatus = async () => {
-      const storedToken = sessionStorage.getItem('auth_token');
-
-      if (storedToken) {
-        setToken(storedToken);
-        axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
-
-        try {
-          const response = await axios.get<MeResponse>('/api/users/me');
-          setUser(response.data.data);
-        } catch (error) {
-          console.error('Session token is invalid. Logging out.', error);
-          // await logout();
-        }
-      }
-      setIsLoading(false);
-    };
-
-    checkAuthStatus();
+    setAccessToken(null);
   }, []);
 
-  const login = async (identifier: string, password: string) => {
-    const response = await axios.post<LoginResponse>('/api/auth/login', {
-      identifier,
-      password,
-    });
+  useEffect(() => {
+    const onCleared = () => {
+      setUser(null);
+      setAccessToken(null);
+    };
+    window.addEventListener(AUTH_SESSION_CLEARED_EVENT, onCleared);
+    return () => window.removeEventListener(AUTH_SESSION_CLEARED_EVENT, onCleared);
+  }, []);
 
-    if (response.data?.data && response.data.token) {
-      const { data: loggedInUser, token: authToken } = response.data;
-      setUser(loggedInUser);
-      setToken(authToken);
-      sessionStorage.setItem('auth_token', authToken);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${authToken}`;
+  useEffect(() => {
+    const onTokenUpdated = () => {
+      setAccessToken(getAccessToken());
+    };
+    window.addEventListener(AUTH_TOKEN_UPDATED_EVENT, onTokenUpdated);
+    return () => window.removeEventListener(AUTH_TOKEN_UPDATED_EVENT, onTokenUpdated);
+  }, []);
 
-      const from = locationState?.from?.pathname || null;
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) {
+      setIsHydrating(false);
+      return;
+    }
 
-      if (loggedInUser.role === 'admin') {
-        navigate(from && from.startsWith('/admin') ? from : '/admin/dashboard');
-      } else {
-        navigate(from || '/homepage');
+    let cancelled = false;
+    void fetchUserMe(token)
+      .then((u) => {
+        if (!cancelled) {
+          setUser(u);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          clearClientSession();
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsHydrating(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clearClientSession]);
+
+  const login = useCallback(
+    async (username: string, password: string) => {
+      const res = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim(), password }),
+      });
+      const json = (await res.json()) as ApiEnvelope<AuthTokens>;
+      const tokens = assertData(res, json);
+      setTokens(tokens.access_token, tokens.refresh_token);
+      setAccessToken(tokens.access_token);
+      const me = await fetchUserMe(tokens.access_token);
+      setUser(me);
+      toast.success(`Καλώς ήρθες, ${me.username}`);
+
+      const from = (location.state as LocationState | null)?.from?.pathname;
+      const target = from && from !== '/login' ? from : '/';
+      navigate(target, { replace: true });
+    },
+    [navigate, location.state],
+  );
+
+  const register = useCallback(
+    async (userData: RegisterRequest) => {
+      const res = await fetch('/api/v1/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData),
+      });
+      const json = (await res.json()) as ApiEnvelope<{
+        id: string;
+        username: string;
+        email: string;
+        account_status: string;
+      }>;
+      assertData(res, json);
+      navigate('/login', { replace: true, state: { pendingApproval: true } });
+    },
+    [navigate],
+  );
+
+  const logout = useCallback(async () => {
+    const refresh = getRefreshToken();
+    if (refresh) {
+      try {
+        await fetch('/api/v1/auth/logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refresh }),
+        });
+      } catch {
+        /* still clear client session */
       }
     }
-  };
+    clearClientSession();
+    navigate('/');
+  }, [clearClientSession, navigate]);
 
-  const register = async (userData: RegisterRequest) => {
-    const response = await axios.post<LoginResponse>('/api/auth/register', {
-      user: userData,
-    });
+  const value = useMemo(
+    () => ({
+      isAuthenticated: !!user && !!accessToken,
+      user,
+      accessToken,
+      isHydrating,
+      login,
+      register,
+      logout,
+      setUser,
+    }),
+    [user, accessToken, isHydrating, login, register, logout],
+  );
 
-    if (response.data?.data && response.data.token) {
-      const { data: newUser, token: authToken } = response.data;
-      setUser(newUser);
-      setToken(authToken);
-      sessionStorage.setItem('auth_token', authToken);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${authToken}`;
-      navigate('/homepage');
-    }
-  };
-
-  const value = {
-    isAuthenticated: !isLoading && !!user,
-    user,
-    token,
-    isLoading,
-    login,
-    register,
-    logout,
-    setUser,
-  };
-
-  /* eslint-disable react-refresh/only-export-components */
-  return <AuthContext.Provider value={value}>{!isLoading && children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => {

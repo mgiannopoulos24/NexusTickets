@@ -1,12 +1,10 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { baseApi } from '@/utils/api';
-import authReducer from '@/utils/authSlice';
-import messagingReducer from '@/utils/messagingSlice';
+import messagingReducer from '@/app/messagingSlice';
 
 export const store = configureStore({
   reducer: {
     [baseApi.reducerPath]: baseApi.reducer,
-    auth: authReducer,
     messaging: messagingReducer,
   },
   middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(baseApi.middleware),

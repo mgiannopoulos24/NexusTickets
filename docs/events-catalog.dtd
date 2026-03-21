@@ -1,0 +1,43 @@
+<!ELEMENT eventCatalog (event*)>
+<!ELEMENT event (Description, Address?, Organizer, GeoLocation?, Category*, ticketTypes, bookings)>
+<!ATTLIST event EventID CDATA #REQUIRED
+              Title CDATA #REQUIRED
+              Status CDATA #REQUIRED
+              StartTime CDATA #REQUIRED
+              EndTime CDATA #REQUIRED
+              Capacity CDATA #REQUIRED
+              City CDATA #REQUIRED
+              Country CDATA #IMPLIED
+              Venue CDATA #REQUIRED>
+<!ELEMENT Description (#PCDATA)>
+<!ELEMENT Address (#PCDATA)>
+<!ELEMENT Organizer EMPTY>
+<!ATTLIST Organizer UserID CDATA #REQUIRED
+                    Username CDATA #IMPLIED
+                    Email CDATA #IMPLIED
+                    FirstName CDATA #IMPLIED
+                    LastName CDATA #IMPLIED>
+<!ELEMENT GeoLocation EMPTY>
+<!ATTLIST GeoLocation Latitude CDATA #REQUIRED
+                        Longitude CDATA #REQUIRED>
+<!ELEMENT Category (#PCDATA)>
+<!ELEMENT ticketTypes (ticketType*)>
+<!ELEMENT ticketType EMPTY>
+<!ATTLIST ticketType TicketTypeID CDATA #REQUIRED
+                     Name CDATA #REQUIRED
+                     Price CDATA #REQUIRED
+                     Quantity CDATA #REQUIRED
+                     Available CDATA #REQUIRED>
+<!ELEMENT bookings (booking*)>
+<!ELEMENT booking (Attendee)>
+<!ATTLIST booking BookingID CDATA #REQUIRED
+                  Quantity CDATA #REQUIRED
+                  TotalCost CDATA #REQUIRED
+                  Status CDATA #REQUIRED
+                  TicketTypeID CDATA #REQUIRED>
+<!ELEMENT Attendee EMPTY>
+<!ATTLIST Attendee UserID CDATA #REQUIRED
+                    Username CDATA #IMPLIED
+                    Email CDATA #IMPLIED
+                    FirstName CDATA #IMPLIED
+                    LastName CDATA #IMPLIED>

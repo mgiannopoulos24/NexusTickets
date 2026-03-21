@@ -7,7 +7,7 @@
 ## 0. Project Bootstrap
 
 - [X] `[!]` Initialize monorepo root with `git init`
-- [X] `[!]` Create root `.gitignore` (Go binaries, `dist/`, `.env*`, `uploads/`, `node_modules/`, `*.log`, `.DS_Store`)
+- [X] `[!]` Create root `.gitignore` (Go binaries, `dist/`, `.env*`, `backend/uploads/`, `node_modules/`, `*.log`, `.DS_Store`)
 - [X] `[!]` Create root `docker-compose.yml` with services: `postgres`, `redis`, `backend`, `frontend`
 - [X] `[!]` Create root `docker-compose.dev.yml` override (hot reload, exposed ports)
 - [X] Create `.env.example` with all required env vars
@@ -137,26 +137,26 @@
 - [X] Calculate total_cost server-side (never trust client value)
 
 ### 3.7 Messaging — REST + WebSocket (Requirement 10)
-- [ ] `[!]` `messaging_service.go`: SendMessage, GetInbox, GetSent, DeleteForUser, MarkAsRead, GetUnreadCount, NotifyEventCancellation
-- [ ] `[!]` REST handlers: `GET /messages/inbox`, `GET /messages/sent`, `GET /messages/unread-count`, `POST /messages`, `DELETE /messages/:id`
-- [ ] `[!]` WebSocket Hub (`handler/ws/hub.go`) — userID → set of clients, broadcast channel, register/unregister
-- [ ] `[!]` WebSocket Client (`handler/ws/client.go`) — ReadPump, WritePump, ping/pong keepalive, max message size
-- [ ] `[!]` WebSocket upgrade handler: `GET /api/v1/ws/messages?token=<jwt>`
-- [ ] `[!]` After SendMessage: broadcast `new_message` + `unread_count` to recipient via Hub
-- [ ] `[!]` Cache unread count in Redis (`INCR nexustickets:unread:{user_id}` on send, `SET 0` on inbox open)
-- [ ] `[!]` `NotifyEventCancellation`: bulk INSERT messages + WS broadcast to all attendees with confirmed bookings
+- [X] `[!]` `messaging_service.go`: SendMessage, GetInbox, GetSent, DeleteForUser, MarkAsRead, GetUnreadCount, NotifyEventCancellation
+- [X] `[!]` REST handlers: `GET /api/v1/messages/inbox`, `GET /api/v1/messages/sent`, `GET /api/v1/messages/unread-count`, `POST /api/v1/messages`, `DELETE /api/v1/messages/:id`
+- [X] `[!]` WebSocket Hub (`handler/ws/hub.go`) — userID → set of clients, broadcast channel, register/unregister
+- [X] `[!]` WebSocket Client (`handler/ws/client.go`) — ReadPump, WritePump, ping/pong keepalive, max message size
+- [X] `[!]` WebSocket upgrade handler: `GET /api/v1/ws/messages?token=<jwt>`
+- [X] `[!]` After SendMessage: broadcast `new_message` + `unread_count` to recipient via Hub
+- [X] `[!]` Cache unread count in Redis (`INCR nexustickets:unread:{user_id}` on send, `SET 0` on inbox open)
+- [X] `[!]` `NotifyEventCancellation`: bulk INSERT messages + WS broadcast to all attendees with confirmed bookings
 
 ### 3.8 Search & Browse
-- [ ] `[!]` Full-text search via `tsvector` + `plainto_tsquery('greek', ...)`
-- [ ] `[!]` Filtering: category, title (ILIKE), free-text (q), date range, price range, city
-- [ ] `[!]` Keyset pagination
-- [ ] Record event view in `user_event_views` for authenticated users
+- [X] `[!]` Full-text search via `tsvector` + `plainto_tsquery('greek', ...)`
+- [X] `[!]` Filtering: category, title (ILIKE), free-text (q), date range, price range, city
+- [X] `[!]` Keyset pagination (`after_start` + `after_id`, `meta.has_more`, `meta.next_after_*`; offset fallback)
+- [X] Record event view in `user_event_views` for authenticated users (`OptionalJWTAuth` on `GET /events/:id`)
 
 ### 3.9 XML / JSON Export (Requirement 12)
-- [ ] `[!]` Streaming XML export — struct tags match assignment DTD exactly
-- [ ] `[!]` Streaming JSON export
-- [ ] Batch DB reads (100 records at a time)
-- [ ] `Content-Disposition: attachment` headers
+- [X] `[!]` Streaming XML export — struct tags match assignment DTD exactly (`docs/events-catalog.dtd`, `internal/export/catalog.go`)
+- [X] `[!]` Streaming JSON export (`{"events":[...]}` streamed)
+- [X] `[!]` Batch DB reads (100 records at a time)
+- [X] `[!]` `Content-Disposition: attachment` headers (`events.xml` / `events.json`)
 
 ### 3.10 Recommendation Engine (Requirement 13)
 - [ ] `[!]` BMF model struct + hyperparameters (K=20, lr=0.005, lambda=0.02, epochs=50)
@@ -196,7 +196,7 @@
 - [X] `[!]` Install remaining dependencies: Redux Toolkit, RTK Query, React Router v7, React Hook Form, Zod, Lucide React, clsx, tailwind-merge
 - [X] `[!]` Install react-leaflet + leaflet + @types/leaflet
 - [X] `[!]` `tsconfig.json`: `strict: true`
-- [X] Configure `VITE_API_BASE_URL` and `VITE_WS_URL` in `.env` and `.env.example`
+- [X] Configure `VITE_API_PROXY_TARGET` and `VITE_WS_URL` in `.env.example` (app uses relative `/api/v1` paths via Vite proxy)
 
 ### 5.2 Core Setup
 - [X] `[!]` `src/app/store.ts` — Redux store with messaging reducer + RTK Query middleware
@@ -231,7 +231,7 @@
 - [ ] `[!]` `authSlice.ts` — user, accessToken, isAuthenticated, localStorage rehydration
 - [ ] `[!]` `authApi.ts` — login, register, refresh, logout RTK Query endpoints
 - [ ] `[!]` `useAuth.ts` — convenience wrapper over auth store
-- [ ] `[!]` `LoginPage.tsx` — React Hook Form + Zod
+- [X] `[!]` `LoginPage.tsx` — React Hook Form + Zod
 - [ ] `[!]` `RegisterPage.tsx` — all fields: username, password, confirm_password, first_name, last_name, email, phone, address, city, country, vat_number
 - [ ] `[!]` `PendingApprovalPage.tsx`
 - [ ] `UnauthorizedPage.tsx`
@@ -363,7 +363,7 @@
 - [ ] WebSocket connects and delivers messages in realtime
 - [ ] Recommendation endpoint returns results
 - [ ] Report PDF in `./report/`
-- [ ] Source zip excludes `node_modules`, `dist`, `.env`, `uploads/`
+- [ ] Source zip excludes `node_modules`, `dist`, `.env`, `backend/uploads/`
 - [ ] Zip + PDF uploaded to e-class before deadline
 
 ---

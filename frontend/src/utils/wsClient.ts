@@ -2,6 +2,18 @@ import type { WSEnvelope } from '@/types/ws';
 
 type MessageSubscriber = (message: WSEnvelope) => void;
 
+function resolveWsMessagesUrl(): string {
+  const raw = import.meta.env.VITE_WS_URL as string | undefined;
+  if (raw !== undefined && raw !== '') {
+    return raw;
+  }
+  if (typeof window !== 'undefined') {
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${proto}//${window.location.host}/api/v1/ws/messages`;
+  }
+  return 'ws://localhost:8080/api/v1/ws/messages';
+}
+
 class WSClient {
   private socket: WebSocket | null = null;
   private reconnectTimer: number | null = null;
@@ -18,7 +30,7 @@ class WSClient {
       return;
     }
 
-    const wsBase = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8080/ws/messages';
+    const wsBase = resolveWsMessagesUrl();
     const url = `${wsBase}?token=${encodeURIComponent(token)}`;
     this.socket = new WebSocket(url);
 

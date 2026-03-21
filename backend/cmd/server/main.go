@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	"nexustickets/internal/config"
 	"nexustickets/internal/db"
 	"nexustickets/internal/handler"
+	wshub "nexustickets/internal/handler/ws"
 	"nexustickets/internal/middleware"
 	"nexustickets/internal/migrate"
 	"nexustickets/internal/redis"
@@ -56,6 +56,9 @@ func main() {
 	app := fiber.New(fiber.Config{
 		AppName:      "NexusTickets API",
 		ErrorHandler: middleware.ErrorHandler(log),
+		// Default 4 KB is too small once the Vite proxy forwards all browser
+		// headers (JWT, sec-ch-ua, cookies, X-Forwarded-*) to the backend.
+		ReadBufferSize: 1 << 15, // 32 KB
 	})
 
 	app.Use(middleware.CORS(cfg.CORSAllowedOrigins))
@@ -63,32 +66,40 @@ func main() {
 	app.Use(recover.New())
 	app.Use(middleware.RequestLogger())
 	app.Use(middleware.RateLimiter(redisClient.Raw, cfg.RateLimitMaxReqs, cfg.RateLimitWindow))
-	app.Static("/media", cfg.MediaStoragePath)
+	app.Static("/uploads/media", cfg.MediaStoragePath)
 
 	userRepo := postgres.NewUserRepositoryPostgres(pg.Gorm)
 	eventRepo := postgres.NewEventRepositoryPostgres(pg.Gorm)
 	bookingRepo := postgres.NewBookingRepositoryPostgres(pg.Gorm)
+	messageRepo := postgres.NewMessageRepositoryPostgres(pg.Gorm)
 	categoryRepo := postgres.NewCategoryRepositoryPostgres(pg.Gorm)
 	eventPhotoRepo := postgres.NewEventPhotoRepositoryPostgres(pg.Gorm)
+	eventViewRepo := postgres.NewUserEventViewRepositoryPostgres(pg.Gorm)
 	ticketTypeRepo := postgres.NewTicketTypeRepositoryPostgres(pg.Gorm)
 	authService := service.NewAuthService(userRepo, redisClient.Raw, cfg.JWTSecret)
 	authHandler := handler.NewAuthHandler(authService)
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService)
-	if err := os.MkdirAll(filepath.Clean(cfg.MediaStoragePath), 0o755); err != nil {
-		log.Fatal("create media storage path failed", zap.Error(err))
-	}
-	eventService := service.NewEventService(eventRepo, bookingRepo, categoryRepo, eventPhotoRepo, cfg.MediaStoragePath)
+	hub := wshub.NewHub()
+	go hub.Run()
+	messagingService := service.NewMessagingService(messageRepo, userRepo, bookingRepo, eventRepo, redisClient.Raw, hub)
+	eventService := service.NewEventService(eventRepo, bookingRepo, categoryRepo, eventPhotoRepo, eventViewRepo, cfg.MediaStoragePath, messagingService)
 	eventHandler := handler.NewEventHandler(eventService)
+	messageHandler := handler.NewMessageHandler(messagingService, hub)
 	bookingService := service.NewBookingService(eventRepo, ticketTypeRepo, bookingRepo)
 	bookingHandler := handler.NewBookingHandler(bookingService)
-	handler.RegisterAuthRoutes(app, authHandler, redisClient.Raw)
-	handler.RegisterUserRoutes(app, userHandler, cfg.JWTSecret)
-	handler.RegisterEventRoutes(app, eventHandler, cfg.JWTSecret)
-	handler.RegisterBookingRoutes(app, bookingHandler, cfg.JWTSecret)
+	catalogExportService := service.NewCatalogExportService(eventRepo, bookingRepo, userRepo)
+	adminExportHandler := handler.NewAdminExportHandler(catalogExportService)
+	v1 := app.Group("/api/v1")
+	handler.RegisterAuthRoutes(v1, authHandler, redisClient.Raw)
+	handler.RegisterUserRoutes(v1, userHandler, cfg.JWTSecret)
+	handler.RegisterEventRoutes(v1, eventHandler, cfg.JWTSecret)
+	handler.RegisterBookingRoutes(v1, bookingHandler, cfg.JWTSecret)
+	handler.RegisterMessageRoutes(v1, messageHandler, cfg.JWTSecret)
+	handler.RegisterAdminExportRoutes(v1, adminExportHandler, cfg.JWTSecret)
 
 	app.Get("/health", func(c *fiber.Ctx) error {
-		return response.OK(c, fiber.Map{"status": "ok"})
+		return response.OK(c, fiber.Map{"status": "ok\n"})
 	})
 
 	app.Get("/ping", func(c *fiber.Ctx) error {
@@ -103,6 +114,10 @@ func main() {
 	addr := fmt.Sprintf(":%d", cfg.AppPort)
 	errCh := make(chan error, 1)
 	go func() {
+		if cfg.TLSCertFile != "" && cfg.TLSKeyFile != "" {
+			errCh <- app.ListenTLS(addr, cfg.TLSCertFile, cfg.TLSKeyFile)
+			return
+		}
 		errCh <- app.Listen(addr)
 	}()
 

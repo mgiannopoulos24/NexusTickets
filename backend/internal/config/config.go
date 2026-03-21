@@ -39,6 +39,9 @@ const (
 	envRedisHost     = "REDIS_HOST"
 	envRedisPort     = "REDIS_PORT"
 	envRedisPassword = "REDIS_PASSWORD"
+
+	envTLSCertFile = "TLS_CERT_FILE"
+	envTLSKeyFile  = "TLS_KEY_FILE"
 )
 
 type Config struct {
@@ -72,6 +75,10 @@ type Config struct {
 	RedisHost     string
 	RedisPort     int `validate:"min=1,max=65535"`
 	RedisPassword string
+
+	// When both are non-empty, the HTTP server uses TLS (paths to PEM files).
+	TLSCertFile string
+	TLSKeyFile  string
 }
 
 func Load() (Config, error) {
@@ -79,10 +86,10 @@ func Load() (Config, error) {
 
 	cfg := Config{
 		AppEnv:             getEnv(envAppEnv, "development"),
-		CORSAllowedOrigins: getEnv(envCORSAllowedOrigins, "http://localhost,http://localhost:5173"),
+		CORSAllowedOrigins: getEnv(envCORSAllowedOrigins, "http://localhost,http://localhost:5173,https://localhost,https://localhost:5173"),
 		JWTSecret:          getEnv(envJWTSecret, "dev-insecure-jwt-secret-change-me"),
 		MigrationsPath:     strings.TrimSpace(getEnv(envMigrationsPath, "/migrations")),
-		MediaStoragePath:   strings.TrimSpace(getEnv(envMediaStoragePath, "./data/media")),
+		MediaStoragePath:   strings.TrimSpace(getEnv(envMediaStoragePath, "uploads/media")),
 		DatabaseURL:        strings.TrimSpace(os.Getenv(envDatabaseURL)),
 		RedisURL:           strings.TrimSpace(os.Getenv(envRedisURL)),
 
@@ -92,6 +99,8 @@ func Load() (Config, error) {
 		DBPassword:    os.Getenv(envDBPassword),
 		RedisHost:     getEnv(envRedisHost, "redis"),
 		RedisPassword: os.Getenv(envRedisPassword),
+		TLSCertFile:   strings.TrimSpace(os.Getenv(envTLSCertFile)),
+		TLSKeyFile:    strings.TrimSpace(os.Getenv(envTLSKeyFile)),
 	}
 
 	appPort, err := parsePort(getEnv(envAppPort, "8080"))
@@ -151,6 +160,18 @@ func Load() (Config, error) {
 	validate := validator.New(validator.WithRequiredStructEnabled())
 	if err := validate.Struct(cfg); err != nil {
 		return Config{}, err
+	}
+
+	if (cfg.TLSCertFile != "") != (cfg.TLSKeyFile != "") {
+		return Config{}, fmt.Errorf("%s and %s must both be set or both empty", envTLSCertFile, envTLSKeyFile)
+	}
+	if cfg.TLSCertFile != "" {
+		if _, err := os.Stat(cfg.TLSCertFile); err != nil {
+			return Config{}, fmt.Errorf("%s: %w", envTLSCertFile, err)
+		}
+		if _, err := os.Stat(cfg.TLSKeyFile); err != nil {
+			return Config{}, fmt.Errorf("%s: %w", envTLSKeyFile, err)
+		}
 	}
 
 	return cfg, nil

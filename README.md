@@ -141,6 +141,18 @@ The frontend is available at `http://localhost:5173`.
 The backend API is available at `http://localhost:8080/api/v1`.  
 API documentation is at `http://localhost:8080/api/v1/docs`.
 
+### Local HTTPS (self-signed, production-style stack)
+
+To run the **built** SPA behind nginx with TLS on your machine (same layout as production, but with a self-signed certificate):
+
+```bash
+cp .env.example .env
+make local-tls
+docker compose up --build
+```
+
+Then open `https://localhost`. Your browser will show a certificate warning once; that is expected for self-signed local certs. The frontend image is built with **same-origin** API URLs (empty `VITE_API_BASE_URL` / `VITE_WS_URL`), so REST and WebSocket traffic go through nginx over HTTPS. Ensure `CORS_ALLOWED_ORIGINS` in `.env` includes `https://localhost` (the default in development does).
+
 > Note about PostgreSQL credentials: the init scripts run **only** when the `postgres_data` volume is empty.
 > If you change `POSTGRES_APP_PASSWORD` / `DB_PASSWORD` after the volume has already been created, the backend will fail with `password authentication failed`.
 > In that case, reset the volumes with:
@@ -177,6 +189,7 @@ make migrate-up     Apply all pending migrations
 make migrate-down   Rollback last migration
 make seed           Seed database with initial data
 make wire           Regenerate Wire dependency injection code
+make local-tls      Generate self-signed TLS key/cert for nginx (`docker/tls/local`)
 ```
 
 ---
@@ -196,11 +209,11 @@ JWT_ACCESS_SECRET       Secret for signing access tokens
 JWT_REFRESH_SECRET      Secret for signing refresh tokens
 ADMIN_USERNAME          Default administrator username
 ADMIN_PASSWORD          Default administrator password
-MEDIA_STORAGE_PATH      Directory for uploaded event photos
+MEDIA_STORAGE_PATH      Directory for uploaded event photos (default: `backend/uploads/media`)
 CORS_ALLOWED_ORIGINS    Comma-separated list of allowed origins
 
 # Frontend
-VITE_API_BASE_URL       Backend API base URL (e.g. http://localhost:8080/api/v1)
+VITE_API_BASE_URL       Backend origin only, or empty for same-origin (e.g. http://localhost:8080). The app calls `/api/v1/...` on that origin.
 ```
 
 ---
@@ -212,11 +225,11 @@ All endpoints are prefixed with `/api/v1/`. Authentication uses Bearer tokens pa
 Public endpoints (no authentication required):
 
 ```
-POST   /auth/register
-POST   /auth/login
-POST   /auth/refresh
-GET    /events
-GET    /events/:id
+POST   /api/v1/auth/register
+POST   /api/v1/auth/login
+POST   /api/v1/auth/refresh
+GET    /api/v1/events
+GET    /api/v1/events/:id
 ```
 
 All other endpoints require a valid JWT and appropriate role. Refer to `docs/api.md` for the complete route map.

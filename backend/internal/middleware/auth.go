@@ -17,7 +17,8 @@ const (
 )
 
 type JWTClaims struct {
-	Role string `json:"role"`
+	Role      string `json:"role"`
+	TokenType string `json:"token_type"`
 	jwt.RegisteredClaims
 }
 
@@ -33,6 +34,28 @@ func JWTAuth(jwtSecret string) fiber.Handler {
 			return fiber.NewError(fiber.StatusUnauthorized, "invalid or expired token")
 		}
 
+		c.Locals(ctxUserIDKey, claims.Subject)
+		c.Locals(ctxRoleKey, claims.Role)
+		return c.Next()
+	}
+}
+
+// OptionalJWTAuth parses a Bearer access token when present and sets auth locals; missing or invalid tokens are ignored.
+func OptionalJWTAuth(jwtSecret string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		const prefix = "Bearer "
+		raw := strings.TrimSpace(c.Get("Authorization"))
+		if raw == "" || !strings.HasPrefix(raw, prefix) {
+			return c.Next()
+		}
+		token := strings.TrimSpace(strings.TrimPrefix(raw, prefix))
+		if token == "" {
+			return c.Next()
+		}
+		claims, err := parseAndValidateJWT(token, jwtSecret)
+		if err != nil {
+			return c.Next()
+		}
 		c.Locals(ctxUserIDKey, claims.Subject)
 		c.Locals(ctxRoleKey, claims.Role)
 		return c.Next()
@@ -76,6 +99,9 @@ func parseAndValidateJWT(token, jwtSecret string) (*JWTClaims, error) {
 	}
 	if strings.TrimSpace(claims.Role) == "" {
 		return nil, errors.New("missing role")
+	}
+	if claims.TokenType != "access" {
+		return nil, errors.New("invalid token type")
 	}
 	return claims, nil
 }
