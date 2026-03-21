@@ -4,6 +4,12 @@ import { Bell, ChevronDown, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NavbarLanguageGlobe } from '@/components/layout/NavbarLanguageGlobe';
 import {
+  SelectFullPanelContainer,
+  selectFullAccountTriggerClassName,
+  selectFullItemClassName,
+  selectFullMenuSeparatorClass,
+} from '@/components/ui/select-full';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -89,65 +95,64 @@ export function Navbar() {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className={cn(
-                      'flex cursor-pointer items-center gap-1 rounded-full outline-none',
-                      'focus-visible:ring-2 focus-visible:ring-[#6d28d9]/40',
-                    )}
+                    className={selectFullAccountTriggerClassName()}
                     aria-label="Μενού λογαριασμού"
                   >
-                    <span
-                      className="flex size-9 items-center justify-center rounded-full bg-[#5c4033] text-sm font-semibold text-white"
-                      aria-hidden
-                    >
-                      {userInitial(user.first_name, user.username)}
-                    </span>
-                    <ChevronDown className="hidden size-4 text-neutral-600 sm:block" aria-hidden />
+                    <span aria-hidden>{userInitial(user.first_name, user.username)}</span>
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[220px]">
-                  <DropdownMenuItem asChild>
-                    <Link to="/account" className="cursor-pointer">
-                      Ο λογαριασμός μου
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/orders" className="cursor-pointer">
-                      Παραγγελίες
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/favorites" className="cursor-pointer">
-                      Αγαπημένα
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link to="/settings" className="cursor-pointer">
-                      Ρυθμίσεις χρήστη
-                    </Link>
-                  </DropdownMenuItem>
-                  {user.role === 'admin' && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem asChild>
-                        <Link
-                          to="/admin"
-                          className="cursor-pointer font-medium text-[var(--nexus-red)] focus:text-[var(--nexus-red)]"
+                <DropdownMenuContent
+                  align="end"
+                  sideOffset={20}
+                  className="min-w-[280px] border-0 bg-transparent p-0 !shadow-none ring-0"
+                >
+                  <SelectFullPanelContainer>
+                    <DropdownMenuItem asChild className={selectFullItemClassName()}>
+                      <Link to="/account" className="flex w-full items-center">
+                        Ο λογαριασμός μου
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild className={selectFullItemClassName()}>
+                      <Link to="/orders" className="flex w-full items-center">
+                        Παραγγελίες
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild className={selectFullItemClassName()}>
+                      <Link to="/favorites" className="flex w-full items-center">
+                        Αγαπημένα
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild className={selectFullItemClassName()}>
+                      <Link to="/settings" className="flex w-full items-center">
+                        Ρυθμίσεις χρήστη
+                      </Link>
+                    </DropdownMenuItem>
+                    {user.role === 'admin' && (
+                      <>
+                        <DropdownMenuSeparator className={selectFullMenuSeparatorClass} />
+                        <DropdownMenuItem
+                          asChild
+                          className={selectFullItemClassName(
+                            'font-medium text-[var(--nexus-red)] focus:text-[var(--nexus-red)] data-[highlighted]:text-[var(--nexus-red)]',
+                          )}
                         >
-                          Admin panel
-                        </Link>
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="cursor-pointer text-neutral-800 focus:text-neutral-900"
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      void handleLogout();
-                    }}
-                  >
-                    Αποσύνδεση
-                  </DropdownMenuItem>
+                          <Link to="/admin" className="flex w-full items-center">
+                            Admin panel
+                          </Link>
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    <DropdownMenuSeparator className={selectFullMenuSeparatorClass} />
+                    <DropdownMenuItem
+                      className={selectFullItemClassName('text-neutral-800 focus:text-neutral-900')}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        void handleLogout();
+                      }}
+                    >
+                      Αποσύνδεση
+                    </DropdownMenuItem>
+                  </SelectFullPanelContainer>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : accessToken && isHydrating ? (

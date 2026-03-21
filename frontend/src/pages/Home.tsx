@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Search } from 'lucide-react';
-
 import { Navbar } from '@/components/layout/Navbar';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
 const QUICK_FILTERS = [
@@ -26,49 +26,73 @@ export default function Home() {
     <div className="min-h-screen bg-white text-neutral-900">
       <Navbar />
 
-      <section className="relative overflow-hidden border-b border-neutral-100">
-        <div className="mx-auto grid max-w-[1400px] gap-10 px-4 py-12 sm:px-6 sm:py-16 lg:grid-cols-2 lg:items-center lg:gap-12 lg:px-8 lg:py-20">
-          <div>
-            <h1 className="text-balance text-3xl font-bold tracking-tight text-neutral-950 sm:text-4xl lg:text-5xl">
-              Η επόμενη εμπειρία σου ξεκινά εδώ
-            </h1>
-            <p className="mt-4 max-w-xl text-lg text-neutral-600">
-              Κλείσε το εισιτήριό σου εύκολα, γρήγορα και με ασφάλεια.
-            </p>
-            <div className="mt-8">
-              <label htmlFor="home-search" className="sr-only">
-                Αναζήτηση
-              </label>
-              <div className="relative flex items-center">
-                <Search
-                  className="pointer-events-none absolute left-5 size-5 text-[#6d28d9]"
-                  aria-hidden
-                />
-                <input
-                  id="home-search"
-                  type="search"
-                  placeholder="Αναζήτηση εκδήλωσης, χώρου ή περιοχής"
-                  className="h-14 w-full rounded-full border border-neutral-200 bg-white pl-14 pr-6 text-base text-neutral-900 shadow-sm outline-none ring-[#6d28d9]/20 transition-shadow placeholder:text-neutral-400 focus:border-[#6d28d9]/40 focus:ring-4"
-                />
+      <section className="home-hero relative border-b border-neutral-100 md:h-[550px] md:overflow-hidden">
+        {/* Desktop: lime panel from right column start to viewport edge (escapes max-width gap) */}
+        <div
+          className="pointer-events-none absolute inset-y-0 right-0 hidden bg-[#d4f040] md:rounded-l-full md:block"
+          style={{
+            left:
+              'calc(max(0px, (100vw - 1400px) / 2) + 2rem + var(--hero-left-col))',
+          }}
+          aria-hidden
+        />
+        <div className="relative z-10 mx-auto grid h-full max-w-[1400px] grid-cols-1 gap-10 px-4 py-10 sm:px-6 md:grid-cols-[var(--hero-left-col)_minmax(0,1fr)] md:items-stretch md:gap-0 md:px-8 md:py-0">
+          <div className="flex min-h-0 w-full flex-col justify-center md:min-h-[550px]">
+            <div className="w-full min-w-0 max-w-[800px]">
+              <h1 className="text-balance text-3xl comfortaa-bold tracking-tight text-[#000020]">
+                Η επόμενη εμπειρία σου ξεκινάει εδώ
+              </h1>
+              <p className="mt-4 text-lg comfortaa-regular text-neutral-500 tracking-tight">
+                Κλείσε τώρα το εισιτήριό σου εύκολα, γρήγορα και με ασφάλεια.
+              </p>
+              <div className="mt-8">
+                <label htmlFor="home-search" className="sr-only">
+                  Αναζήτηση
+                </label>
+                <div className="relative flex items-center">
+                  <Search
+                    className="pointer-events-none absolute left-5 size-5 text-indigo-500"
+                    aria-hidden={true}
+                  />
+                  <Input
+                    id="home-search"
+                    type="search"
+                    placeholder="Αναζήτηση εκδήλωσης, χώρου ή περιοχής"
+                    className={cn(
+                      'h-14 rounded-full border-0 bg-white pl-14 pr-6 text-[16px]',
+                      'comfortaa-regular text-neutral-900 ring-0 placeholder:text-neutral-500',
+                      'transition-shadow duration-300 ease-out motion-reduce:transition-none',
+                      'shadow-[0_4px_14px_-4px_rgba(15,23,42,0.12),inset_0_0_0_1px_rgb(229_231_235)]',
+                      'hover:shadow-[0_4px_14px_-4px_rgba(15,23,42,0.12),inset_0_0_0_1px_rgb(212_212_216)]',
+                      'focus-visible:shadow-[0_4px_14px_-4px_rgba(15,23,42,0.14),inset_0_0_0_2px_#6d28d9]',
+                      'focus-visible:ring-0 focus-visible:outline-none',
+                    )}
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="relative min-h-[280px] lg:min-h-[360px]">
+          <div className="relative min-h-[280px] min-w-0 md:min-h-[550px]">
+            {/* Mobile: lime fill in stacked column; md+ uses section-level panel flush to viewport right */}
             <div
-              className="absolute -right-8 -top-4 h-[120%] w-[85%] rounded-[2.5rem] bg-gradient-to-br from-[#7c3aed] via-[#6d28d9] to-[#5b21b6] opacity-90 blur-px sm:right-0"
+              className="absolute inset-0 rounded-t-[2.5rem] bg-[#d4f040] md:hidden"
               aria-hidden
             />
-            <div className="relative ml-auto flex h-full min-h-[260px] max-w-lg items-stretch overflow-hidden rounded-2xl border border-white/20 bg-neutral-900 shadow-2xl ring-1 ring-black/5 lg:ml-0">
-              <div className="flex flex-1 flex-col justify-end bg-gradient-to-t from-black/80 via-black/20 to-violet-900/40 p-6 text-white">
-                <p className="text-xs font-medium uppercase tracking-wider text-violet-200">
+            <div className="relative z-10 flex h-full min-h-[280px] items-center justify-center p-6 md:min-h-[550px] md:p-8">
+              <div className="w-full h-full max-w-lg rounded-2xl border border-neutral-200/80 bg-white/95 p-6 text-neutral-900 shadow-sm backdrop-blur-sm md:p-8">
+                <p className="text-xs uppercase tracking-[0.2em] text-neutral-500 comfortaa-regular">
                   Προτεινόμενο
                 </p>
-                <p className="mt-1 text-2xl font-bold">Θεατρική σεζόν</p>
-                <p className="mt-2 text-sm text-white/85">Ανακάλυψε παραστάσεις κοντά σου.</p>
+                <p className="mt-2 text-2xl font-bold tracking-tight comfortaa-bold text-[#000020]">
+                  Θεατρική σεζόν
+                </p>
+                <p className="mt-2 text-sm text-neutral-600 comfortaa-regular">
+                  Ανακάλυψε παραστάσεις κοντά σου.
+                </p>
                 <Link
                   to="/events"
-                  className="mt-4 inline-flex w-fit rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#5b21b6] transition hover:bg-violet-50"
+                  className="mt-5 inline-flex w-fit rounded-full bg-[#6d28d9] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 comfortaa-regular"
                 >
                   Δες εκδηλώσεις
                 </Link>
