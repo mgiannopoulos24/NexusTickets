@@ -19,6 +19,8 @@ const LoginPage = lazy(() => import('@/pages/LoginPage'));
 const RegisterPage = lazy(() => import('@/pages/RegisterPage'));
 const RegisterPendingPage = lazy(() => import('@/pages/RegisterPendingPage'));
 const AdminDashboard = lazy(() => import('@/pages/admin/AdminDashboard'));
+const AdminEventsPage = lazy(() => import('@/pages/admin/AdminEventsPage'));
+const AdminEventEditPage = lazy(() => import('@/pages/admin/AdminEventEditPage'));
 
 const routes: RouteConfig[] = [
   {
@@ -44,6 +46,20 @@ const routes: RouteConfig[] = [
   {
     path: '/admin',
     element: <AdminDashboard />,
+    layout: 'app',
+    protected: true,
+    roles: ['admin'],
+  },
+  {
+    path: '/admin/events',
+    element: <AdminEventsPage />,
+    layout: 'app',
+    protected: true,
+    roles: ['admin'],
+  },
+  {
+    path: '/admin/events/:id/edit',
+    element: <AdminEventEditPage />,
     layout: 'app',
     protected: true,
     roles: ['admin'],

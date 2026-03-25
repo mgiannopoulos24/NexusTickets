@@ -8,7 +8,8 @@ function formatDateRange(startISO: string, endISO: string): string {
   const end = new Date(endISO);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '';
 
-  const sameMonth = start.getUTCFullYear() === end.getUTCFullYear() && start.getUTCMonth() === end.getUTCMonth();
+  const sameMonth =
+    start.getUTCFullYear() === end.getUTCFullYear() && start.getUTCMonth() === end.getUTCMonth();
   const monthFmt = new Intl.DateTimeFormat('el-GR', { month: 'short', timeZone: 'UTC' });
 
   const startDay = start.getUTCDate();
@@ -35,7 +36,10 @@ function eventLocation(ev: Pick<Event, 'venue' | 'city'>): string {
 }
 
 type EventCardProps = {
-  event: Pick<Event, 'id' | 'title' | 'venue' | 'city' | 'start_at' | 'end_at' | 'featured_image_url'>;
+  event: Pick<
+    Event,
+    'id' | 'title' | 'venue' | 'city' | 'start_at' | 'end_at' | 'featured_image_url'
+  >;
   href?: string;
   className?: string;
 };
@@ -87,4 +91,3 @@ export function EventCard({ event, href, className }: EventCardProps) {
     </article>
   );
 }
-

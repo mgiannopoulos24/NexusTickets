@@ -102,10 +102,11 @@ export function Footer() {
         </div>
 
         <div className="mt-10 border-t border-neutral-200 pt-6">
-          <p className="text-center text-xs text-neutral-500 comfortaa-regular">© {new Date().getFullYear()} NexusTickets</p>
+          <p className="text-center text-xs text-neutral-500 comfortaa-regular">
+            © {new Date().getFullYear()} NexusTickets
+          </p>
         </div>
       </div>
     </footer>
   );
 }
-

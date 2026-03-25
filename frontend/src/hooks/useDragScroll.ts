@@ -16,7 +16,9 @@ type DragScrollHandlers = {
   onClickCapture: (e: React.MouseEvent<HTMLElement>) => void;
 };
 
-export function useDragScroll<T extends HTMLElement>(opts?: UseDragScrollOptions): {
+export function useDragScroll<T extends HTMLElement>(
+  opts?: UseDragScrollOptions,
+): {
   ref: React.RefObject<T | null>;
   handlers: DragScrollHandlers;
 } {
@@ -127,4 +129,3 @@ export function useDragScroll<T extends HTMLElement>(opts?: UseDragScrollOptions
 
   return { ref, handlers };
 }
-

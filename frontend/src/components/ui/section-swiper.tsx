@@ -88,4 +88,3 @@ export function SectionSwiper({ title, children, className }: SectionSwiperProps
     </section>
   );
 }
-

@@ -47,7 +47,8 @@ function mapRegisterError(err: unknown): string {
   const msg = err instanceof Error ? err.message : '';
   if (msg.includes('username already taken')) return 'Το όνομα χρήστη χρησιμοποιείται ήδη.';
   if (msg.includes('email already taken')) return 'Το email χρησιμοποιείται ήδη.';
-  if (msg.includes('missing required registration fields')) return 'Συμπληρώστε όλα τα υποχρεωτικά πεδία.';
+  if (msg.includes('missing required registration fields'))
+    return 'Συμπληρώστε όλα τα υποχρεωτικά πεδία.';
   return 'Προέκυψε σφάλμα. Δοκιμάστε ξανά.';
 }
 
@@ -115,9 +116,14 @@ export default function RegisterPage() {
       void checkUsernameAvailable(usernameValue)
         .then((available) => {
           setUsernameStatus(available ? 'available' : 'taken');
-          setUsernameHint(available ? 'Διαθέσιμο όνομα χρήστη' : 'Το όνομα χρήστη χρησιμοποιείται ήδη');
+          setUsernameHint(
+            available ? 'Διαθέσιμο όνομα χρήστη' : 'Το όνομα χρήστη χρησιμοποιείται ήδη',
+          );
           if (!available) {
-            setError('username', { type: 'validate', message: 'Το όνομα χρήστη χρησιμοποιείται ήδη' });
+            setError('username', {
+              type: 'validate',
+              message: 'Το όνομα χρήστη χρησιμοποιείται ήδη',
+            });
           } else {
             clearErrors('username');
           }
@@ -141,7 +147,10 @@ export default function RegisterPage() {
         if (!available) {
           setUsernameStatus('taken');
           setUsernameHint('Το όνομα χρήστη χρησιμοποιείται ήδη');
-          setError('username', { type: 'validate', message: 'Το όνομα χρήστη χρησιμοποιείται ήδη' });
+          setError('username', {
+            type: 'validate',
+            message: 'Το όνομα χρήστη χρησιμοποιείται ήδη',
+          });
           return;
         }
       } catch {
@@ -194,7 +203,10 @@ export default function RegisterPage() {
         >
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <div className="md:col-span-2">
-              <label htmlFor="reg-username" className="mb-1.5 block text-sm font-medium text-neutral-800">
+              <label
+                htmlFor="reg-username"
+                className="mb-1.5 block text-sm font-medium text-neutral-800"
+              >
                 Όνομα χρήστη <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Input
@@ -205,14 +217,22 @@ export default function RegisterPage() {
                 {...register('username')}
               />
               {(errors.username?.message || usernameHint) && (
-                <p className={cn('mt-1 text-sm', errors.username ? 'text-[var(--nexus-red)]' : usernameHintColor)}>
+                <p
+                  className={cn(
+                    'mt-1 text-sm',
+                    errors.username ? 'text-[var(--nexus-red)]' : usernameHintColor,
+                  )}
+                >
                   {errors.username?.message ?? usernameHint}
                 </p>
               )}
             </div>
 
             <div>
-              <label htmlFor="reg-password" className="mb-1.5 block text-sm font-medium text-neutral-800">
+              <label
+                htmlFor="reg-password"
+                className="mb-1.5 block text-sm font-medium text-neutral-800"
+              >
                 Κωδικός <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Input
@@ -228,7 +248,10 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label htmlFor="reg-confirm" className="mb-1.5 block text-sm font-medium text-neutral-800">
+              <label
+                htmlFor="reg-confirm"
+                className="mb-1.5 block text-sm font-medium text-neutral-800"
+              >
                 Επιβεβαίωση κωδικού <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Input
@@ -239,12 +262,17 @@ export default function RegisterPage() {
                 {...register('confirm_password')}
               />
               {errors.confirm_password && (
-                <p className="mt-1 text-sm text-[var(--nexus-red)]">{errors.confirm_password.message}</p>
+                <p className="mt-1 text-sm text-[var(--nexus-red)]">
+                  {errors.confirm_password.message}
+                </p>
               )}
             </div>
 
             <div>
-              <label htmlFor="reg-firstname" className="mb-1.5 block text-sm font-medium text-neutral-800">
+              <label
+                htmlFor="reg-firstname"
+                className="mb-1.5 block text-sm font-medium text-neutral-800"
+              >
                 Όνομα <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Input
@@ -260,7 +288,10 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label htmlFor="reg-lastname" className="mb-1.5 block text-sm font-medium text-neutral-800">
+              <label
+                htmlFor="reg-lastname"
+                className="mb-1.5 block text-sm font-medium text-neutral-800"
+              >
                 Επώνυμο <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Input
@@ -276,7 +307,10 @@ export default function RegisterPage() {
             </div>
 
             <div className="md:col-span-2">
-              <label htmlFor="reg-email" className="mb-1.5 block text-sm font-medium text-neutral-800">
+              <label
+                htmlFor="reg-email"
+                className="mb-1.5 block text-sm font-medium text-neutral-800"
+              >
                 Email <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Input
@@ -286,47 +320,82 @@ export default function RegisterPage() {
                 className={cn(errors.email && 'border-red-500')}
                 {...register('email')}
               />
-              {errors.email && <p className="mt-1 text-sm text-[var(--nexus-red)]">{errors.email.message}</p>}
+              {errors.email && (
+                <p className="mt-1 text-sm text-[var(--nexus-red)]">{errors.email.message}</p>
+              )}
             </div>
 
             <div>
-              <label htmlFor="reg-phone" className="mb-1.5 block text-sm font-medium text-neutral-800">
+              <label
+                htmlFor="reg-phone"
+                className="mb-1.5 block text-sm font-medium text-neutral-800"
+              >
                 Τηλέφωνο
               </label>
               <Input id="reg-phone" type="tel" autoComplete="tel" {...register('phone')} />
             </div>
 
             <div>
-              <label htmlFor="reg-vat" className="mb-1.5 block text-sm font-medium text-neutral-800">
+              <label
+                htmlFor="reg-vat"
+                className="mb-1.5 block text-sm font-medium text-neutral-800"
+              >
                 ΑΦΜ
               </label>
               <Input id="reg-vat" type="text" {...register('vat_number')} />
             </div>
 
             <div className="md:col-span-2">
-              <label htmlFor="reg-address" className="mb-1.5 block text-sm font-medium text-neutral-800">
+              <label
+                htmlFor="reg-address"
+                className="mb-1.5 block text-sm font-medium text-neutral-800"
+              >
                 Διεύθυνση
               </label>
-              <Input id="reg-address" type="text" autoComplete="street-address" {...register('address')} />
+              <Input
+                id="reg-address"
+                type="text"
+                autoComplete="street-address"
+                {...register('address')}
+              />
             </div>
 
             <div>
-              <label htmlFor="reg-city" className="mb-1.5 block text-sm font-medium text-neutral-800">
+              <label
+                htmlFor="reg-city"
+                className="mb-1.5 block text-sm font-medium text-neutral-800"
+              >
                 Πόλη
               </label>
-              <Input id="reg-city" type="text" autoComplete="address-level2" {...register('city')} />
+              <Input
+                id="reg-city"
+                type="text"
+                autoComplete="address-level2"
+                {...register('city')}
+              />
             </div>
 
             <div>
-              <label htmlFor="reg-country" className="mb-1.5 block text-sm font-medium text-neutral-800">
+              <label
+                htmlFor="reg-country"
+                className="mb-1.5 block text-sm font-medium text-neutral-800"
+              >
                 Χώρα
               </label>
-              <Input id="reg-country" type="text" autoComplete="country-name" {...register('country')} />
+              <Input
+                id="reg-country"
+                type="text"
+                autoComplete="country-name"
+                {...register('country')}
+              />
             </div>
           </div>
 
           {submitError && (
-            <p className="mt-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--nexus-red)]" role="alert">
+            <p
+              className="mt-5 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--nexus-red)]"
+              role="alert"
+            >
               {submitError}
             </p>
           )}
@@ -350,4 +419,3 @@ export default function RegisterPage() {
     </div>
   );
 }
-

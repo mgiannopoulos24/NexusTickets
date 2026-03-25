@@ -16,7 +16,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContent';
 
@@ -163,7 +170,11 @@ export function Navbar() {
               />
             ) : showLoginButton ? (
               <div className="hidden items-center gap-2 self-center sm:flex">
-                <Button asChild variant="ghost" className="cursor-pointer rounded-full comfortaa-regular">
+                <Button
+                  asChild
+                  variant="ghost"
+                  className="cursor-pointer rounded-full comfortaa-regular"
+                >
                   <Link to="/register">Εγγραφή</Link>
                 </Button>
                 <Button
@@ -222,7 +233,8 @@ export function Navbar() {
                     {user ? (
                       <div className="space-y-2">
                         <p className="text-sm text-neutral-600 comfortaa-regular">
-                          Συνδεδεμένος ως <span className="font-semibold text-neutral-900">{user.username}</span>
+                          Συνδεδεμένος ως{' '}
+                          <span className="font-semibold text-neutral-900">{user.username}</span>
                         </p>
                         <div className="flex flex-col gap-2">
                           <SheetClose asChild>

@@ -9,7 +9,10 @@ import routes from '@/routes/routes';
 function App() {
   useWebSocket();
 
-  const withLayout = (layout: (typeof routes)[number]['layout'] | undefined, element: ReactNode) => {
+  const withLayout = (
+    layout: (typeof routes)[number]['layout'] | undefined,
+    element: ReactNode,
+  ) => {
     switch (layout ?? 'app') {
       case 'none':
         return element;
@@ -28,14 +31,12 @@ function App() {
             key={index}
             path={route.path}
             element={
-              route.protected ? (
-                withLayout(
-                  route.layout,
-                  <ProtectedRoute allowedRoles={route.roles!}>{route.element}</ProtectedRoute>,
-                )
-              ) : (
-                withLayout(route.layout, route.element)
-              )
+              route.protected
+                ? withLayout(
+                    route.layout,
+                    <ProtectedRoute allowedRoles={route.roles!}>{route.element}</ProtectedRoute>,
+                  )
+                : withLayout(route.layout, route.element)
             }
           />
         ))}

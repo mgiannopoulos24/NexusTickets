@@ -7,10 +7,12 @@ export default function RegisterPendingPage() {
     <div className="bg-[var(--nexus-lightgray)]/40">
       <main className="mx-auto flex max-w-2xl flex-col gap-8 px-4 py-12 sm:px-6 lg:px-8">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Η εγγραφή σας υποβλήθηκε</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-950">
+            Η εγγραφή σας υποβλήθηκε
+          </h1>
           <p className="mt-2 text-sm text-neutral-600">
-            Ο λογαριασμός σας βρίσκεται σε κατάσταση <span className="font-medium">αναμονής</span> και απαιτεί
-            έγκριση από διαχειριστή.
+            Ο λογαριασμός σας βρίσκεται σε κατάσταση <span className="font-medium">αναμονής</span>{' '}
+            και απαιτεί έγκριση από διαχειριστή.
           </p>
         </div>
 
@@ -35,4 +37,3 @@ export default function RegisterPendingPage() {
     </div>
   );
 }
-

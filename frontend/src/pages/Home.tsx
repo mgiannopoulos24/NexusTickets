@@ -10,16 +10,16 @@ import { useDragScroll } from '@/hooks/useDragScroll';
 import Awesomplete from 'awesomplete';
 
 const SECTIONS = [
-  'Δημοφιλή',
-  'Προτεινόμενα',
-  'Νέα',
-  'Κατηγορίες',
-  'Θέατρο',
-  'Μουσική',
-  'Σινεμά',
+  { label: 'Δημοφιλή' },
+  { label: 'Προτεινόμενα' },
+  { label: 'Νέα' },
+  { label: 'Κατηγορίες' },
+  { label: 'Θέατρο' },
+  { label: 'Μουσική' },
+  { label: 'Σινεμά' },
 ] as const;
 
-type HomeSectionKey = (typeof SECTIONS)[number];
+type HomeSectionKey = (typeof SECTIONS)[number]['label'];
 
 function sectionId(label: string): string {
   return `home-section-${label
@@ -34,93 +34,11 @@ function sectionId(label: string): string {
     .replaceAll('ώ', 'ω')}`;
 }
 
-const PLACEHOLDER_EVENTS: EventModel[] = [
-  {
-    id: '1',
-    organizer_id: 'org',
-    title: 'Panathēnea Festival',
-    description: '—',
-    venue: 'Ζάππειο Μέγαρο',
-    city: 'Αθήνα',
-    start_at: '2026-05-27T00:00:00Z',
-    end_at: '2026-05-29T00:00:00Z',
-    capacity: 0,
-    status: 'published',
-    categories: [],
-    ticket_types: [],
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
-    featured_image_url: null,
-  },
-  {
-    id: '2',
-    organizer_id: 'org',
-    title: 'ASTORIA',
-    description: '—',
-    venue: 'Κέντρο Πολιτισμού',
-    city: 'Θεσσαλονίκη',
-    start_at: '2026-04-12T00:00:00Z',
-    end_at: '2026-04-12T00:00:00Z',
-    capacity: 0,
-    status: 'published',
-    categories: [],
-    ticket_types: [],
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
-    featured_image_url: null,
-  },
-  {
-    id: '3',
-    organizer_id: 'org',
-    title: 'Summer Fest',
-    description: '—',
-    venue: 'Παραλία',
-    city: 'Πάτρα',
-    start_at: '2026-07-03T00:00:00Z',
-    end_at: '2026-07-04T00:00:00Z',
-    capacity: 0,
-    status: 'published',
-    categories: [],
-    ticket_types: [],
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
-    featured_image_url: null,
-  },
-  {
-    id: '4',
-    organizer_id: 'org',
-    title: 'Κλασικό αριστούργημα',
-    description: '—',
-    venue: 'Μέγαρο Μουσικής',
-    city: 'Αθήνα',
-    start_at: '2026-03-18T00:00:00Z',
-    end_at: '2026-03-18T00:00:00Z',
-    capacity: 0,
-    status: 'published',
-    categories: [],
-    ticket_types: [],
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
-    featured_image_url: null,
-  },
-  {
-    id: '5',
-    organizer_id: 'org',
-    title: 'Ρυθμός & Ήχος',
-    description: '—',
-    venue: 'Live Stage',
-    city: 'Αθήνα',
-    start_at: '2026-02-10T00:00:00Z',
-    end_at: '2026-02-10T00:00:00Z',
-    capacity: 0,
-    status: 'published',
-    categories: [],
-    ticket_types: [],
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
-    featured_image_url: null,
-  },
-] as unknown as EventModel[];
+type ApiEnvelope<T> = {
+  data: T | null;
+  error?: { code: string; message: string } | null;
+  meta?: unknown;
+};
 
 export default function Home() {
   const [active, setActive] = useState<HomeSectionKey>('Δημοφιλή');
@@ -129,15 +47,16 @@ export default function Home() {
   const searchRef = useRef<HTMLInputElement | null>(null);
   const awesompleteRef = useRef<Awesomplete | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const [events, setEvents] = useState<EventModel[]>([]);
+  const [eventsLoading, setEventsLoading] = useState<boolean>(true);
+  const [eventsError, setEventsError] = useState<string | null>(null);
 
-  const sections = useMemo(
-    () =>
-      SECTIONS.map((label) => ({
-        label,
-        id: sectionId(label),
-      })),
-    [],
-  );
+  const sections = useMemo(() => {
+    return SECTIONS.map((s) => ({
+      label: s.label,
+      id: sectionId(s.label),
+    }));
+  }, []);
 
   useEffect(() => {
     const onScroll = () => {
@@ -158,6 +77,31 @@ export default function Home() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, [active, sections]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setEventsLoading(true);
+    setEventsError(null);
+
+    void fetch('/api/v1/events?limit=50&offset=0')
+      .then(async (res) => {
+        const json = (await res.json()) as ApiEnvelope<EventModel[]>;
+        if (!res.ok || json.error) {
+          throw new Error(json.error?.message ?? 'Σφάλμα φόρτωσης εκδηλώσεων');
+        }
+        if (!cancelled) setEvents(json.data ?? []);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setEventsError(e instanceof Error ? e.message : 'Σφάλμα');
+      })
+      .finally(() => {
+        if (!cancelled) setEventsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const input = searchRef.current;
@@ -206,9 +150,12 @@ export default function Home() {
         const controller = new AbortController();
         abortRef.current = controller;
         try {
-          const res = await fetch(`/api/v1/events/search?limit=8&offset=0&q=${encodeURIComponent(q)}`, {
-            signal: controller.signal,
-          });
+          const res = await fetch(
+            `/api/v1/events/search?limit=8&offset=0&q=${encodeURIComponent(q)}`,
+            {
+              signal: controller.signal,
+            },
+          );
           const json = (await res.json()) as {
             data: Array<Pick<EventModel, 'id' | 'title' | 'venue' | 'city'>> | null;
             error?: { code: string; message: string } | null;
@@ -218,13 +165,12 @@ export default function Home() {
             a.evaluate();
             return;
           }
-          const items =
-            Array.isArray(json.data)
-              ? json.data.map((ev) => ({
-                  label: `${ev.title} — ${ev.venue}${ev.city ? `, ${ev.city}` : ''}`,
-                  value: ev.title,
-                }))
-              : [];
+          const items = Array.isArray(json.data)
+            ? json.data.map((ev) => ({
+                label: `${ev.title} — ${ev.venue}${ev.city ? `, ${ev.city}` : ''}`,
+                value: ev.title,
+              }))
+            : [];
           a.list = items;
           a.evaluate();
         } catch (err: unknown) {
@@ -251,8 +197,7 @@ export default function Home() {
         <div
           className="pointer-events-none absolute inset-y-0 right-0 hidden bg-[#d4f040] md:rounded-l-full md:block"
           style={{
-            left:
-              'calc(max(0px, (100vw - 1400px) / 2) + 2rem + var(--hero-left-col))',
+            left: 'calc(max(0px, (100vw - 1400px) / 2) + 2rem + var(--hero-left-col))',
           }}
           aria-hidden
         />
@@ -375,11 +320,23 @@ export default function Home() {
             className={cn(idx > 0 && 'mt-12')}
           >
             <SectionSwiper title={s.label}>
-              {PLACEHOLDER_EVENTS.map((ev) => (
-                <div key={`${s.id}-${ev.id}`} className="snap-start">
-                  <EventCard event={ev} />
+              {eventsLoading ? (
+                <div className="text-sm text-neutral-600 comfortaa-regular">Φόρτωση…</div>
+              ) : eventsError ? (
+                <div className="text-sm text-[var(--nexus-red)] comfortaa-regular">
+                  {eventsError}
                 </div>
-              ))}
+              ) : events.length === 0 ? (
+                <div className="text-sm text-neutral-600 comfortaa-regular">
+                  Δεν υπάρχουν εκδηλώσεις ακόμα.
+                </div>
+              ) : (
+                events.map((ev) => (
+                  <div key={`${s.id}-${ev.id}`} className="snap-start">
+                    <EventCard event={ev} />
+                  </div>
+                ))
+              )}
             </SectionSwiper>
           </div>
         ))}
