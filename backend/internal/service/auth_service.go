@@ -112,6 +112,20 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (domain.Us
 	return created, nil
 }
 
+func (s *AuthService) IsUsernameAvailable(ctx context.Context, username string) (bool, error) {
+	u := strings.TrimSpace(username)
+	if u == "" {
+		return false, fmt.Errorf("username is required")
+	}
+	if _, err := s.users.GetByUsername(ctx, u); err == nil {
+		return false, nil
+	} else if errors.Is(err, domain.ErrNotFound) {
+		return true, nil
+	} else {
+		return false, err
+	}
+}
+
 func (s *AuthService) Login(ctx context.Context, username, password string) (LoginResult, error) {
 	user, err := s.users.GetByUsername(ctx, strings.TrimSpace(username))
 	if err != nil {

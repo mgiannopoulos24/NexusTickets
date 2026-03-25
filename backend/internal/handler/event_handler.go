@@ -51,6 +51,7 @@ func (h *EventHandler) Create(c *fiber.Ctx) error {
 		Title:       req.Title,
 		Description: req.Description,
 		Venue:       req.Venue,
+		FeaturedImageURL: req.FeaturedImageURL,
 		Address:     req.Address,
 		City:        req.City,
 		Country:     req.Country,
@@ -218,6 +219,7 @@ func (h *EventHandler) Update(c *fiber.Ctx) error {
 		Title:       req.Title,
 		Description: req.Description,
 		Venue:       req.Venue,
+		FeaturedImageURL: req.FeaturedImageURL,
 		Address:     req.Address,
 		City:        req.City,
 		Country:     req.Country,
@@ -429,6 +431,51 @@ func (h *EventHandler) UploadPhoto(c *fiber.Ctx) error {
 	})
 }
 
+func (h *EventHandler) UploadFeaturedImage(c *fiber.Ctx) error {
+	organizerID, err := authUserID(c)
+	if err != nil {
+		return err
+	}
+	eventID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid event id")
+	}
+
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "file is required")
+	}
+	if fileHeader.Size <= 0 {
+		return fiber.NewError(fiber.StatusBadRequest, "empty file")
+	}
+	if fileHeader.Size > maxPhotoUploadBytes {
+		return fiber.NewError(fiber.StatusBadRequest, "file too large (max 5MB)")
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "unable to open uploaded file")
+	}
+	defer func() { _ = file.Close() }()
+
+	sniff := make([]byte, 512)
+	n, err := io.ReadFull(file, sniff)
+	if err != nil && err != io.ErrUnexpectedEOF {
+		return fiber.NewError(fiber.StatusBadRequest, "unable to read uploaded file")
+	}
+	mimeType, ok := service.DetectImageMIME(sniff[:n])
+	if !ok {
+		return fiber.NewError(fiber.StatusBadRequest, "unsupported image type: "+mimeType)
+	}
+
+	reader := io.MultiReader(bytes.NewReader(sniff[:n]), file)
+	event, cats, err := h.service.SetFeaturedImage(c.Context(), organizerID, eventID, mimeType, reader)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, toEventResponse(event, cats))
+}
+
 func (h *EventHandler) DeletePhoto(c *fiber.Ctx) error {
 	organizerID, err := authUserID(c)
 	if err != nil {
@@ -472,6 +519,7 @@ func toEventResponse(event domain.Event, cats []domain.Category) dto.EventRespon
 		Title:       event.Title,
 		Description: event.Description,
 		Venue:       event.Venue,
+		FeaturedImageURL: event.FeaturedImageURL,
 		Address:     event.Address,
 		City:        event.City,
 		Country:     event.Country,

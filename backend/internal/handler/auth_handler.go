@@ -52,6 +52,15 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	})
 }
 
+func (h *AuthHandler) UsernameAvailable(c *fiber.Ctx) error {
+	username := c.Query("username")
+	available, err := h.service.IsUsernameAvailable(c.Context(), username)
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	return response.OK(c, fiber.Map{"available": available})
+}
+
 func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	var req dto.LoginRequest
 	if err := c.BodyParser(&req); err != nil {

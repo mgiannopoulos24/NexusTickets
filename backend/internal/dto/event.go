@@ -10,6 +10,7 @@ type CreateEventRequest struct {
 	Title       string              `json:"title"`
 	Description string              `json:"description"`
 	Venue       string              `json:"venue"`
+	FeaturedImageURL *string         `json:"featured_image_url"`
 	Address     *string             `json:"address"`
 	City        string              `json:"city"`
 	Country     *string             `json:"country"`
@@ -26,6 +27,7 @@ type UpdateEventRequest struct {
 	Title       *string              `json:"title"`
 	Description *string              `json:"description"`
 	Venue       *string              `json:"venue"`
+	FeaturedImageURL *string         `json:"featured_image_url"`
 	Address     *string              `json:"address"`
 	City        *string              `json:"city"`
 	Country     *string              `json:"country"`
@@ -52,6 +54,7 @@ type EventResponse struct {
 	Title       string               `json:"title"`
 	Description string               `json:"description"`
 	Venue       string               `json:"venue"`
+	FeaturedImageURL *string          `json:"featured_image_url"`
 	Address     *string              `json:"address"`
 	City        string               `json:"city"`
 	Country     *string              `json:"country"`

@@ -44,6 +44,7 @@ type Event struct {
 	Title       string
 	Description string
 	Venue       string
+	FeaturedImageURL *string
 
 	Address *string
 	City    string

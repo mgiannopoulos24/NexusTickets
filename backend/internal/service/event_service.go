@@ -37,6 +37,7 @@ type CreateEventInput struct {
 	Title       string
 	Description string
 	Venue       string
+	FeaturedImageURL *string
 	Address     *string
 	City        string
 	Country     *string
@@ -53,6 +54,7 @@ type UpdateEventInput struct {
 	Title       *string
 	Description *string
 	Venue       *string
+	FeaturedImageURL *string
 	Address     *string
 	City        *string
 	Country     *string
@@ -112,6 +114,7 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, in Cre
 		Title:       strings.TrimSpace(in.Title),
 		Description: strings.TrimSpace(in.Description),
 		Venue:       strings.TrimSpace(in.Venue),
+		FeaturedImageURL: in.FeaturedImageURL,
 		Address:     in.Address,
 		City:        strings.TrimSpace(in.City),
 		Country:     in.Country,
@@ -219,6 +222,9 @@ func (s *EventService) Update(ctx context.Context, organizerID, eventID uuid.UUI
 	}
 	if in.Venue != nil {
 		event.Venue = strings.TrimSpace(*in.Venue)
+	}
+	if in.FeaturedImageURL != nil {
+		event.FeaturedImageURL = in.FeaturedImageURL
 	}
 	if in.Address != nil {
 		event.Address = in.Address
@@ -578,6 +584,28 @@ func (s *EventService) DeletePhoto(ctx context.Context, organizerID, eventID, ph
 	}
 	_ = os.Remove(filepath.Join(s.mediaRoot, filepath.FromSlash(target.StoragePath)))
 	return nil
+}
+
+func (s *EventService) SetFeaturedImage(ctx context.Context, organizerID, eventID uuid.UUID, mimeType string, r io.Reader) (domain.Event, []domain.Category, error) {
+	event, err := s.events.GetByID(ctx, eventID)
+	if err != nil {
+		return domain.Event{}, nil, err
+	}
+	if event.OrganizerID != organizerID {
+		return domain.Event{}, nil, domain.ErrForbidden
+	}
+
+	created, err := s.AddPhoto(ctx, organizerID, eventID, mimeType, r)
+	if err != nil {
+		return domain.Event{}, nil, err
+	}
+
+	url := "/uploads/media/" + filepath.ToSlash(created.StoragePath)
+	event.FeaturedImageURL = &url
+	if _, err := s.events.Update(ctx, event); err != nil {
+		return domain.Event{}, nil, err
+	}
+	return s.Get(ctx, eventID)
 }
 
 func DetectImageMIME(header []byte) (string, bool) {

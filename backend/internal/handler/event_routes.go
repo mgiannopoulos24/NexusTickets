@@ -26,6 +26,7 @@ func RegisterEventRoutes(router fiber.Router, eventHandler *EventHandler, jwtSec
 	organizer.Post("/:id/ticket-types", eventHandler.AddTicketType)
 	organizer.Patch("/:id/ticket-types/:ticketTypeId", eventHandler.UpdateTicketType)
 	organizer.Delete("/:id/ticket-types/:ticketTypeId", eventHandler.DeleteTicketType)
+	organizer.Post("/:id/featured-image", eventHandler.UploadFeaturedImage)
 	organizer.Post("/:id/photos", eventHandler.UploadPhoto)
 	organizer.Delete("/:id/photos/:photoId", eventHandler.DeletePhoto)
 }

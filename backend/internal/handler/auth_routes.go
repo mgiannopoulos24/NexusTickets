@@ -12,6 +12,7 @@ import (
 func RegisterAuthRoutes(router fiber.Router, authHandler *AuthHandler, redisClient *redisv9.Client) {
 	auth := router.Group("/auth")
 	auth.Use(middleware.RateLimiter(redisClient, 5, time.Minute))
+	auth.Get("/username-available", authHandler.UsernameAvailable)
 	auth.Post("/register", authHandler.Register)
 	auth.Post("/login", authHandler.Login)
 	auth.Post("/refresh", authHandler.Refresh)
