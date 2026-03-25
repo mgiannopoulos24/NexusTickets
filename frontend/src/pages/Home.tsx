@@ -1,10 +1,15 @@
 import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
-import { Navbar } from '@/components/layout/Navbar';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { SectionSwiper } from '@/components/ui/section-swiper';
+import { EventCard } from '@/components/events/EventCard';
+import type { Event as EventModel } from '@/types/models';
+import { useDragScroll } from '@/hooks/useDragScroll';
+import Awesomplete from 'awesomplete';
 
-const QUICK_FILTERS = [
+const SECTIONS = [
   'Δημοφιλή',
   'Προτεινόμενα',
   'Νέα',
@@ -14,18 +19,233 @@ const QUICK_FILTERS = [
   'Σινεμά',
 ] as const;
 
-const PLACEHOLDER_EVENTS = [
-  { id: '1', title: 'Ρυθμός & Ήχος', subtitle: 'Live στο κέντρο' },
-  { id: '2', title: 'ASTORIA', subtitle: 'Θεατρική παράσταση' },
-  { id: '3', title: 'Summer Fest', subtitle: 'Μουσική βραδιά' },
-  { id: '4', title: 'Κλασικό αριστούργημα', subtitle: 'Όπερα' },
-] as const;
+type HomeSectionKey = (typeof SECTIONS)[number];
+
+function sectionId(label: string): string {
+  return `home-section-${label
+    .toLocaleLowerCase('el-GR')
+    .replaceAll(' ', '-')
+    .replaceAll('ά', 'α')
+    .replaceAll('έ', 'ε')
+    .replaceAll('ή', 'η')
+    .replaceAll('ί', 'ι')
+    .replaceAll('ό', 'ο')
+    .replaceAll('ύ', 'υ')
+    .replaceAll('ώ', 'ω')}`;
+}
+
+const PLACEHOLDER_EVENTS: EventModel[] = [
+  {
+    id: '1',
+    organizer_id: 'org',
+    title: 'Panathēnea Festival',
+    description: '—',
+    venue: 'Ζάππειο Μέγαρο',
+    city: 'Αθήνα',
+    start_at: '2026-05-27T00:00:00Z',
+    end_at: '2026-05-29T00:00:00Z',
+    capacity: 0,
+    status: 'published',
+    categories: [],
+    ticket_types: [],
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    featured_image_url: null,
+  },
+  {
+    id: '2',
+    organizer_id: 'org',
+    title: 'ASTORIA',
+    description: '—',
+    venue: 'Κέντρο Πολιτισμού',
+    city: 'Θεσσαλονίκη',
+    start_at: '2026-04-12T00:00:00Z',
+    end_at: '2026-04-12T00:00:00Z',
+    capacity: 0,
+    status: 'published',
+    categories: [],
+    ticket_types: [],
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    featured_image_url: null,
+  },
+  {
+    id: '3',
+    organizer_id: 'org',
+    title: 'Summer Fest',
+    description: '—',
+    venue: 'Παραλία',
+    city: 'Πάτρα',
+    start_at: '2026-07-03T00:00:00Z',
+    end_at: '2026-07-04T00:00:00Z',
+    capacity: 0,
+    status: 'published',
+    categories: [],
+    ticket_types: [],
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    featured_image_url: null,
+  },
+  {
+    id: '4',
+    organizer_id: 'org',
+    title: 'Κλασικό αριστούργημα',
+    description: '—',
+    venue: 'Μέγαρο Μουσικής',
+    city: 'Αθήνα',
+    start_at: '2026-03-18T00:00:00Z',
+    end_at: '2026-03-18T00:00:00Z',
+    capacity: 0,
+    status: 'published',
+    categories: [],
+    ticket_types: [],
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    featured_image_url: null,
+  },
+  {
+    id: '5',
+    organizer_id: 'org',
+    title: 'Ρυθμός & Ήχος',
+    description: '—',
+    venue: 'Live Stage',
+    city: 'Αθήνα',
+    start_at: '2026-02-10T00:00:00Z',
+    end_at: '2026-02-10T00:00:00Z',
+    capacity: 0,
+    status: 'published',
+    categories: [],
+    ticket_types: [],
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    featured_image_url: null,
+  },
+] as unknown as EventModel[];
 
 export default function Home() {
-  return (
-    <div className="min-h-screen bg-white text-neutral-900">
-      <Navbar />
+  const [active, setActive] = useState<HomeSectionKey>('Δημοφιλή');
+  const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
+  const tabsDrag = useDragScroll<HTMLDivElement>();
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const awesompleteRef = useRef<Awesomplete | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
+  const sections = useMemo(
+    () =>
+      SECTIONS.map((label) => ({
+        label,
+        id: sectionId(label),
+      })),
+    [],
+  );
+
+  useEffect(() => {
+    const onScroll = () => {
+      // Find the closest section to top.
+      const top = 88; // navbar + breathing room
+      let best: { label: HomeSectionKey; dist: number } | null = null;
+      for (const s of sections) {
+        const el = sectionRefs.current[s.id];
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        const dist = Math.abs(r.top - top);
+        if (!best || dist < best.dist) {
+          best = { label: s.label, dist };
+        }
+      }
+      if (best && best.label !== active) setActive(best.label);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [active, sections]);
+
+  useEffect(() => {
+    const input = searchRef.current;
+    if (!input) return;
+
+    const a = new Awesomplete(input, {
+      minChars: 2,
+      maxItems: 8,
+      autoFirst: true,
+      replace: (text) => {
+        input.value = text;
+      },
+    });
+    awesompleteRef.current = a;
+
+    const onSelect = (ev: Event) => {
+      // Keep selection behavior simple: Awesomplete will already replace the input value.
+      // We only prevent any accidental default behavior.
+      void ev;
+    };
+
+    // Awesomplete emits DOM CustomEvents on the input element.
+    input.addEventListener('awesomplete-selectcomplete', onSelect as unknown as EventListener);
+    return () => {
+      input.removeEventListener('awesomplete-selectcomplete', onSelect as unknown as EventListener);
+      awesompleteRef.current?.destroy();
+      awesompleteRef.current = null;
+    };
+  }, []);
+
+  const fetchSuggestions = useMemo(() => {
+    let timer: number | null = null;
+    return (raw: string) => {
+      const q = raw.trim();
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(async () => {
+        const a = awesompleteRef.current;
+        if (!a) return;
+        abortRef.current?.abort();
+        if (q.length < 2) {
+          a.list = [];
+          a.evaluate();
+          return;
+        }
+
+        const controller = new AbortController();
+        abortRef.current = controller;
+        try {
+          const res = await fetch(`/api/v1/events/search?limit=8&offset=0&q=${encodeURIComponent(q)}`, {
+            signal: controller.signal,
+          });
+          const json = (await res.json()) as {
+            data: Array<Pick<EventModel, 'id' | 'title' | 'venue' | 'city'>> | null;
+            error?: { code: string; message: string } | null;
+          };
+          if (!res.ok || json.error) {
+            a.list = [];
+            a.evaluate();
+            return;
+          }
+          const items =
+            Array.isArray(json.data)
+              ? json.data.map((ev) => ({
+                  label: `${ev.title} — ${ev.venue}${ev.city ? `, ${ev.city}` : ''}`,
+                  value: ev.title,
+                }))
+              : [];
+          a.list = items;
+          a.evaluate();
+        } catch (err: unknown) {
+          if (err instanceof DOMException && err.name === 'AbortError') return;
+          a.list = [];
+          a.evaluate();
+        }
+      }, 220);
+    };
+  }, []);
+
+  const scrollToSection = (label: HomeSectionKey) => {
+    const id = sectionId(label);
+    const el = sectionRefs.current[id];
+    if (!el) return;
+    setActive(label);
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  return (
+    <>
       <section className="home-hero relative border-b border-neutral-100 md:h-[550px] md:overflow-hidden">
         {/* Desktop: lime panel from right column start to viewport edge (escapes max-width gap) */}
         <div
@@ -58,9 +278,12 @@ export default function Home() {
                     id="home-search"
                     type="search"
                     placeholder="Αναζήτηση εκδήλωσης, χώρου ή περιοχής"
+                    ref={searchRef}
+                    onChange={(e) => fetchSuggestions(e.target.value)}
                     className={cn(
-                      'h-14 rounded-full border-0 bg-white pl-14 pr-6 text-[16px]',
+                      'h-14 rounded-full border-0 bg-white pl-14 pr-6 text-[16px] max-[600px]:text-[14px]',
                       'comfortaa-regular text-neutral-900 ring-0 placeholder:text-neutral-500',
+                      'max-[600px]:placeholder:text-[14px]',
                       'transition-shadow duration-300 ease-out motion-reduce:transition-none',
                       'shadow-[0_4px_14px_-4px_rgba(15,23,42,0.12),inset_0_0_0_1px_rgb(229_231_235)]',
                       'hover:shadow-[0_4px_14px_-4px_rgba(15,23,42,0.12),inset_0_0_0_1px_rgb(212_212_216)]',
@@ -102,52 +325,65 @@ export default function Home() {
         </div>
       </section>
 
-      <nav aria-label="Γρήγορα φίλτρα" className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-2 px-4 py-3 sm:gap-3 sm:px-6 lg:px-8">
-          {QUICK_FILTERS.map((label) => (
-            <Link
-              key={label}
-              to="/events"
-              className={cn(
-                'rounded-full px-3 py-1.5 text-sm font-medium text-neutral-700 transition-colors',
-                'hover:bg-violet-50 hover:text-[#6d28d9]',
-              )}
-            >
-              {label}
-            </Link>
-          ))}
+      <nav aria-label="Ενότητες αρχικής" className="border-b border-neutral-200 bg-white">
+        <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
+          <div
+            ref={tabsDrag.ref}
+            className={cn(
+              'flex items-stretch gap-8 overflow-x-auto',
+              '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+              'snap-x snap-mandatory',
+              'touch-pan-x overscroll-x-contain',
+            )}
+            {...tabsDrag.handlers}
+          >
+            {sections.map((s) => {
+              const isActive = s.label === active;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => scrollToSection(s.label)}
+                  className={cn(
+                    'relative shrink-0 py-4 text-sm font-semibold transition-colors comfortaa-regular snap-start',
+                    isActive ? 'text-neutral-950' : 'text-neutral-600 hover:text-neutral-900',
+                  )}
+                >
+                  {s.label}
+                  <span
+                    className={cn(
+                      'absolute left-0 right-0 -bottom-px h-[3px] rounded-full transition-opacity',
+                      isActive ? 'bg-neutral-900 opacity-100' : 'bg-neutral-900 opacity-0',
+                    )}
+                    aria-hidden
+                  />
+                </button>
+              );
+            })}
+          </div>
         </div>
       </nav>
 
-      <section className="mx-auto max-w-[1400px] px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-neutral-950">Δημοφιλή</h2>
-          <p className="mt-1 text-neutral-600">Τα αγαπημένα του κοινού αυτή την περίοδο.</p>
-        </div>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {PLACEHOLDER_EVENTS.map((ev) => (
-            <article
-              key={ev.id}
-              className="group overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm transition hover:shadow-md"
-            >
-              <Link to="/events" className="block">
-                <div
-                  className={cn(
-                    'relative aspect-[4/5] bg-gradient-to-br from-violet-200 via-violet-400 to-purple-700',
-                    'flex items-end p-4',
-                  )}
-                >
-                  <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%2240%22%20height=%2240%22%20viewBox=%220%200%2040%2040%22%3E%3Cg%20fill=%22%23ffffff%22%20fill-opacity=%220.08%22%3E%3Cpath%20d=%22M0%2040h40V0H0v40zM20%2020h20v20H20z%22/%3E%3C/g%3E%3C/svg%3E')] opacity-40" />
-                  <div className="relative z-10">
-                    <h3 className="text-lg font-bold text-white drop-shadow-sm">{ev.title}</h3>
-                    <p className="text-sm text-white/90">{ev.subtitle}</p>
-                  </div>
+      <div className="mx-auto max-w-[1400px] px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+        {sections.map((s, idx) => (
+          <div
+            key={s.id}
+            id={s.id}
+            ref={(el) => {
+              sectionRefs.current[s.id] = el;
+            }}
+            className={cn(idx > 0 && 'mt-12')}
+          >
+            <SectionSwiper title={s.label}>
+              {PLACEHOLDER_EVENTS.map((ev) => (
+                <div key={`${s.id}-${ev.id}`} className="snap-start">
+                  <EventCard event={ev} />
                 </div>
-              </Link>
-            </article>
-          ))}
-        </div>
-      </section>
-    </div>
+              ))}
+            </SectionSwiper>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }

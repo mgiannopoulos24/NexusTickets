@@ -1,11 +1,23 @@
 import { Route, Routes } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { Toaster } from '@/components/ui/sonner';
+import { AppLayout } from '@/components/layout/AppLayout';
 import routes from '@/routes/routes';
 
 function App() {
   useWebSocket();
+
+  const withLayout = (layout: (typeof routes)[number]['layout'] | undefined, element: ReactNode) => {
+    switch (layout ?? 'app') {
+      case 'none':
+        return element;
+      case 'app':
+      default:
+        return <AppLayout>{element}</AppLayout>;
+    }
+  };
 
   return (
     <>
@@ -17,9 +29,12 @@ function App() {
             path={route.path}
             element={
               route.protected ? (
-                <ProtectedRoute allowedRoles={route.roles!}>{route.element}</ProtectedRoute>
+                withLayout(
+                  route.layout,
+                  <ProtectedRoute allowedRoles={route.roles!}>{route.element}</ProtectedRoute>,
+                )
               ) : (
-                route.element
+                withLayout(route.layout, route.element)
               )
             }
           />

@@ -33,6 +33,7 @@ export interface Event {
   title: string;
   description: string;
   venue: string;
+  featured_image_url?: string | null;
   address?: string | null;
   city: string;
   country?: string | null;

@@ -179,7 +179,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         account_status: string;
       }>;
       assertData(res, json);
-      navigate('/login', { replace: true, state: { pendingApproval: true } });
+      navigate('/register/pending', { replace: true });
     },
     [navigate],
   );

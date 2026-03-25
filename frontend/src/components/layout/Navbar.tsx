@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Bell, ChevronDown, Search } from 'lucide-react';
+import { Bell, ChevronDown, Menu } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { NavbarLanguageGlobe } from '@/components/layout/NavbarLanguageGlobe';
@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContent';
 
@@ -161,23 +162,132 @@ export function Navbar() {
                 aria-hidden
               />
             ) : showLoginButton ? (
-              <Button
-                asChild
-                className={cn(
-                  'hidden cursor-pointer self-center rounded-full bg-[#6d28d9] px-5 text-white hover:bg-[#5b21b6] sm:inline-flex',
-                )}
-              >
-                <Link to="/login">Σύνδεση</Link>
-              </Button>
+              <div className="hidden items-center gap-2 self-center sm:flex">
+                <Button asChild variant="ghost" className="cursor-pointer rounded-full comfortaa-regular">
+                  <Link to="/register">Εγγραφή</Link>
+                </Button>
+                <Button
+                  asChild
+                  className={cn(
+                    'cursor-pointer rounded-full bg-[#6d28d9] px-5 text-white hover:bg-[#5b21b6] comfortaa-regular',
+                  )}
+                >
+                  <Link to="/login">Σύνδεση</Link>
+                </Button>
+              </div>
             ) : null}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="cursor-pointer self-center lg:hidden"
-              aria-label="Αναζήτηση"
-            >
-              <Search className="size-5" />
-            </Button>
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="cursor-pointer self-center lg:hidden"
+                  aria-label="Μενού"
+                >
+                  <Menu className="size-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="p-0">
+                <SheetHeader className="border-b border-neutral-200">
+                  <SheetTitle className="comfortaa-bold">
+                    <Link to="/" className="inline-flex items-baseline">
+                      <span className="text-lg comfortaa-bold tracking-tight text-[var(--nexus-purple)]">
+                        Nexus
+                      </span>
+                      <span className="text-lg comfortaa-semibold tracking-tight text-[var(--nexus-purple)]/90">
+                        Tickets
+                      </span>
+                    </Link>
+                  </SheetTitle>
+                </SheetHeader>
+
+                <div className="p-4">
+                  <nav className="flex flex-col gap-1">
+                    {NAV_LINKS.map((item) => (
+                      <SheetClose asChild key={item.href}>
+                        <Link
+                          to={item.href}
+                          className={cn(
+                            'rounded-xl px-3 py-2 text-base text-neutral-800 transition-colors comfortaa-regular',
+                            'hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)]',
+                          )}
+                        >
+                          {item.label}
+                        </Link>
+                      </SheetClose>
+                    ))}
+                  </nav>
+
+                  <div className="mt-4 border-t border-neutral-200 pt-4">
+                    {user ? (
+                      <div className="space-y-2">
+                        <p className="text-sm text-neutral-600 comfortaa-regular">
+                          Συνδεδεμένος ως <span className="font-semibold text-neutral-900">{user.username}</span>
+                        </p>
+                        <div className="flex flex-col gap-2">
+                          <SheetClose asChild>
+                            <Link
+                              to="/account"
+                              className={cn(
+                                'rounded-xl px-3 py-2 text-base text-neutral-800 transition-colors comfortaa-regular',
+                                'hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)]',
+                              )}
+                            >
+                              Ο λογαριασμός μου
+                            </Link>
+                          </SheetClose>
+                          {user.role === 'admin' && (
+                            <SheetClose asChild>
+                              <Link
+                                to="/admin"
+                                className={cn(
+                                  'rounded-xl px-3 py-2 text-base font-medium text-[var(--nexus-red)] transition-colors comfortaa-regular',
+                                  'hover:bg-red-50',
+                                )}
+                              >
+                                Admin panel
+                              </Link>
+                            </SheetClose>
+                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="justify-start rounded-xl px-3 py-2 text-base text-neutral-800 comfortaa-regular"
+                            onClick={() => void handleLogout()}
+                          >
+                            Αποσύνδεση
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <SheetClose asChild>
+                          <Link
+                            to="/register"
+                            className={cn(
+                              'rounded-xl px-3 py-2 text-base text-neutral-800 transition-colors comfortaa-regular',
+                              'hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)]',
+                            )}
+                          >
+                            Εγγραφή
+                          </Link>
+                        </SheetClose>
+                        <SheetClose asChild>
+                          <Link
+                            to="/login"
+                            className={cn(
+                              'rounded-xl bg-[#6d28d9] px-3 py-2 text-base text-white transition hover:bg-[#5b21b6] comfortaa-regular',
+                            )}
+                          >
+                            Σύνδεση
+                          </Link>
+                        </SheetClose>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </div>

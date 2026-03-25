@@ -5,7 +5,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
 import { useAuth } from '@/contexts/AuthContent';
-import { Navbar } from '@/components/layout/Navbar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -51,8 +50,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--nexus-lightgray)]/40">
-      <Navbar />
+    <div className="bg-[var(--nexus-lightgray)]/40">
       <main className="mx-auto flex max-w-md flex-col gap-8 px-4 py-12 sm:px-6 lg:px-8">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Σύνδεση</h1>
@@ -127,6 +125,12 @@ export default function LoginPage() {
           </Button>
 
           <p className="mt-6 text-center text-sm text-neutral-600">
+            Δεν έχετε λογαριασμό;{' '}
+            <Link to="/register" className="font-medium text-[#6d28d9] hover:underline">
+              Εγγραφή
+            </Link>
+          </p>
+          <p className="mt-3 text-center text-sm text-neutral-600">
             <Link to="/" className="font-medium text-[#6d28d9] hover:underline">
               Επιστροφή στην αρχική
             </Link>
