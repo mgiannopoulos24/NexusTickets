@@ -81,6 +81,22 @@ type SearchEventsInput struct {
 	AfterID      *uuid.UUID
 }
 
+type AdminUpdateEventInput struct {
+	Title            *string
+	Description      *string
+	Venue            *string
+	Address          *string
+	City             *string
+	Country          *string
+	Latitude         *float64
+	Longitude        *float64
+	StartAt          *time.Time
+	EndAt            *time.Time
+	Capacity         *int
+	Categories       *[]string
+	FeaturedImageURL *string
+}
+
 func NewEventService(
 	events repo.EventRepository,
 	bookings repo.BookingRepository,
@@ -298,6 +314,87 @@ func (s *EventService) Update(ctx context.Context, organizerID, eventID uuid.UUI
 	return s.Get(ctx, eventID)
 }
 
+func (s *EventService) AdminList(ctx context.Context, limit, offset int) ([]domain.Event, [][]domain.Category, error) {
+	events, err := s.events.ListForExport(ctx, limit, offset)
+	if err != nil {
+		return nil, nil, err
+	}
+	return s.hydrateMany(ctx, events)
+}
+
+func (s *EventService) AdminGet(ctx context.Context, eventID uuid.UUID) (domain.Event, []domain.Category, error) {
+	return s.Get(ctx, eventID)
+}
+
+func (s *EventService) AdminUpdate(ctx context.Context, eventID uuid.UUID, in AdminUpdateEventInput) (domain.Event, []domain.Category, error) {
+	event, err := s.events.GetByID(ctx, eventID)
+	if err != nil {
+		return domain.Event{}, nil, err
+	}
+
+	if in.Title != nil {
+		event.Title = strings.TrimSpace(*in.Title)
+	}
+	if in.Description != nil {
+		event.Description = strings.TrimSpace(*in.Description)
+	}
+	if in.Venue != nil {
+		event.Venue = strings.TrimSpace(*in.Venue)
+	}
+	if in.FeaturedImageURL != nil {
+		event.FeaturedImageURL = in.FeaturedImageURL
+	}
+	if in.Address != nil {
+		event.Address = in.Address
+	}
+	if in.City != nil {
+		event.City = strings.TrimSpace(*in.City)
+	}
+	if in.Country != nil {
+		event.Country = in.Country
+	}
+	if in.Latitude != nil {
+		event.Latitude = in.Latitude
+	}
+	if in.Longitude != nil {
+		event.Longitude = in.Longitude
+	}
+	if in.StartAt != nil {
+		event.StartAt = in.StartAt.UTC()
+	}
+	if in.EndAt != nil {
+		event.EndAt = in.EndAt.UTC()
+	}
+	if in.Capacity != nil {
+		event.Capacity = *in.Capacity
+	}
+
+	if strings.TrimSpace(event.Title) == "" ||
+		strings.TrimSpace(event.Description) == "" ||
+		strings.TrimSpace(event.Venue) == "" ||
+		strings.TrimSpace(event.City) == "" ||
+		event.Capacity < 0 ||
+		event.EndAt.Before(event.StartAt) {
+		return domain.Event{}, nil, domain.ErrInvalidEventState
+	}
+
+	if _, err := s.events.Update(ctx, event); err != nil {
+		return domain.Event{}, nil, err
+	}
+
+	if in.Categories != nil {
+		cats, err := s.resolveCategories(ctx, *in.Categories)
+		if err != nil {
+			return domain.Event{}, nil, err
+		}
+		if err := s.events.SetCategories(ctx, eventID, categoryIDs(cats)); err != nil {
+			return domain.Event{}, nil, err
+		}
+	}
+
+	return s.Get(ctx, eventID)
+}
+
 func (s *EventService) Delete(ctx context.Context, organizerID, eventID uuid.UUID) error {
 	event, err := s.events.GetByID(ctx, eventID)
 	if err != nil {
@@ -506,6 +603,10 @@ func (s *EventService) AddPhoto(ctx context.Context, organizerID, eventID uuid.U
 	if event.OrganizerID != organizerID {
 		return domain.EventPhoto{}, domain.ErrForbidden
 	}
+	return s.saveEventImage(ctx, eventID, mimeType, r)
+}
+
+func (s *EventService) saveEventImage(ctx context.Context, eventID uuid.UUID, mimeType string, r io.Reader) (domain.EventPhoto, error) {
 	if strings.TrimSpace(s.mediaRoot) == "" {
 		return domain.EventPhoto{}, fmt.Errorf("media storage path is not configured")
 	}
@@ -595,7 +696,26 @@ func (s *EventService) SetFeaturedImage(ctx context.Context, organizerID, eventI
 		return domain.Event{}, nil, domain.ErrForbidden
 	}
 
-	created, err := s.AddPhoto(ctx, organizerID, eventID, mimeType, r)
+	created, err := s.saveEventImage(ctx, eventID, mimeType, r)
+	if err != nil {
+		return domain.Event{}, nil, err
+	}
+
+	url := "/uploads/media/" + filepath.ToSlash(created.StoragePath)
+	event.FeaturedImageURL = &url
+	if _, err := s.events.Update(ctx, event); err != nil {
+		return domain.Event{}, nil, err
+	}
+	return s.Get(ctx, eventID)
+}
+
+func (s *EventService) AdminSetFeaturedImage(ctx context.Context, eventID uuid.UUID, mimeType string, r io.Reader) (domain.Event, []domain.Category, error) {
+	event, err := s.events.GetByID(ctx, eventID)
+	if err != nil {
+		return domain.Event{}, nil, err
+	}
+
+	created, err := s.saveEventImage(ctx, eventID, mimeType, r)
 	if err != nil {
 		return domain.Event{}, nil, err
 	}

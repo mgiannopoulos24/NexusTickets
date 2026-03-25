@@ -12,6 +12,15 @@ func RegisterEventRoutes(router fiber.Router, eventHandler *EventHandler, jwtSec
 
 	events.Get("/", eventHandler.List)
 	events.Get("/search", eventHandler.Search)
+
+	admin := events.Group("/admin")
+	admin.Use(middleware.JWTAuth(jwtSecret))
+	admin.Use(middleware.RequireRole(domain.UserRoleAdmin))
+	admin.Get("/", eventHandler.AdminListEvents)
+	admin.Get("/:id", eventHandler.AdminGetEvent)
+	admin.Patch("/:id", eventHandler.AdminUpdateEvent)
+	admin.Post("/:id/featured-image", eventHandler.AdminUploadFeaturedImage)
+
 	events.Get("/:id", middleware.OptionalJWTAuth(jwtSecret), eventHandler.Get)
 
 	organizer := events.Group("/organizer")

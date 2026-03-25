@@ -476,6 +476,47 @@ func (h *EventHandler) UploadFeaturedImage(c *fiber.Ctx) error {
 	return response.OK(c, toEventResponse(event, cats))
 }
 
+func (h *EventHandler) AdminUploadFeaturedImage(c *fiber.Ctx) error {
+	eventID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid event id")
+	}
+
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "file is required")
+	}
+	if fileHeader.Size <= 0 {
+		return fiber.NewError(fiber.StatusBadRequest, "empty file")
+	}
+	if fileHeader.Size > maxPhotoUploadBytes {
+		return fiber.NewError(fiber.StatusBadRequest, "file too large (max 5MB)")
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "unable to open uploaded file")
+	}
+	defer func() { _ = file.Close() }()
+
+	sniff := make([]byte, 512)
+	n, err := io.ReadFull(file, sniff)
+	if err != nil && err != io.ErrUnexpectedEOF {
+		return fiber.NewError(fiber.StatusBadRequest, "unable to read uploaded file")
+	}
+	mimeType, ok := service.DetectImageMIME(sniff[:n])
+	if !ok {
+		return fiber.NewError(fiber.StatusBadRequest, "unsupported image type: "+mimeType)
+	}
+
+	reader := io.MultiReader(bytes.NewReader(sniff[:n]), file)
+	event, cats, err := h.service.AdminSetFeaturedImage(c.Context(), eventID, mimeType, reader)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, toEventResponse(event, cats))
+}
+
 func (h *EventHandler) DeletePhoto(c *fiber.Ctx) error {
 	organizerID, err := authUserID(c)
 	if err != nil {
@@ -494,6 +535,80 @@ func (h *EventHandler) DeletePhoto(c *fiber.Ctx) error {
 		return err
 	}
 	return response.OK(c, fiber.Map{"message": "photo deleted"})
+}
+
+func (h *EventHandler) AdminListEvents(c *fiber.Ctx) error {
+	limit, offset, err := parsePage(c.Query("limit"), c.Query("offset"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+	events, cats, err := h.service.AdminList(c.Context(), limit, offset)
+	if err != nil {
+		return err
+	}
+	out := make([]dto.EventResponse, 0, len(events))
+	for i := range events {
+		out = append(out, toEventResponse(events[i], cats[i]))
+	}
+	return response.OK(c, out)
+}
+
+func (h *EventHandler) AdminGetEvent(c *fiber.Ctx) error {
+	eventID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid event id")
+	}
+	event, cats, err := h.service.AdminGet(c.Context(), eventID)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, toEventResponse(event, cats))
+}
+
+func (h *EventHandler) AdminUpdateEvent(c *fiber.Ctx) error {
+	eventID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid event id")
+	}
+
+	var req dto.UpdateEventRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+
+	in := service.AdminUpdateEventInput{
+		Title:            req.Title,
+		Description:      req.Description,
+		Venue:            req.Venue,
+		FeaturedImageURL: req.FeaturedImageURL,
+		Address:          req.Address,
+		City:             req.City,
+		Country:          req.Country,
+		Latitude:         req.Latitude,
+		Longitude:        req.Longitude,
+		Capacity:         req.Capacity,
+		Categories:       req.Categories,
+	}
+	if req.StartAt != nil {
+		ts, parseErr := time.Parse(time.RFC3339, strings.TrimSpace(*req.StartAt))
+		if parseErr != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid start_at (expected RFC3339)")
+		}
+		in.StartAt = &ts
+	}
+	if req.EndAt != nil {
+		ts, parseErr := time.Parse(time.RFC3339, strings.TrimSpace(*req.EndAt))
+		if parseErr != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid end_at (expected RFC3339)")
+		}
+		in.EndAt = &ts
+	}
+
+	event, cats, err := h.service.AdminUpdate(c.Context(), eventID, in)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, toEventResponse(event, cats))
 }
 
 func toEventResponse(event domain.Event, cats []domain.Category) dto.EventResponse {

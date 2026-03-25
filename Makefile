@@ -1,4 +1,4 @@
-.PHONY: dev build test lint migrate-up migrate-down seed db-reset wire local-tls
+.PHONY: dev build test lint migrate-up migrate-down seed seed-events db-reset wire local-tls
 
 COMPOSE = docker compose -f docker-compose.yml
 COMPOSE_DEV = docker compose -f docker-compose.yml -f docker-compose.dev.yml
@@ -28,6 +28,9 @@ migrate-down:
 seed:
 	@$(MAKE) migrate-up
 
+seed-events:
+	@cd backend && DB_HOST=$${DB_HOST:-localhost} DB_PORT=$${DB_PORT:-$${POSTGRES_EXPOSED_PORT:-5432}} go run ./cmd/seed-events -n 50
+
 db-reset:
 	@echo "This will delete local postgres/redis volumes (DATA LOSS)."
 	@$(COMPOSE_DEV) down -v
@@ -39,4 +42,3 @@ wire:
 local-tls:
 	@chmod +x scripts/generate-local-tls.sh
 	@./scripts/generate-local-tls.sh
-
