@@ -8,14 +8,13 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
-import type { Event } from '@/types/models';
 import { cn } from '@/lib/utils';
 import { PencilIcon } from 'lucide-react';
 
@@ -78,7 +77,7 @@ function formatDateForUi(date: Date | undefined): string {
   return date.toLocaleDateString('el-GR', { year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 
-function TimeSpinner({
+function TimeClock({
   value,
   onChange,
   disabled,
@@ -91,104 +90,114 @@ function TimeSpinner({
   const hour = parsed.hour;
   const minute = parsed.minute;
 
-  const setHour = (h: number) => {
-    const next = ((h % 24) + 24) % 24;
-    onChange(`${pad2(next)}:${pad2(minute)}`);
-  };
-  const setMinute = (m: number) => {
-    const next = ((m % 60) + 60) % 60;
-    onChange(`${pad2(hour)}:${pad2(next)}`);
-  };
+  const hourAngles = Array.from({ length: 12 }, (_, i) => i);
+  const minuteAngles = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
 
-  const incHour = (delta: number) => setHour(hour + delta);
-  const incMinute = (delta: number) => setMinute(minute + delta);
+  const getHourAngle = (h: number) => ((h % 12) / 12) * 360 * (Math.PI / 180) - Math.PI / 2;
+  const getMinuteAngle = (m: number) => (m / 60) * 360 * (Math.PI / 180) - Math.PI / 2;
+
+  const hourRad = getHourAngle(hour);
+  const minuteRad = getMinuteAngle(minute);
+  const centerX = 100, centerY = 100;
+  const hourHandLength = 55;
+  const minuteHandLength = 75;
 
   return (
-    <div className={cn('flex items-center gap-3', disabled && 'opacity-60')}>
-      <div className="flex items-center gap-1">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          disabled={disabled}
-          onClick={() => incHour(1)}
-          className="h-9 w-9 rounded-lg"
-          aria-label="Αύξηση ώρας"
-        >
-          +
-        </Button>
-        <select
-          value={pad2(hour)}
-          disabled={disabled}
-          onChange={(e) => setHour(Number(e.target.value))}
-          className={cn(
-            'h-9 rounded-lg border border-neutral-200 bg-white px-2 text-sm outline-none',
-            'focus-visible:border-[#6d28d9] focus-visible:ring-2 focus-visible:ring-[#6d28d9]/20',
-            'comfortaa-regular',
-          )}
-          aria-label="Ώρα"
-        >
-          {Array.from({ length: 24 }).map((_, i) => (
-            <option key={i} value={pad2(i)}>
-              {pad2(i)}
-            </option>
-          ))}
-        </select>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          disabled={disabled}
-          onClick={() => incHour(-1)}
-          className="h-9 w-9 rounded-lg"
-          aria-label="Μείωση ώρας"
-        >
-          −
-        </Button>
+    <div className={cn('flex flex-col items-center gap-4', disabled && 'opacity-60')}>
+      <div className="relative w-52 h-52">
+        <svg viewBox="0 0 200 200" className="w-full h-full">
+          <circle cx={centerX} cy={centerY} r="95" fill="white" stroke="#e5e7eb" strokeWidth="2" />
+          
+          {[0, 3, 6, 9].map((h) => {
+            const angle = (h / 12) * 2 * Math.PI - Math.PI / 2;
+            const x = centerX + Math.cos(angle) * 80;
+            const y = centerY + Math.sin(angle) * 80;
+            return (
+              <text
+                key={h}
+                x={x}
+                y={y + 5}
+                textAnchor="middle"
+                fontSize="14"
+                fontWeight="600"
+                fill="#374151"
+                className="comfortaa-regular"
+              >
+                {h === 0 ? '12' : h}
+              </text>
+            );
+          })}
+          
+          {hourAngles.map((h) => {
+            const angle = (h / 12) * 2 * Math.PI - Math.PI / 2;
+            const x = centerX + Math.cos(angle) * 85;
+            const y = centerY + Math.sin(angle) * 85;
+            return (
+              <circle key={`tick-${h}`} cx={x} cy={y} r="2" fill="#d1d5db" />
+            );
+          })}
+          
+          <line
+            x1={centerX}
+            y1={centerY}
+            x2={centerX + Math.cos(hourRad) * hourHandLength}
+            y2={centerY + Math.sin(hourRad) * hourHandLength}
+            stroke="#6d28d9"
+            strokeWidth="4"
+            strokeLinecap="round"
+          />
+          <line
+            x1={centerX}
+            y1={centerY}
+            x2={centerX + Math.cos(minuteRad) * minuteHandLength}
+            y2={centerY + Math.sin(minuteRad) * minuteHandLength}
+            stroke="#6d28d9"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <circle cx={centerX} cy={centerY} r="5" fill="#6d28d9" />
+          
+          <text x={centerX} y={centerY + 40} textAnchor="middle" fontSize="12" fill="#6b7280" className="comfortaa-regular">
+            {pad2(hour)}:{pad2(minute)}
+          </text>
+        </svg>
       </div>
 
-      <span className="text-sm text-neutral-500 comfortaa-regular">:</span>
-
-      <div className="flex items-center gap-1">
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          disabled={disabled}
-          onClick={() => incMinute(5)}
-          className="h-9 w-9 rounded-lg"
-          aria-label="Αύξηση λεπτών"
-        >
-          +
-        </Button>
-        <select
-          value={pad2(minute)}
-          disabled={disabled}
-          onChange={(e) => setMinute(Number(e.target.value))}
-          className={cn(
-            'h-9 rounded-lg border border-neutral-200 bg-white px-2 text-sm outline-none',
-            'focus-visible:border-[#6d28d9] focus-visible:ring-2 focus-visible:ring-[#6d28d9]/20',
-            'comfortaa-regular',
-          )}
-          aria-label="Λεπτά"
-        >
-          {Array.from({ length: 60 }).map((_, i) => (
-            <option key={i} value={pad2(i)}>
-              {pad2(i)}
-            </option>
-          ))}
-        </select>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          disabled={disabled}
-          onClick={() => incMinute(-5)}
-          className="h-9 w-9 rounded-lg"
-          aria-label="Μείωση λεπτών"
-        >
-          −
-        </Button>
+      <div className="flex gap-2">
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-[10px] text-neutral-500">Ώρα</span>
+          <input
+            type="range"
+            min="0"
+            max="23"
+            value={hour}
+            onChange={(e) => onChange(`${pad2(Number(e.target.value))}:${pad2(minute)}`)}
+            disabled={disabled}
+            className="w-24 accent-[#6d28d9]"
+          />
+          <div className="flex justify-between w-24 text-[9px] text-neutral-400">
+            <span>00</span><span>12</span><span>23</span>
+          </div>
+        </div>
+      </div>
+      
+      <div className="flex gap-2">
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-[10px] text-neutral-500">Λεπτά</span>
+          <input
+            type="range"
+            min="0"
+            max="55"
+            step="5"
+            value={minute}
+            onChange={(e) => onChange(`${pad2(hour)}:${pad2(Number(e.target.value))}`)}
+            disabled={disabled}
+            className="w-24 accent-[#6d28d9]"
+          />
+          <div className="flex justify-between w-24 text-[9px] text-neutral-400">
+            <span>00</span><span>30</span><span>55</span>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -206,9 +215,33 @@ function DateTimeDialogField({
   onChange: (nextDate: Date | undefined, nextTime: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<'date' | 'time'>('date');
+  const [tempDate, setTempDate] = useState<Date | undefined>(date);
+  const [tempTime, setTempTime] = useState(timeHHMM);
 
   const uiDate = formatDateForUi(date);
   const uiValue = uiDate ? `${uiDate} ${timeHHMM}` : '';
+
+  const handleOpen = (isOpen: boolean) => {
+    setOpen(isOpen);
+    if (isOpen) {
+      setTempDate(date);
+      setTempTime(timeHHMM);
+      setStep('date');
+    }
+  };
+
+  const handleDateSelect = (d: Date | undefined) => {
+    setTempDate(d);
+    if (d) {
+      setStep('time');
+    }
+  };
+
+  const handleConfirm = () => {
+    onChange(tempDate, tempTime);
+    setOpen(false);
+  };
 
   return (
     <div>
@@ -218,43 +251,68 @@ function DateTimeDialogField({
           type="button"
           variant="ghost"
           size="sm"
-          className="h-7 w-7 cursor-pointer rounded-md px-0 text-sm text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 comfortaa-regular"
-          onClick={() => {
-            setOpen(true);
-          }}
+          className="h-7 w-7 cursor-pointer px-0 text-sm text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 comfortaa-regular"
+          onClick={() => handleOpen(true)}
           aria-label={`${label} επεξεργασία`}
         >
           <PencilIcon className="size-4" />
         </Button>
       </div>
 
-      <div className="rounded-xl border border-neutral-200 bg-white px-3 py-2">
+      <div className="border border-neutral-200 bg-white px-3 py-2">
         <p className="text-sm text-neutral-900 comfortaa-regular">{uiValue || '—'}</p>
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={handleOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="comfortaa-bold">{label}</DialogTitle>
-            <DialogDescription className="comfortaa-regular">Ημερομηνία και ώρα.</DialogDescription>
+            <DialogDescription className="comfortaa-regular">
+              {step === 'date' ? 'Επιλέξτε ημερομηνία' : 'Επιλέξτε ώρα'}
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-col gap-4">
-            <Calendar mode="single" selected={date} onSelect={(d) => onChange(d, timeHHMM)} />
-            <div className="rounded-xl border border-neutral-200 bg-white p-3">
-              <p className="mb-2 text-xs text-neutral-600 comfortaa-regular">Ώρα</p>
-              <TimeSpinner value={timeHHMM} onChange={(t) => onChange(date, t)} disabled={!date} />
+          {step === 'date' ? (
+            <div className="flex flex-col gap-4">
+              <Calendar mode="single" selected={tempDate} onSelect={handleDateSelect} />
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setStep('time')}
+                  disabled={!tempDate}
+                  className="comfortaa-regular"
+                >
+                  Επόμενο →
+                </Button>
+              </div>
             </div>
-            <DialogFooter className="sm:justify-end">
-              <Button
-                type="button"
-                className="rounded-full bg-[#6d28d9] text-white hover:bg-[#5b21b6] comfortaa-regular"
-                onClick={() => setOpen(false)}
-              >
-                Έτοιμο
-              </Button>
-            </DialogFooter>
-          </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <TimeClock
+                value={tempTime}
+                onChange={setTempTime}
+                disabled={!tempDate}
+              />
+              <div className="flex justify-between">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setStep('date')}
+                  className="comfortaa-regular"
+                >
+                  ← Πίσω
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleConfirm}
+                  className="bg-[#6d28d9] text-white hover:bg-[#5b21b6] comfortaa-regular"
+                >
+                  Επιβεβαίωση
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
@@ -479,7 +537,7 @@ export default function AdminEventEditPage() {
 
   return (
     <AdminLayout>
-      <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+      <div className="bg-white p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="text-xs text-neutral-500 comfortaa-regular">
@@ -496,7 +554,7 @@ export default function AdminEventEditPage() {
             type="button"
             onClick={() => void onSave()}
             disabled={loading || saving || !form}
-            className="rounded-full bg-[#6d28d9] text-white hover:bg-[#5b21b6] comfortaa-regular"
+            className="rounded-none border-2 border-[#6d28d9] bg-transparent px-4 py-1.5 text-sm text-[#6d28d9] hover:bg-[#6d28d9] hover:text-white comfortaa-regular"
           >
             {saving ? 'Αποθήκευση…' : 'Αποθήκευση'}
           </Button>
@@ -536,14 +594,10 @@ export default function AdminEventEditPage() {
                 <label className="mb-1.5 block text-sm font-medium text-neutral-800 comfortaa-regular">
                   Περιγραφή
                 </label>
-                <textarea
+                <Textarea
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className={cn(
-                    'min-h-32 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm outline-none',
-                    'focus-visible:border-[#6d28d9] focus-visible:ring-2 focus-visible:ring-[#6d28d9]/20',
-                    'comfortaa-regular',
-                  )}
+                  className="min-h-32"
                 />
               </div>
             </div>
@@ -628,8 +682,8 @@ export default function AdminEventEditPage() {
                               e.currentTarget.value = '';
                             }}
                             className={cn(
-                              'block w-full text-sm text-neutral-700 file:mr-3 file:rounded-full file:border-0',
-                              'file:bg-[#6d28d9] file:px-3 file:py-2 file:text-white file:hover:bg-[#5b21b6]',
+                              'block w-full text-sm text-neutral-700 file:mr-2 file:rounded-none',
+                              'file:bg-transparent file:border-2 file:border-[#6d28d9] file:px-2 file:py-1 file:text-xs file:text-[#6d28d9] file:hover:bg-[#6d28d9] file:hover:text-white',
                               'comfortaa-regular',
                             )}
                           />

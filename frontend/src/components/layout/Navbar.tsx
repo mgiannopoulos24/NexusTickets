@@ -55,10 +55,10 @@ export function Navbar() {
       <div className="flex h-16 max-w-screen items-stretch justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 shrink-0 items-center">
           <Link to="/" className="flex cursor-pointer items-baseline">
-            <span className="text-xl comfortaa-bold tracking-tight text-[var(--nexus-purple)] sm:text-2xl">
+            <span className="text-base sm:text-lg md:text-xl lg:text-2xl comfortaa-bold tracking-tight text-[var(--nexus-purple)]">
               Nexus
             </span>
-            <span className="text-xl comfortaa-semibold tracking-tight text-[var(--nexus-purple)]/90 sm:text-2xl">
+            <span className="text-base sm:text-lg md:text-xl lg:text-2xl comfortaa-semibold tracking-tight text-[var(--nexus-purple)]/90">
               Tickets
             </span>
           </Link>
@@ -66,18 +66,45 @@ export function Navbar() {
 
         <div className="flex min-w-0 flex-1 items-stretch justify-end gap-2 sm:gap-3 lg:gap-4">
           <nav className="comfortaa-regular hidden items-stretch text-base text-neutral-800 lg:flex">
-            {NAV_LINKS.map((item) => (
-              <Link
-                key={item.href}
-                to={item.href}
-                className="flex shrink-0 cursor-pointer self-stretch items-center border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]"
-              >
-                {item.label}
-              </Link>
-            ))}
+            <Link
+              to="/events"
+              className="flex shrink-0 cursor-pointer self-stretch items-center border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]"
+            >
+              Εκδηλώσεις
+            </Link>
+            <Link
+              to="/events?category=theater"
+              className="hidden xl:flex shrink-0 cursor-pointer self-stretch items-center border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]"
+            >
+              Θέατρο
+            </Link>
+            <Link
+              to="/events?category=music"
+              className="hidden xl:flex shrink-0 cursor-pointer self-stretch items-center border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]"
+            >
+              Μουσική
+            </Link>
+            <Link
+              to="/events?category=sports"
+              className="hidden xl:flex shrink-0 cursor-pointer self-stretch items-center border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]"
+            >
+              Αθλητικά
+            </Link>
+            <Link
+              to="/events?category=cinema"
+              className="hidden xl:flex shrink-0 cursor-pointer self-stretch items-center border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]"
+            >
+              Σινεμά
+            </Link>
+            <Link
+              to="/subscriptions"
+              className="hidden xl:flex shrink-0 cursor-pointer self-stretch items-center border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]"
+            >
+              Συνδρομές
+            </Link>
             <button
               type="button"
-              className="flex shrink-0 cursor-pointer self-stretch items-center gap-0.5 border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]"
+              className="hidden 2xl:flex shrink-0 cursor-pointer self-stretch items-center gap-0.5 border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]"
             >
               Περισσότερα
               <ChevronDown className="size-4 opacity-70" aria-hidden />

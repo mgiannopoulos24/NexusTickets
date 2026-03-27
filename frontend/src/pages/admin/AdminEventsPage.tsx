@@ -55,7 +55,7 @@ export default function AdminEventsPage() {
 
   return (
     <AdminLayout>
-      <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+      <div className="bg-white p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-neutral-950 comfortaa-bold">Εκδηλώσεις</h1>
