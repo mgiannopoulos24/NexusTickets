@@ -65,7 +65,7 @@ func main() {
 	app.Use(middleware.RequestID())
 	app.Use(recover.New())
 	app.Use(middleware.RequestLogger())
-	app.Use(middleware.RateLimiter(redisClient.Raw, cfg.RateLimitMaxReqs, cfg.RateLimitWindow))
+	app.Use(middleware.RateLimiter(redisClient.Raw, "global", cfg.RateLimitMaxReqs, cfg.RateLimitWindow))
 	app.Static("/uploads/media", cfg.MediaStoragePath)
 
 	userRepo := postgres.NewUserRepositoryPostgres(pg.Gorm)

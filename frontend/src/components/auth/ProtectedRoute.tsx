@@ -1,9 +1,8 @@
-import NotAuthorized from './NotAuthorized';
 import { Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 
-import { useAuth } from '@/contexts/AuthContent';
+import { useAuth } from '@/hooks/useAuth';
 import type { UserRole } from '@/types/enums';
 
 type ProtectedRouteProps = {
@@ -31,12 +30,11 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
   }
 
   if (!user) {
-    // return <Navigate to="/login" state={{ from: location }} replace />;
-    return <NotAuthorized />;
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   if (!allowedRoles.includes(user.role)) {
-    return <NotAuthorized />;
+    return <Navigate to="/unauthorized" replace />;
   }
 
   return <>{children}</>;

@@ -1,42 +1,43 @@
 import { Route, Routes } from 'react-router-dom';
-import type { ReactNode } from 'react';
-import { useWebSocket } from '@/hooks/useWebSocket';
+
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import { AppShell } from '@/components/layout/AppShell';
 import { Toaster } from '@/components/ui/sonner';
-import { AppLayout } from '@/components/layout/AppLayout';
 import routes from '@/routes/routes';
 
 function App() {
-  useWebSocket();
-
-  const withLayout = (
-    layout: (typeof routes)[number]['layout'] | undefined,
-    element: ReactNode,
-  ) => {
-    switch (layout ?? 'app') {
-      case 'none':
-        return element;
-      case 'app':
-      default:
-        return <AppLayout>{element}</AppLayout>;
-    }
-  };
+  const appRoutes = routes.filter((r) => r.layout !== 'none');
+  const bareRoutes = routes.filter((r) => r.layout === 'none');
 
   return (
     <>
       <Toaster position="top-left" richColors closeButton />
       <Routes>
-        {routes.map((route, index) => (
+        <Route element={<AppShell />}>
+          {appRoutes.map((route, index) => (
+            <Route
+              key={`${route.path}-${index}`}
+              path={route.path}
+              element={
+                route.protected ? (
+                  <ProtectedRoute allowedRoles={route.roles!}>{route.element}</ProtectedRoute>
+                ) : (
+                  route.element
+                )
+              }
+            />
+          ))}
+        </Route>
+        {bareRoutes.map((route, index) => (
           <Route
-            key={index}
+            key={`bare-${route.path}-${index}`}
             path={route.path}
             element={
-              route.protected
-                ? withLayout(
-                    route.layout,
-                    <ProtectedRoute allowedRoles={route.roles!}>{route.element}</ProtectedRoute>,
-                  )
-                : withLayout(route.layout, route.element)
+              route.protected ? (
+                <ProtectedRoute allowedRoles={route.roles!}>{route.element}</ProtectedRoute>
+              ) : (
+                route.element
+              )
             }
           />
         ))}

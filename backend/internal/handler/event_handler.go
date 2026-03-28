@@ -52,6 +52,7 @@ func (h *EventHandler) Create(c *fiber.Ctx) error {
 		Description: req.Description,
 		Venue:       req.Venue,
 		FeaturedImageURL: req.FeaturedImageURL,
+		EventDetail: req.EventDetail,
 		Address:     req.Address,
 		City:        req.City,
 		Country:     req.Country,
@@ -220,6 +221,7 @@ func (h *EventHandler) Update(c *fiber.Ctx) error {
 		Description: req.Description,
 		Venue:       req.Venue,
 		FeaturedImageURL: req.FeaturedImageURL,
+		EventDetail: req.EventDetail,
 		Address:     req.Address,
 		City:        req.City,
 		Country:     req.Country,
@@ -581,6 +583,7 @@ func (h *EventHandler) AdminUpdateEvent(c *fiber.Ctx) error {
 		Description:      req.Description,
 		Venue:            req.Venue,
 		FeaturedImageURL: req.FeaturedImageURL,
+		EventDetail:      req.EventDetail,
 		Address:          req.Address,
 		City:             req.City,
 		Country:          req.Country,
@@ -602,6 +605,18 @@ func (h *EventHandler) AdminUpdateEvent(c *fiber.Ctx) error {
 			return fiber.NewError(fiber.StatusBadRequest, "invalid end_at (expected RFC3339)")
 		}
 		in.EndAt = &ts
+	}
+	if req.Status != nil {
+		raw := strings.TrimSpace(*req.Status)
+		if raw != "" {
+			st := domain.EventStatus(raw)
+			switch st {
+			case domain.EventStatusDraft, domain.EventStatusPublished, domain.EventStatusCancelled:
+				in.Status = &st
+			default:
+				return fiber.NewError(fiber.StatusBadRequest, "invalid status (use draft, published, or cancelled)")
+			}
+		}
 	}
 
 	event, cats, err := h.service.AdminUpdate(c.Context(), eventID, in)
@@ -635,6 +650,7 @@ func toEventResponse(event domain.Event, cats []domain.Category) dto.EventRespon
 		Description: event.Description,
 		Venue:       event.Venue,
 		FeaturedImageURL: event.FeaturedImageURL,
+		EventDetail: event.Detail,
 		Address:     event.Address,
 		City:        event.City,
 		Country:     event.Country,

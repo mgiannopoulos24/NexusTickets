@@ -1,103 +1,153 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
-import { SectionSwiper } from '@/components/ui/section-swiper';
-import { EventCard } from '@/components/events/EventCard';
-import type { Event as EventModel } from '@/types/models';
-import { useDragScroll } from '@/hooks/useDragScroll';
 import Awesomplete from 'awesomplete';
 
-const SECTIONS = [
-  { label: 'Δημοφιλή' },
-  { label: 'Προτεινόμενα' },
-  { label: 'Νέα' },
-  { label: 'Κατηγορίες' },
-  { label: 'Θέατρο' },
-  { label: 'Μουσική' },
-  { label: 'Σινεμά' },
-] as const;
-
-type HomeSectionKey = (typeof SECTIONS)[number]['label'];
-
-function sectionId(label: string): string {
-  return `home-section-${label
-    .toLocaleLowerCase('el-GR')
-    .replaceAll(' ', '-')
-    .replaceAll('ά', 'α')
-    .replaceAll('έ', 'ε')
-    .replaceAll('ή', 'η')
-    .replaceAll('ί', 'ι')
-    .replaceAll('ό', 'ο')
-    .replaceAll('ύ', 'υ')
-    .replaceAll('ώ', 'ω')}`;
-}
+import { CategoryFilterStrip } from '@/components/home/CategoryFilterStrip';
+import type { HomeSectionTab } from '@/components/home/CategoryFilterStrip';
+import { EventCard } from '@/components/events/EventCard';
+import { Input } from '@/components/ui/input';
+import { SectionSwiper } from '@/components/ui/section-swiper';
+import {
+  HOME_SECTION_LABELS,
+  HOME_SECTION_SUBTITLES,
+  HOME_SLIDER_ORDER,
+  homeViewAllHref,
+  homeViewAllLabel,
+  type HomeSliderKey,
+} from '@/constants/homeEventSections';
+import { categoryIdForSlug } from '@/lib/categorySlug';
+import { cn } from '@/lib/utils';
+import type { Event as EventModel } from '@/types/models';
 
 type ApiEnvelope<T> = {
   data: T | null;
   error?: { code: string; message: string } | null;
-  meta?: unknown;
+};
+
+type CategoryDto = { id: string; name: string };
+
+function sectionDomId(key: HomeSliderKey): string {
+  return `home-section-${key}`;
+}
+
+/** Pixels to leave below sticky navbar when scrolling to a section. */
+const SECTION_SCROLL_OFFSET_PX = 72;
+
+const EMPTY_SECTIONS: Record<HomeSliderKey, EventModel[]> = {
+  popular: [],
+  recommended: [],
+  new: [],
+  theater: [],
+  music: [],
+  cinema: [],
 };
 
 export default function Home() {
-  const [active, setActive] = useState<HomeSectionKey>('Δημοφιλή');
+  const [active, setActive] = useState<HomeSliderKey>('popular');
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
-  const tabsDrag = useDragScroll<HTMLDivElement>();
   const searchRef = useRef<HTMLInputElement | null>(null);
   const awesompleteRef = useRef<Awesomplete | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const [events, setEvents] = useState<EventModel[]>([]);
-  const [eventsLoading, setEventsLoading] = useState<boolean>(true);
+  const suggestTimerRef = useRef<number | null>(null);
+
+  const [eventsBySection, setEventsBySection] =
+    useState<Record<HomeSliderKey, EventModel[]>>(EMPTY_SECTIONS);
+  const [eventsLoading, setEventsLoading] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
 
-  const sections = useMemo(() => {
-    return SECTIONS.map((s) => ({
-      label: s.label,
-      id: sectionId(s.label),
-    }));
-  }, []);
+  const sectionTabs = useMemo<HomeSectionTab[]>(
+    () =>
+      HOME_SLIDER_ORDER.map((key) => ({
+        key,
+        id: sectionDomId(key),
+        label: HOME_SECTION_LABELS[key],
+      })),
+    [],
+  );
 
   useEffect(() => {
     const onScroll = () => {
-      // Find the closest section to top.
-      const top = 88; // navbar + breathing room
-      let best: { label: HomeSectionKey; dist: number } | null = null;
-      for (const s of sections) {
+      const anchor = SECTION_SCROLL_OFFSET_PX + 24;
+      let best: { key: HomeSliderKey; dist: number } | null = null;
+      for (const s of sectionTabs) {
         const el = sectionRefs.current[s.id];
         if (!el) continue;
         const r = el.getBoundingClientRect();
-        const dist = Math.abs(r.top - top);
+        const dist = Math.abs(r.top - anchor);
         if (!best || dist < best.dist) {
-          best = { label: s.label, dist };
+          best = { key: s.key, dist };
         }
       }
-      if (best && best.label !== active) setActive(best.label);
+      if (best && best.key !== active) setActive(best.key);
     };
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
-  }, [active, sections]);
+  }, [active, sectionTabs]);
 
   useEffect(() => {
     let cancelled = false;
     setEventsLoading(true);
     setEventsError(null);
 
-    void fetch('/api/v1/events?limit=50&offset=0')
-      .then(async (res) => {
-        const json = (await res.json()) as ApiEnvelope<EventModel[]>;
-        if (!res.ok || json.error) {
-          throw new Error(json.error?.message ?? 'Σφάλμα φόρτωσης εκδηλώσεων');
-        }
-        if (!cancelled) setEvents(json.data ?? []);
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) setEventsError(e instanceof Error ? e.message : 'Σφάλμα');
-      })
-      .finally(() => {
-        if (!cancelled) setEventsLoading(false);
-      });
+    const searchEvents = async (searchParams: string): Promise<EventModel[]> => {
+      const res = await fetch(`/api/v1/events/search?${searchParams}`);
+      const json = (await res.json()) as ApiEnvelope<EventModel[]>;
+      if (!res.ok || json.error) {
+        throw new Error(json.error?.message ?? 'Σφάλμα φόρτωσης εκδηλώσεων');
+      }
+      return json.data ?? [];
+    };
 
+    const load = async () => {
+      try {
+        const catRes = await fetch('/api/v1/categories');
+        const catJson = (await catRes.json()) as ApiEnvelope<CategoryDto[]>;
+        if (!catRes.ok || catJson.error) {
+          throw new Error(catJson.error?.message ?? 'Σφάλμα κατηγοριών');
+        }
+        const categories = catJson.data ?? [];
+
+        const baseList = 'limit=24&offset=0';
+        const [popular, recommended, rawNew] = await Promise.all([
+          searchEvents(baseList),
+          searchEvents(baseList),
+          searchEvents('limit=48&offset=0'),
+        ]);
+
+        const newest = [...rawNew]
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, 24);
+
+        const loadCat = async (slug: 'theater' | 'music' | 'cinema') => {
+          const id = categoryIdForSlug(slug, categories);
+          if (!id) return [];
+          return searchEvents(`${baseList}&category_ids=${encodeURIComponent(id)}`);
+        };
+
+        const [theater, music, cinema] = await Promise.all([
+          loadCat('theater'),
+          loadCat('music'),
+          loadCat('cinema'),
+        ]);
+
+        if (cancelled) return;
+        setEventsBySection({
+          popular,
+          recommended,
+          new: newest,
+          theater,
+          music,
+          cinema,
+        });
+      } catch (e: unknown) {
+        if (!cancelled) setEventsError(e instanceof Error ? e.message : 'Σφάλμα');
+      } finally {
+        if (!cancelled) setEventsLoading(false);
+      }
+    };
+
+    void load();
     return () => {
       cancelled = true;
     };
@@ -118,12 +168,9 @@ export default function Home() {
     awesompleteRef.current = a;
 
     const onSelect = (ev: Event) => {
-      // Keep selection behavior simple: Awesomplete will already replace the input value.
-      // We only prevent any accidental default behavior.
       void ev;
     };
 
-    // Awesomplete emits DOM CustomEvents on the input element.
     input.addEventListener('awesomplete-selectcomplete', onSelect as unknown as EventListener);
     return () => {
       input.removeEventListener('awesomplete-selectcomplete', onSelect as unknown as EventListener);
@@ -132,68 +179,70 @@ export default function Home() {
     };
   }, []);
 
-  const fetchSuggestions = useMemo(() => {
-    let timer: number | null = null;
-    return (raw: string) => {
-      const q = raw.trim();
-      if (timer) window.clearTimeout(timer);
-      timer = window.setTimeout(async () => {
-        const a = awesompleteRef.current;
-        if (!a) return;
-        abortRef.current?.abort();
-        if (q.length < 2) {
+  const fetchSuggestions = useCallback((raw: string) => {
+    const q = raw.trim();
+    if (suggestTimerRef.current !== null) {
+      window.clearTimeout(suggestTimerRef.current);
+      suggestTimerRef.current = null;
+    }
+    suggestTimerRef.current = window.setTimeout(async () => {
+      suggestTimerRef.current = null;
+      const a = awesompleteRef.current;
+      if (!a) return;
+      abortRef.current?.abort();
+      if (q.length < 2) {
+        a.list = [];
+        a.evaluate();
+        return;
+      }
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+      try {
+        const res = await fetch(
+          `/api/v1/events/search?limit=8&offset=0&q=${encodeURIComponent(q)}`,
+          {
+            signal: controller.signal,
+          },
+        );
+        const json = (await res.json()) as {
+          data: Array<Pick<EventModel, 'id' | 'title' | 'venue' | 'city'>> | null;
+          error?: { code: string; message: string } | null;
+        };
+        if (!res.ok || json.error) {
           a.list = [];
           a.evaluate();
           return;
         }
-
-        const controller = new AbortController();
-        abortRef.current = controller;
-        try {
-          const res = await fetch(
-            `/api/v1/events/search?limit=8&offset=0&q=${encodeURIComponent(q)}`,
-            {
-              signal: controller.signal,
-            },
-          );
-          const json = (await res.json()) as {
-            data: Array<Pick<EventModel, 'id' | 'title' | 'venue' | 'city'>> | null;
-            error?: { code: string; message: string } | null;
-          };
-          if (!res.ok || json.error) {
-            a.list = [];
-            a.evaluate();
-            return;
-          }
-          const items = Array.isArray(json.data)
-            ? json.data.map((ev) => ({
-                label: `${ev.title} — ${ev.venue}${ev.city ? `, ${ev.city}` : ''}`,
-                value: ev.title,
-              }))
-            : [];
-          a.list = items;
-          a.evaluate();
-        } catch (err: unknown) {
-          if (err instanceof DOMException && err.name === 'AbortError') return;
-          a.list = [];
-          a.evaluate();
-        }
-      }, 220);
-    };
+        const items = Array.isArray(json.data)
+          ? json.data.map((ev) => ({
+              label: `${ev.title} — ${ev.venue}${ev.city ? `, ${ev.city}` : ''}`,
+              value: ev.title,
+            }))
+          : [];
+        a.list = items;
+        a.evaluate();
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        a.list = [];
+        a.evaluate();
+      }
+    }, 220);
   }, []);
 
-  const scrollToSection = (label: HomeSectionKey) => {
-    const id = sectionId(label);
+  const scrollToSection = (key: HomeSliderKey) => {
+    const id = sectionDomId(key);
     const el = sectionRefs.current[id];
     if (!el) return;
-    setActive(label);
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setActive(key);
+    const top =
+      el.getBoundingClientRect().top + window.scrollY - SECTION_SCROLL_OFFSET_PX;
+    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
   };
 
   return (
     <>
       <section className="home-hero relative border-b border-neutral-100 md:h-[550px] md:overflow-hidden">
-        {/* Desktop: lime panel from right column start to viewport edge (escapes max-width gap) */}
         <div
           className="pointer-events-none absolute inset-y-0 right-0 hidden bg-[#d4f040] md:rounded-l-full md:block"
           style={{
@@ -226,7 +275,7 @@ export default function Home() {
                     ref={searchRef}
                     onChange={(e) => fetchSuggestions(e.target.value)}
                     className={cn(
-                      'h-14 rounded-full border-0 bg-white pl-14 pr-6 text-[16px] max-[600px]:text-[14px]',
+                      'h-14 w-full rounded-full border-0 bg-white pl-14 pr-6 text-[16px] max-[600px]:text-[14px]',
                       'comfortaa-regular text-neutral-900 ring-0 placeholder:text-neutral-500',
                       'max-[600px]:placeholder:text-[14px]',
                       'transition-shadow duration-300 ease-out motion-reduce:transition-none',
@@ -242,13 +291,12 @@ export default function Home() {
           </div>
 
           <div className="relative min-h-[280px] min-w-0 md:min-h-[550px]">
-            {/* Mobile: lime fill in stacked column; md+ uses section-level panel flush to viewport right */}
             <div
               className="absolute inset-0 rounded-t-[2.5rem] bg-[#d4f040] md:hidden"
               aria-hidden
             />
             <div className="relative z-10 flex h-full min-h-[280px] items-center justify-center p-6 md:min-h-[550px] md:p-8">
-              <div className="w-full h-full max-w-lg rounded-2xl border border-neutral-200/80 bg-white/95 p-6 text-neutral-900 shadow-sm backdrop-blur-sm md:p-8">
+              <div className="h-full w-full max-w-lg rounded-2xl border border-neutral-200/80 bg-white/95 p-6 text-neutral-900 shadow-sm backdrop-blur-sm md:p-8">
                 <p className="text-xs uppercase tracking-[0.2em] text-neutral-500 comfortaa-regular">
                   Προτεινόμενο
                 </p>
@@ -259,10 +307,10 @@ export default function Home() {
                   Ανακάλυψε παραστάσεις κοντά σου.
                 </p>
                 <Link
-                  to="/events"
+                  to="/events/category/theater"
                   className="mt-5 inline-flex w-fit rounded-full bg-[#6d28d9] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 comfortaa-regular"
                 >
-                  Δες εκδηλώσεις
+                  Δες εκδηλώσεις θεάτρου
                 </Link>
               </div>
             </div>
@@ -270,76 +318,55 @@ export default function Home() {
         </div>
       </section>
 
-      <nav aria-label="Ενότητες αρχικής" className="border-b border-neutral-200 bg-white">
-        <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
-          <div
-            ref={tabsDrag.ref}
-            className={cn(
-              'flex items-stretch gap-8 overflow-x-auto',
-              '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
-              'snap-x snap-mandatory',
-              'touch-pan-x overscroll-x-contain',
-            )}
-            {...tabsDrag.handlers}
-          >
-            {sections.map((s) => {
-              const isActive = s.label === active;
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => scrollToSection(s.label)}
-                  className={cn(
-                    'relative shrink-0 py-4 text-sm font-semibold transition-colors comfortaa-regular snap-start',
-                    isActive ? 'text-neutral-950' : 'text-neutral-600 hover:text-neutral-900',
-                  )}
-                >
-                  {s.label}
-                  <span
-                    className={cn(
-                      'absolute left-0 right-0 -bottom-px h-[3px] rounded-full transition-opacity',
-                      isActive ? 'bg-neutral-900 opacity-100' : 'bg-neutral-900 opacity-0',
-                    )}
-                    aria-hidden
-                  />
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </nav>
+      <CategoryFilterStrip
+        sectionTabs={sectionTabs}
+        activeSection={active}
+        onSectionTabClick={scrollToSection}
+      />
 
       <div className="mx-auto max-w-[1400px] px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
-        {sections.map((s, idx) => (
-          <div
-            key={s.id}
-            id={s.id}
-            ref={(el) => {
-              sectionRefs.current[s.id] = el;
-            }}
-            className={cn(idx > 0 && 'mt-12')}
-          >
-            <SectionSwiper title={s.label}>
-              {eventsLoading ? (
-                <div className="text-sm text-neutral-600 comfortaa-regular">Φόρτωση…</div>
-              ) : eventsError ? (
-                <div className="text-sm text-[var(--nexus-red)] comfortaa-regular">
-                  {eventsError}
-                </div>
-              ) : events.length === 0 ? (
-                <div className="text-sm text-neutral-600 comfortaa-regular">
-                  Δεν υπάρχουν εκδηλώσεις ακόμα.
-                </div>
-              ) : (
-                events.map((ev) => (
-                  <div key={`${s.id}-${ev.id}`} className="snap-start">
-                    <EventCard event={ev} />
+        {HOME_SLIDER_ORDER.map((key, idx) => {
+          const sId = sectionDomId(key);
+          const events = eventsBySection[key];
+          return (
+            <div
+              key={sId}
+              id={sId}
+              ref={(el) => {
+                sectionRefs.current[sId] = el;
+              }}
+              className={cn('scroll-mt-[72px]', idx > 0 && 'mt-12')}
+              tabIndex={-1}
+            >
+              <SectionSwiper
+                title={HOME_SECTION_LABELS[key]}
+                subtitle={HOME_SECTION_SUBTITLES[key]}
+                viewAllHref={homeViewAllHref(key)}
+                viewAllLabel={homeViewAllLabel(key)}
+              >
+                {eventsLoading ? (
+                  <div className="text-sm text-neutral-600 comfortaa-regular">Φόρτωση…</div>
+                ) : eventsError ? (
+                  <div className="text-sm text-[var(--nexus-red)] comfortaa-regular">
+                    {eventsError}
                   </div>
-                ))
-              )}
-            </SectionSwiper>
-          </div>
-        ))}
+                ) : events.length === 0 ? (
+                  <div className="text-sm text-neutral-600 comfortaa-regular">
+                    {key === 'theater' || key === 'music' || key === 'cinema'
+                      ? 'Δεν υπάρχουν εκδηλώσεις σε αυτή την κατηγορία.'
+                      : 'Δεν υπάρχουν εκδηλώσεις ακόμα.'}
+                  </div>
+                ) : (
+                  events.map((ev) => (
+                    <div key={`${sId}-${ev.id}`} className="snap-start">
+                      <EventCard event={ev} />
+                    </div>
+                  ))
+                )}
+              </SectionSwiper>
+            </div>
+          );
+        })}
       </div>
     </>
   );

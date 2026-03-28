@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { useAuth } from '@/contexts/AuthContent';
+import { useAuth } from '@/hooks/useAuth';
 import type { Event } from '@/types/models';
 import { cn } from '@/lib/utils';
 

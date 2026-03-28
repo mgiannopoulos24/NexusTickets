@@ -48,6 +48,7 @@ type CreateEventInput struct {
 	Capacity    int
 	Categories  []string
 	TicketTypes []TicketTypeInput
+	EventDetail *domain.EventDetail
 }
 
 type UpdateEventInput struct {
@@ -65,6 +66,7 @@ type UpdateEventInput struct {
 	Capacity    *int
 	Categories  *[]string
 	TicketTypes *[]TicketTypeInput
+	EventDetail *domain.EventDetail
 }
 
 type SearchEventsInput struct {
@@ -95,6 +97,8 @@ type AdminUpdateEventInput struct {
 	Capacity         *int
 	Categories       *[]string
 	FeaturedImageURL *string
+	EventDetail      *domain.EventDetail
+	Status           *domain.EventStatus
 }
 
 func NewEventService(
@@ -125,12 +129,18 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, in Cre
 		return domain.Event{}, nil, err
 	}
 
+	detail := domain.EventDetail{}
+	if in.EventDetail != nil {
+		detail = *in.EventDetail
+	}
+
 	created, err := s.events.Create(ctx, domain.Event{
 		OrganizerID: organizerID,
 		Title:       strings.TrimSpace(in.Title),
 		Description: strings.TrimSpace(in.Description),
 		Venue:       strings.TrimSpace(in.Venue),
 		FeaturedImageURL: in.FeaturedImageURL,
+		Detail:      detail,
 		Address:     in.Address,
 		City:        strings.TrimSpace(in.City),
 		Country:     in.Country,
@@ -257,6 +267,9 @@ func (s *EventService) Update(ctx context.Context, organizerID, eventID uuid.UUI
 	if in.Longitude != nil {
 		event.Longitude = in.Longitude
 	}
+	if in.EventDetail != nil {
+		event.Detail = *in.EventDetail
+	}
 	if in.StartAt != nil {
 		event.StartAt = in.StartAt.UTC()
 	}
@@ -358,6 +371,17 @@ func (s *EventService) AdminUpdate(ctx context.Context, eventID uuid.UUID, in Ad
 	}
 	if in.Longitude != nil {
 		event.Longitude = in.Longitude
+	}
+	if in.EventDetail != nil {
+		event.Detail = *in.EventDetail
+	}
+	if in.Status != nil {
+		switch *in.Status {
+		case domain.EventStatusDraft, domain.EventStatusPublished, domain.EventStatusCancelled:
+			event.Status = *in.Status
+		default:
+			return domain.Event{}, nil, domain.ErrInvalidEventState
+		}
 	}
 	if in.StartAt != nil {
 		event.StartAt = in.StartAt.UTC()

@@ -1,5 +1,7 @@
 package dto
 
+import "nexustickets/internal/domain"
+
 type TicketTypeRequest struct {
 	Name     string  `json:"name"`
 	Price    float64 `json:"price"`
@@ -21,6 +23,7 @@ type CreateEventRequest struct {
 	Capacity    int                 `json:"capacity"`
 	Categories  []string            `json:"categories"`
 	TicketTypes []TicketTypeRequest `json:"ticket_types"`
+	EventDetail *domain.EventDetail `json:"event_detail"`
 }
 
 type UpdateEventRequest struct {
@@ -38,6 +41,9 @@ type UpdateEventRequest struct {
 	Capacity    *int                 `json:"capacity"`
 	Categories  *[]string            `json:"categories"`
 	TicketTypes *[]TicketTypeRequest `json:"ticket_types"`
+	EventDetail *domain.EventDetail `json:"event_detail"`
+	// Status: optional lifecycle change (admin PATCH). Allowed: draft, published, cancelled.
+	Status *string `json:"status"`
 }
 
 type TicketTypeResponse struct {
@@ -66,6 +72,7 @@ type EventResponse struct {
 	Status      string               `json:"status"`
 	Categories  []string             `json:"categories"`
 	TicketTypes []TicketTypeResponse `json:"ticket_types"`
+	EventDetail domain.EventDetail   `json:"event_detail"`
 	CreatedAt   string               `json:"created_at"`
 	UpdatedAt   string               `json:"updated_at"`
 }

@@ -85,6 +85,7 @@ func main() {
 			CreatedAt:       now,
 			UpdatedAt:       now,
 			FeaturedImageURL: nil,
+			EventDetail:      []byte("{}"),
 		}
 		events = append(events, e)
 	}

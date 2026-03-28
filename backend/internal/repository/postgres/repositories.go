@@ -431,20 +431,22 @@ func (r *eventRepositoryPostgres) Update(ctx context.Context, event domain.Event
 		Model(&EventModel{}).
 		Where("id = ?", event.ID).
 		Updates(map[string]interface{}{
-			"organizer_id": m.OrganizerID,
-			"title":        m.Title,
-			"description":  m.Description,
-			"venue":        m.Venue,
-			"address":      m.Address,
-			"city":         m.City,
-			"country":      m.Country,
-			"latitude":     m.Latitude,
-			"longitude":    m.Longitude,
-			"start_time":   m.StartAt,
-			"end_time":     m.EndAt,
-			"capacity":     m.Capacity,
-			"status":       m.Status,
-			"updated_at":   m.UpdatedAt,
+			"organizer_id":        m.OrganizerID,
+			"title":               m.Title,
+			"description":       m.Description,
+			"venue":               m.Venue,
+			"featured_image_url":  m.FeaturedImageURL,
+			"event_detail":        m.EventDetail,
+			"address":             m.Address,
+			"city":                m.City,
+			"country":             m.Country,
+			"latitude":            m.Latitude,
+			"longitude":           m.Longitude,
+			"start_time":          m.StartAt,
+			"end_time":            m.EndAt,
+			"capacity":            m.Capacity,
+			"status":              m.Status,
+			"updated_at":          m.UpdatedAt,
 		}).Error
 	if err != nil {
 		return domain.Event{}, fmt.Errorf("update event: %w", err)

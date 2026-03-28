@@ -32,6 +32,7 @@
     "react-leaflet": "^5.0.0",
     "react-redux": "^9.2.0",
     "react-router-dom": "^7.13.1",
+    "react-time-picker": "^8.0.2",
     "recharts": "2.15.4",
     "shadcn": "^4.0.8",
     "sonner": "^2.0.7",

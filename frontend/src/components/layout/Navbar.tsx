@@ -24,17 +24,14 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
+import { useAppSelector } from '@/app/hooks';
+import { Badge } from '@/components/ui/badge';
+import { EVENTS_NAV_DROPDOWN_ITEMS } from '@/constants/navEventsDropdown';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/contexts/AuthContent';
+import { useAuth } from '@/hooks/useAuth';
 
-const NAV_LINKS = [
-  { label: 'Εκδηλώσεις', href: '/events' },
-  { label: 'Θέατρο', href: '/events?category=theater' },
-  { label: 'Μουσική', href: '/events?category=music' },
-  { label: 'Αθλητικά', href: '/events?category=sports' },
-  { label: 'Σινεμά', href: '/events?category=cinema' },
-  { label: 'Συνδρομές', href: '/subscriptions' },
-] as const;
+const navPrimaryClass =
+  'flex shrink-0 cursor-pointer items-center self-stretch border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]';
 
 function userInitial(firstName: string, username: string): string {
   const c = firstName.trim().charAt(0) || username.trim().charAt(0);
@@ -43,6 +40,7 @@ function userInitial(firstName: string, username: string): string {
 
 export function Navbar() {
   const { user, accessToken, isHydrating, logout } = useAuth();
+  const unreadCount = useAppSelector((s) => s.messaging.unreadCount);
 
   const handleLogout = async () => {
     await logout();
@@ -66,49 +64,38 @@ export function Navbar() {
 
         <div className="flex min-w-0 flex-1 items-stretch justify-end gap-2 sm:gap-3 lg:gap-4">
           <nav className="comfortaa-regular hidden items-stretch text-base text-neutral-800 lg:flex">
-            <Link
-              to="/events"
-              className="flex shrink-0 cursor-pointer self-stretch items-center border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]"
-            >
-              Εκδηλώσεις
-            </Link>
-            <Link
-              to="/events?category=theater"
-              className="hidden xl:flex shrink-0 cursor-pointer self-stretch items-center border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]"
-            >
-              Θέατρο
-            </Link>
-            <Link
-              to="/events?category=music"
-              className="hidden xl:flex shrink-0 cursor-pointer self-stretch items-center border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]"
-            >
-              Μουσική
-            </Link>
-            <Link
-              to="/events?category=sports"
-              className="hidden xl:flex shrink-0 cursor-pointer self-stretch items-center border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]"
-            >
-              Αθλητικά
-            </Link>
-            <Link
-              to="/events?category=cinema"
-              className="hidden xl:flex shrink-0 cursor-pointer self-stretch items-center border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]"
-            >
-              Σινεμά
-            </Link>
-            <Link
-              to="/subscriptions"
-              className="hidden xl:flex shrink-0 cursor-pointer self-stretch items-center border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]"
-            >
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(navPrimaryClass, 'items-center gap-0.5')}
+                  aria-haspopup="menu"
+                >
+                  Εκδηλώσεις
+                  <ChevronDown className="size-4 opacity-70" aria-hidden />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" sideOffset={8} className="min-w-[260px] p-1">
+                {EVENTS_NAV_DROPDOWN_ITEMS.map((item) => (
+                  <DropdownMenuItem key={item.label} asChild>
+                    <Link
+                      to={item.to}
+                      className="cursor-pointer rounded-md px-3 py-2.5 text-sm text-neutral-900 comfortaa-regular"
+                    >
+                      {item.label}
+                    </Link>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {user?.role === 'organizer' ? (
+              <Link to="/organizer/events" className={cn(navPrimaryClass, 'items-center')}>
+                Οι εκδηλώσεις μου
+              </Link>
+            ) : null}
+            <Link to="/subscriptions" className={cn(navPrimaryClass, 'items-center')}>
               Συνδρομές
             </Link>
-            <button
-              type="button"
-              className="hidden 2xl:flex shrink-0 cursor-pointer self-stretch items-center gap-0.5 border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]"
-            >
-              Περισσότερα
-              <ChevronDown className="size-4 opacity-70" aria-hidden />
-            </button>
           </nav>
 
           <div className="flex shrink-0 items-stretch gap-1 sm:gap-2">
@@ -117,12 +104,19 @@ export function Navbar() {
               variant="ghost"
               size="icon"
               className="relative cursor-pointer self-center text-neutral-600"
-              aria-label="Ειδοποιήσεις"
+              aria-label={
+                unreadCount > 0 ? `Ειδοποιήσεις, ${unreadCount} μη αναγνωσμένα` : 'Ειδοποιήσεις'
+              }
             >
               <Bell className="size-5" />
-              <span className="absolute right-1 top-1 flex size-4 items-center justify-center rounded-full bg-[#6d28d9] text-[10px] font-semibold text-white">
-                1
-              </span>
+              {unreadCount > 0 ? (
+                <Badge
+                  variant="destructive"
+                  className="absolute -right-0.5 -top-0.5 min-w-5 justify-center border-0 bg-[#6d28d9] px-1 text-[10px] text-white hover:bg-[#6d28d9]"
+                >
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </Badge>
+              ) : null}
             </Button>
 
             {user ? (
@@ -162,6 +156,16 @@ export function Navbar() {
                         Ρυθμίσεις χρήστη
                       </Link>
                     </DropdownMenuItem>
+                    {user.role === 'organizer' && (
+                      <>
+                        <DropdownMenuSeparator className={selectFullMenuSeparatorClass} />
+                        <DropdownMenuItem asChild className={selectFullItemClassName()}>
+                          <Link to="/organizer" className="flex w-full items-center">
+                            Περιοχή διοργανωτή
+                          </Link>
+                        </DropdownMenuItem>
+                      </>
+                    )}
                     {user.role === 'admin' && (
                       <>
                         <DropdownMenuSeparator className={selectFullMenuSeparatorClass} />
@@ -241,10 +245,13 @@ export function Navbar() {
 
                 <div className="p-4">
                   <nav className="flex flex-col gap-1">
-                    {NAV_LINKS.map((item) => (
-                      <SheetClose asChild key={item.href}>
+                    <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 comfortaa-regular">
+                      Εκδηλώσεις
+                    </p>
+                    {EVENTS_NAV_DROPDOWN_ITEMS.map((item) => (
+                      <SheetClose asChild key={item.label}>
                         <Link
-                          to={item.href}
+                          to={item.to}
                           className={cn(
                             'rounded-xl px-3 py-2 text-base text-neutral-800 transition-colors comfortaa-regular',
                             'hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)]',
@@ -254,6 +261,17 @@ export function Navbar() {
                         </Link>
                       </SheetClose>
                     ))}
+                    <SheetClose asChild>
+                      <Link
+                        to="/subscriptions"
+                        className={cn(
+                          'mt-2 rounded-xl px-3 py-2 text-base text-neutral-800 transition-colors comfortaa-regular',
+                          'hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)]',
+                        )}
+                      >
+                        Συνδρομές
+                      </Link>
+                    </SheetClose>
                   </nav>
 
                   <div className="mt-4 border-t border-neutral-200 pt-4">
@@ -275,6 +293,19 @@ export function Navbar() {
                               Ο λογαριασμός μου
                             </Link>
                           </SheetClose>
+                          {user.role === 'organizer' && (
+                            <SheetClose asChild>
+                              <Link
+                                to="/organizer"
+                                className={cn(
+                                  'rounded-xl px-3 py-2 text-base text-neutral-800 transition-colors comfortaa-regular',
+                                  'hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)]',
+                                )}
+                              >
+                                Περιοχή διοργανωτή
+                              </Link>
+                            </SheetClose>
+                          )}
                           {user.role === 'admin' && (
                             <SheetClose asChild>
                               <Link

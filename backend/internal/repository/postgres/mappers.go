@@ -1,6 +1,8 @@
 package postgres
 
 import (
+	"encoding/json"
+
 	"nexustickets/internal/domain"
 )
 
@@ -48,6 +50,25 @@ func userDomainToModel(u domain.User) UserModel {
 	}
 }
 
+func eventDetailFromModel(b []byte) domain.EventDetail {
+	if len(b) == 0 {
+		return domain.EventDetail{}
+	}
+	var d domain.EventDetail
+	if err := json.Unmarshal(b, &d); err != nil {
+		return domain.EventDetail{}
+	}
+	return d
+}
+
+func eventDetailToModel(d domain.EventDetail) []byte {
+	b, err := json.Marshal(d)
+	if err != nil || len(b) == 0 {
+		return []byte("{}")
+	}
+	return b
+}
+
 func eventModelToDomain(m EventModel) domain.Event {
 	return domain.Event{
 		ID:           m.ID,
@@ -57,6 +78,7 @@ func eventModelToDomain(m EventModel) domain.Event {
 		Description:  m.Description,
 		Venue:        m.Venue,
 		FeaturedImageURL: m.FeaturedImageURL,
+		Detail:       eventDetailFromModel(m.EventDetail),
 		Address:      m.Address,
 		City:         m.City,
 		Country:      m.Country,
@@ -81,6 +103,7 @@ func eventDomainToModel(e domain.Event) EventModel {
 		Description:  e.Description,
 		Venue:        e.Venue,
 		FeaturedImageURL: e.FeaturedImageURL,
+		EventDetail:  eventDetailToModel(e.Detail),
 		Address:      e.Address,
 		City:         e.City,
 		Country:      e.Country,

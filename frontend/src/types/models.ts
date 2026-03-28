@@ -1,4 +1,5 @@
 import type { AccountStatus, BookingStatus, EventStatus, UserRole } from '@/types/enums';
+import type { EventDetail } from '@/types/eventDetail';
 
 export interface User {
   id: string;
@@ -45,6 +46,7 @@ export interface Event {
   status: EventStatus;
   categories: string[];
   ticket_types: TicketType[];
+  event_detail?: EventDetail;
   created_at: string;
   updated_at: string;
 }

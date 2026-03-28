@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useAppDispatch } from '@/app/hooks';
-import { useAuth } from '@/contexts/AuthContent';
+import { useAuth } from '@/hooks/useAuth';
 import { wsClient } from '@/utils/wsClient';
 import { pushIncomingMessage, setUnreadCount } from '@/app/messagingSlice';
 import {

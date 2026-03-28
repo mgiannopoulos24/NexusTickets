@@ -62,6 +62,7 @@ func TestEventMapping_RoundTrip(t *testing.T) {
 		Title:        "Event title",
 		Description:  "Event description",
 		Venue:        "Venue name",
+		Detail:       domain.EventDetail{},
 		Address:      strPtr("Address line"),
 		City:         "Thessaloniki",
 		Country:      strPtr("Greece"),

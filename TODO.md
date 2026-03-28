@@ -214,29 +214,29 @@
 - [X] `[!]` `src/main.tsx` — `<Provider store>`, `<BrowserRouter>`
 
 ### 5.3 Layout & Shared Components
-- [ ] `[!]` `Navbar.tsx` — logo, nav links, user menu, unread badge (from Redux)
-- [ ] `[!]` `AppShell.tsx` — mounts `useWebSocket()`, renders Navbar + `<Outlet />`
-- [ ] `LoadingSpinner.tsx`
-- [ ] `ErrorMessage.tsx`
-- [ ] `EmptyState.tsx`
-- [ ] `SkeletonList.tsx`
-- [ ] `[!]` `Pagination.tsx` — shadcn-based page controls
-- [ ] Add shadcn components: `bunx shadcn add button input card dialog table badge tabs sheet select sonner`
+- [X] `[!]` `Navbar.tsx` — logo, nav links, user menu, unread badge (from Redux)
+- [X] `[!]` `AppShell.tsx` — mounts `useWebSocket()`, renders Navbar + `<Outlet />`
+- [X] `LoadingSpinner.tsx`
+- [X] `ErrorMessage.tsx`
+- [X] `EmptyState.tsx`
+- [X] `SkeletonList.tsx`
+- [X] `[!]` `Pagination.tsx` — shadcn-based page controls
+- [X] Add shadcn components: `bunx shadcn add button input card dialog table badge tabs sheet select sonner` (present under `src/components/ui/`; `badge` added)
 
 ---
 
 ## 6. Frontend — Features
 
 ### 6.1 Auth
-- [ ] `[!]` `authSlice.ts` — user, accessToken, isAuthenticated, localStorage rehydration
-- [ ] `[!]` `authApi.ts` — login, register, refresh, logout RTK Query endpoints
-- [ ] `[!]` `useAuth.ts` — convenience wrapper over auth store
+- [X] `[!]` `authSlice.ts` — user, accessToken, isAuthenticated, localStorage rehydration
+- [X] `[!]` `authApi.ts` — login, register, refresh, logout RTK Query endpoints
+- [X] `[!]` `useAuth.ts` — convenience wrapper over auth store
 - [X] `[!]` `LoginPage.tsx` — React Hook Form + Zod
-- [ ] `[!]` `RegisterPage.tsx` — all fields: username, password, confirm_password, first_name, last_name, email, phone, address, city, country, vat_number
-- [ ] `[!]` `PendingApprovalPage.tsx`
-- [ ] `UnauthorizedPage.tsx`
-- [ ] Token refresh on 401 in `baseApi` reauth wrapper
-- [ ] `wsClient.disconnect()` called on logout
+- [X] `[!]` `RegisterPage.tsx` — all fields: username, password, confirm_password, first_name, last_name, email, phone, address, city, country, vat_number
+- [X] `[!]` `PendingApprovalPage.tsx`
+- [X] `UnauthorizedPage.tsx`
+- [X] Token refresh on 401 in `baseApi` reauth wrapper
+- [X] `wsClient.disconnect()` called on logout
 
 ### 6.2 Event Browse
 - [ ] `[!]` `eventsApi.ts` — getEvents, getEvent, getRecommended
@@ -245,11 +245,11 @@
 - [ ] `[!]` `EventCard.tsx` — title, date, venue, city, categories, price, availability
 - [ ] `[!]` Filter sidebar — category, date range, price range, city, free text
 - [ ] `[!]` URL search params sync with active filters
-- [ ] `[!]` `EventDetailPage.tsx` — full info, photo gallery, map, ticket selector, booking button
-- [ ] `[!]` `MapEmbed.tsx` — react-leaflet, lazy loaded, event marker
+- [X] `[!]` `EventDetailPage.tsx` — full info, photo gallery, map, ticket selector, booking button
+- [X] `[!]` `EventMapEmbed.tsx` — react-leaflet, lazy-loaded via route chunk, event marker
 - [ ] Recommended events section (authenticated users only)
-- [ ] Record event view on detail page load (authenticated)
-- [ ] Guest: show "Σύνδεση για κράτηση" instead of booking button
+- [X] Record event view on detail page load (authenticated)
+- [X] Guest: show "Σύνδεση για κράτηση" instead of booking button
 
 ### 6.3 Bookings
 - [ ] `[!]` `bookingsApi.ts` — createBooking, getMyBookings

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import { EventDetailTemplateForm } from '@/components/admin/EventDetailTemplateForm';
+import { EventMapEmbed } from '@/components/events/EventMapEmbed';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { useAuth } from '@/contexts/AuthContent';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -16,7 +18,23 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+import type { EventDetail } from '@/types/eventDetail';
+import { emptyEventDetail, normalizeEventDetail } from '@/types/eventDetail';
+import type { Event } from '@/types/models';
+import type { EventStatus } from '@/types/enums';
+
+/** Admin may set draft / published / cancelled (matches API). */
+const ADMIN_EVENT_STATUS_VALUES = ['draft', 'published', 'cancelled'] as const;
+type AdminEventStatus = (typeof ADMIN_EVENT_STATUS_VALUES)[number];
+
+function normalizeAdminEventStatus(raw: string): AdminEventStatus {
+  if (raw === 'draft' || raw === 'published' || raw === 'cancelled') return raw;
+  return 'draft';
+}
 import { PencilIcon } from 'lucide-react';
+import TimePicker from 'react-time-picker';
+import 'react-time-picker/dist/TimePicker.css';
+import 'react-clock/dist/Clock.css';
 
 type ApiEnvelope<T> = {
   data: T | null;
@@ -34,11 +52,17 @@ type FormState = {
   title: string;
   description: string;
   venue: string;
+  address: string;
   city: string;
   country: string;
+  /** Decimal degrees as typed in the form (WGS84). Empty = omit on save (keep DB value). */
+  latitude: string;
+  longitude: string;
   start_at: string;
   end_at: string;
   featured_image_url: string;
+  /** draft | published | cancelled */
+  status: AdminEventStatus;
   categories: Set<string>;
 };
 
@@ -60,7 +84,15 @@ function parseTimeHHMM(raw: string): { hour: number; minute: number } | null {
 function toUtcRfc3339(date: Date, timeHHMM: string): string | null {
   const parsed = parseTimeHHMM(timeHHMM);
   if (!parsed) return null;
-  const utc = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), parsed.hour, parsed.minute, 0, 0);
+  const utc = Date.UTC(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    parsed.hour,
+    parsed.minute,
+    0,
+    0,
+  );
   return new Date(utc).toISOString();
 }
 
@@ -77,7 +109,7 @@ function formatDateForUi(date: Date | undefined): string {
   return date.toLocaleDateString('el-GR', { year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 
-function TimeClock({
+function AdminTimePicker({
   value,
   onChange,
   disabled,
@@ -86,119 +118,53 @@ function TimeClock({
   onChange: (next: string) => void;
   disabled?: boolean;
 }) {
-  const parsed = parseTimeHHMM(value) ?? { hour: 12, minute: 0 };
-  const hour = parsed.hour;
-  const minute = parsed.minute;
+  const [clockOpen, setClockOpen] = useState(true);
 
-  const hourAngles = Array.from({ length: 12 }, (_, i) => i);
-  const minuteAngles = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+  useEffect(() => {
+    if (disabled) setClockOpen(false);
+  }, [disabled]);
 
-  const getHourAngle = (h: number) => ((h % 12) / 12) * 360 * (Math.PI / 180) - Math.PI / 2;
-  const getMinuteAngle = (m: number) => (m / 60) * 360 * (Math.PI / 180) - Math.PI / 2;
-
-  const hourRad = getHourAngle(hour);
-  const minuteRad = getMinuteAngle(minute);
-  const centerX = 100, centerY = 100;
-  const hourHandLength = 55;
-  const minuteHandLength = 75;
+  const parsed = parseTimeHHMM(value);
+  const pickerValue = parsed ? `${pad2(parsed.hour)}:${pad2(parsed.minute)}:00` : null;
 
   return (
-    <div className={cn('flex flex-col items-center gap-4', disabled && 'opacity-60')}>
-      <div className="relative w-52 h-52">
-        <svg viewBox="0 0 200 200" className="w-full h-full">
-          <circle cx={centerX} cy={centerY} r="95" fill="white" stroke="#e5e7eb" strokeWidth="2" />
-          
-          {[0, 3, 6, 9].map((h) => {
-            const angle = (h / 12) * 2 * Math.PI - Math.PI / 2;
-            const x = centerX + Math.cos(angle) * 80;
-            const y = centerY + Math.sin(angle) * 80;
-            return (
-              <text
-                key={h}
-                x={x}
-                y={y + 5}
-                textAnchor="middle"
-                fontSize="14"
-                fontWeight="600"
-                fill="#374151"
-                className="comfortaa-regular"
-              >
-                {h === 0 ? '12' : h}
-              </text>
-            );
-          })}
-          
-          {hourAngles.map((h) => {
-            const angle = (h / 12) * 2 * Math.PI - Math.PI / 2;
-            const x = centerX + Math.cos(angle) * 85;
-            const y = centerY + Math.sin(angle) * 85;
-            return (
-              <circle key={`tick-${h}`} cx={x} cy={y} r="2" fill="#d1d5db" />
-            );
-          })}
-          
-          <line
-            x1={centerX}
-            y1={centerY}
-            x2={centerX + Math.cos(hourRad) * hourHandLength}
-            y2={centerY + Math.sin(hourRad) * hourHandLength}
-            stroke="#6d28d9"
-            strokeWidth="4"
-            strokeLinecap="round"
-          />
-          <line
-            x1={centerX}
-            y1={centerY}
-            x2={centerX + Math.cos(minuteRad) * minuteHandLength}
-            y2={centerY + Math.sin(minuteRad) * minuteHandLength}
-            stroke="#6d28d9"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <circle cx={centerX} cy={centerY} r="5" fill="#6d28d9" />
-          
-          <text x={centerX} y={centerY + 40} textAnchor="middle" fontSize="12" fill="#6b7280" className="comfortaa-regular">
-            {pad2(hour)}:{pad2(minute)}
-          </text>
-        </svg>
-      </div>
-
-      <div className="flex gap-2">
-        <div className="flex flex-col items-center gap-1">
-          <span className="text-[10px] text-neutral-500">Ώρα</span>
-          <input
-            type="range"
-            min="0"
-            max="23"
-            value={hour}
-            onChange={(e) => onChange(`${pad2(Number(e.target.value))}:${pad2(minute)}`)}
-            disabled={disabled}
-            className="w-24 accent-[#6d28d9]"
-          />
-          <div className="flex justify-between w-24 text-[9px] text-neutral-400">
-            <span>00</span><span>12</span><span>23</span>
-          </div>
-        </div>
-      </div>
-      
-      <div className="flex gap-2">
-        <div className="flex flex-col items-center gap-1">
-          <span className="text-[10px] text-neutral-500">Λεπτά</span>
-          <input
-            type="range"
-            min="0"
-            max="55"
-            step="5"
-            value={minute}
-            onChange={(e) => onChange(`${pad2(hour)}:${pad2(Number(e.target.value))}`)}
-            disabled={disabled}
-            className="w-24 accent-[#6d28d9]"
-          />
-          <div className="flex justify-between w-24 text-[9px] text-neutral-400">
-            <span>00</span><span>30</span><span>55</span>
-          </div>
-        </div>
-      </div>
+    <div
+      className={cn(
+        'w-full',
+        /* Stack inputs + analog clock; lift clock above dialog stacking (react-time-picker + react-clock) */
+        '[&_.react-time-picker]:!flex [&_.react-time-picker]:w-full [&_.react-time-picker]:max-w-none [&_.react-time-picker]:flex-col [&_.react-time-picker]:items-stretch',
+        '[&_.react-time-picker__wrapper]:w-full [&_.react-time-picker__inputGroup]:w-full',
+        '[&_.react-time-picker__clock]:!z-[60] [&_.react-time-picker__clock]:mx-auto',
+      )}
+    >
+      <TimePicker
+        className="w-full max-w-none"
+        isOpen={clockOpen}
+        onClockOpen={() => setClockOpen(true)}
+        onClockClose={() => setClockOpen(false)}
+        value={pickerValue}
+        onChange={(v) => {
+          if (v == null) return;
+          const m = /^(\d{1,2}):(\d{2})/.exec(String(v).trim());
+          if (!m) return;
+          const hour = Number(m[1]);
+          const minute = Number(m[2]);
+          if (!Number.isFinite(hour) || !Number.isFinite(minute)) return;
+          if (hour < 0 || hour > 23) return;
+          if (minute < 0 || minute > 59) return;
+          onChange(`${pad2(hour)}:${pad2(minute)}`);
+        }}
+        format="HH:mm"
+        locale="el-GR"
+        maxDetail="minute"
+        clockAriaLabel="Αναλογικό ρολόι"
+        clearAriaLabel="Καθαρισμός ώρας"
+        disabled={disabled}
+        clockProps={{
+          size: 200,
+          renderSecondHand: false,
+        }}
+      />
     </div>
   );
 }
@@ -264,7 +230,9 @@ function DateTimeDialogField({
       </div>
 
       <Dialog open={open} onOpenChange={handleOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent
+          className={cn('sm:max-w-md', step === 'time' && 'overflow-visible sm:max-w-lg')}
+        >
           <DialogHeader>
             <DialogTitle className="comfortaa-bold">{label}</DialogTitle>
             <DialogDescription className="comfortaa-regular">
@@ -274,7 +242,12 @@ function DateTimeDialogField({
 
           {step === 'date' ? (
             <div className="flex flex-col gap-4">
-              <Calendar mode="single" selected={tempDate} onSelect={handleDateSelect} />
+              <Calendar
+                mode="single"
+                selected={tempDate}
+                onSelect={handleDateSelect}
+                variant="calendar-alt"
+              />
               <div className="flex justify-end">
                 <Button
                   type="button"
@@ -289,11 +262,7 @@ function DateTimeDialogField({
             </div>
           ) : (
             <div className="flex flex-col gap-4">
-              <TimeClock
-                value={tempTime}
-                onChange={setTempTime}
-                disabled={!tempDate}
-              />
+              <AdminTimePicker value={tempTime} onChange={setTempTime} disabled={!tempDate} />
               <div className="flex justify-between">
                 <Button
                   type="button"
@@ -337,6 +306,7 @@ export default function AdminEventEditPage() {
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState<string | null>(null);
+  const [detail, setDetail] = useState<EventDetail>(emptyEventDetail());
 
   const eventId = id ?? '';
 
@@ -383,11 +353,17 @@ export default function AdminEventEditPage() {
           title: ev.title ?? '',
           description: ev.description ?? '',
           venue: ev.venue ?? '',
+          address: ev.address ?? '',
           city: ev.city ?? '',
           country: ev.country ?? '',
+          latitude:
+            ev.latitude != null && Number.isFinite(ev.latitude) ? String(ev.latitude) : '',
+          longitude:
+            ev.longitude != null && Number.isFinite(ev.longitude) ? String(ev.longitude) : '',
           start_at: ev.start_at ?? '',
           end_at: ev.end_at ?? '',
           featured_image_url: ev.featured_image_url ?? '',
+          status: normalizeAdminEventStatus(ev.status as EventStatus),
           categories: new Set(ev.categories ?? []),
         });
 
@@ -403,6 +379,7 @@ export default function AdminEventEditPage() {
         }
 
         setFeaturedPreview(ev.featured_image_url ?? null);
+        setDetail(normalizeEventDetail(ev.event_detail));
       }
     };
 
@@ -420,6 +397,18 @@ export default function AdminEventEditPage() {
   }, [eventId, accessToken]);
 
   const categoryNames = useMemo(() => categories.map((c) => c.name), [categories]);
+
+  const mapPreviewCoords = useMemo(() => {
+    if (!form) return null;
+    const latRaw = form.latitude.trim().replace(',', '.');
+    const lonRaw = form.longitude.trim().replace(',', '.');
+    if (latRaw === '' || lonRaw === '') return null;
+    const lat = Number.parseFloat(latRaw);
+    const lon = Number.parseFloat(lonRaw);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+    return { lat, lon };
+  }, [form]);
 
   const toggleCategory = (name: string) => {
     setForm((prev) => {
@@ -479,13 +468,17 @@ export default function AdminEventEditPage() {
     try {
       const fd = new FormData();
       fd.append('file', file);
-      const res = await fetch(`/api/v1/events/admin/${encodeURIComponent(eventId)}/featured-image`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${accessToken}` },
-        body: fd,
-      });
+      const res = await fetch(
+        `/api/v1/events/admin/${encodeURIComponent(eventId)}/featured-image`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}` },
+          body: fd,
+        },
+      );
       const json = (await res.json()) as ApiEnvelope<Event>;
-      if (!res.ok || json.error) throw new Error(json.error?.message ?? 'Αποτυχία μεταφόρτωσης εικόνας');
+      if (!res.ok || json.error)
+        throw new Error(json.error?.message ?? 'Αποτυχία μεταφόρτωσης εικόνας');
 
       const next = json.data?.featured_image_url ?? '';
       setForm((prev) => (prev ? { ...prev, featured_image_url: next } : prev));
@@ -494,6 +487,11 @@ export default function AdminEventEditPage() {
       setSaveOk('Αποθηκεύτηκε');
     } catch (e: unknown) {
       setSaveError(e instanceof Error ? e.message : 'Σφάλμα');
+      if (featuredObjectUrlRef.current) {
+        URL.revokeObjectURL(featuredObjectUrlRef.current);
+        featuredObjectUrlRef.current = null;
+      }
+      setFeaturedPreview(form?.featured_image_url?.trim() || null);
     } finally {
       setUploadingFeatured(false);
     }
@@ -509,24 +507,48 @@ export default function AdminEventEditPage() {
     setSaveError(null);
     setSaveOk(null);
     try {
+      const latRaw = form.latitude.trim().replace(',', '.');
+      const lonRaw = form.longitude.trim().replace(',', '.');
+      const latNum = latRaw === '' ? Number.NaN : Number.parseFloat(latRaw);
+      const lonNum = lonRaw === '' ? Number.NaN : Number.parseFloat(lonRaw);
+
+      const payload: Record<string, unknown> = {
+        title: form.title,
+        description: form.description,
+        venue: form.venue,
+        city: form.city,
+        country: form.country || null,
+        address: form.address.trim() || null,
+        start_at: form.start_at,
+        end_at: form.end_at,
+        featured_image_url: form.featured_image_url || null,
+        categories: Array.from(form.categories),
+        event_detail: detail,
+        status: form.status,
+      };
+      if (latRaw !== '' && Number.isFinite(latNum)) payload.latitude = latNum;
+      if (lonRaw !== '' && Number.isFinite(lonNum)) payload.longitude = lonNum;
+
       const res = await fetch(`/api/v1/events/admin/${encodeURIComponent(eventId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({
-          title: form.title,
-          description: form.description,
-          venue: form.venue,
-          city: form.city,
-          country: form.country || null,
-          start_at: form.start_at,
-          end_at: form.end_at,
-          featured_image_url: form.featured_image_url || null,
-          categories: Array.from(form.categories),
-        }),
+        body: JSON.stringify(payload),
       });
       const json = (await res.json()) as ApiEnvelope<Event>;
       if (!res.ok || json.error) throw new Error(json.error?.message ?? 'Αποτυχία αποθήκευσης');
       setEvent(json.data ?? null);
+      if (json.data?.event_detail) setDetail(normalizeEventDetail(json.data.event_detail));
+      const saved = json.data;
+      if (saved) {
+        setForm((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: normalizeAdminEventStatus(saved.status as EventStatus),
+              }
+            : prev,
+        );
+      }
       setSaveOk('Αποθηκεύτηκε');
     } catch (e: unknown) {
       setSaveError(e instanceof Error ? e.message : 'Σφάλμα');
@@ -600,6 +622,21 @@ export default function AdminEventEditPage() {
                   className="min-h-32"
                 />
               </div>
+              {mapPreviewCoords && (
+                <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+                  <p className="border-b border-neutral-100 bg-neutral-50 px-4 py-2 text-sm font-medium text-neutral-800 comfortaa-bold">
+                    Χάρτης τοποθεσίας
+                  </p>
+                  <div className="p-2">
+                    <EventMapEmbed
+                      latitude={mapPreviewCoords.lat}
+                      longitude={mapPreviewCoords.lon}
+                      className="min-h-[280px] rounded-lg"
+                    />
+                  </div>
+                </div>
+              )}
+              <EventDetailTemplateForm value={detail} onChange={setDetail} disabled={saving} />
             </div>
 
             <aside className="space-y-5">
@@ -608,6 +645,32 @@ export default function AdminEventEditPage() {
                   Λεπτομέρειες
                 </p>
                 <div className="mt-4 space-y-3">
+                  <div>
+                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                      Κατάσταση
+                    </label>
+                    <select
+                      value={form.status}
+                      disabled={saving}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          status: e.target.value as AdminEventStatus,
+                        })
+                      }
+                      className={cn(
+                        'flex h-9 w-full rounded-md border border-neutral-200 bg-white px-3 text-sm comfortaa-regular',
+                        saving && 'opacity-50',
+                      )}
+                    >
+                      <option value="draft">Πρόχειρο (draft)</option>
+                      <option value="published">Δημοσιευμένο</option>
+                      <option value="cancelled">Ακυρωμένο</option>
+                    </select>
+                    <p className="mt-1 text-[10px] text-neutral-500 comfortaa-regular">
+                      Πρόχειρο: δεν φαίνεται στη δημόσια λίστα. Δημοσιευμένο: ορατό σε όλους.
+                    </p>
+                  </div>
                   <div>
                     <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
                       Χώρος
@@ -634,6 +697,40 @@ export default function AdminEventEditPage() {
                       value={form.country}
                       onChange={(e) => setForm({ ...form, country: e.target.value })}
                     />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                      Διεύθυνση (οδός)
+                    </label>
+                    <Input
+                      value={form.address}
+                      onChange={(e) => setForm({ ...form, address: e.target.value })}
+                      placeholder="π.χ. Ιπποκράτους 7"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                        Γεωγρ. πλάτος (latitude)
+                      </label>
+                      <Input
+                        value={form.latitude}
+                        onChange={(e) => setForm({ ...form, latitude: e.target.value })}
+                        placeholder="π.χ. 37.9838"
+                        inputMode="decimal"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                        Γεωγρ. μήκος (longitude)
+                      </label>
+                      <Input
+                        value={form.longitude}
+                        onChange={(e) => setForm({ ...form, longitude: e.target.value })}
+                        placeholder="π.χ. 23.7275"
+                        inputMode="decimal"
+                      />
+                    </div>
                   </div>
                   <div>
                     <DateTimeDialogField
@@ -688,7 +785,11 @@ export default function AdminEventEditPage() {
                             )}
                           />
                           <p className="mt-2 text-[11px] text-neutral-500 comfortaa-regular">
-                            {uploadingFeatured ? 'Μεταφόρτωση…' : form.featured_image_url ? form.featured_image_url : ''}
+                            {uploadingFeatured
+                              ? 'Μεταφόρτωση…'
+                              : form.featured_image_url
+                                ? form.featured_image_url
+                                : ''}
                           </p>
                         </div>
                       </div>

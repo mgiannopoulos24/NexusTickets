@@ -27,10 +27,11 @@ end
 return 1
 `)
 
-func RateLimiter(redisClient *redisv9.Client, maxRequests int, window time.Duration) fiber.Handler {
+// keySegment separates limit buckets (e.g. "global" vs "auth"); same IP uses different keys per segment.
+func RateLimiter(redisClient *redisv9.Client, keySegment string, maxRequests int, window time.Duration) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		ip := c.IP()
-		key := fmt.Sprintf("rate_limit:%s", ip)
+		key := fmt.Sprintf("rate_limit:%s:%s", keySegment, ip)
 		nowMs := time.Now().UnixMilli()
 
 		allowed, err := slidingWindowScript.Run(
