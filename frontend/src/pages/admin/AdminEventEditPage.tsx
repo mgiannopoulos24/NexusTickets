@@ -356,8 +356,7 @@ export default function AdminEventEditPage() {
           address: ev.address ?? '',
           city: ev.city ?? '',
           country: ev.country ?? '',
-          latitude:
-            ev.latitude != null && Number.isFinite(ev.latitude) ? String(ev.latitude) : '',
+          latitude: ev.latitude != null && Number.isFinite(ev.latitude) ? String(ev.latitude) : '',
           longitude:
             ev.longitude != null && Number.isFinite(ev.longitude) ? String(ev.longitude) : '',
           start_at: ev.start_at ?? '',

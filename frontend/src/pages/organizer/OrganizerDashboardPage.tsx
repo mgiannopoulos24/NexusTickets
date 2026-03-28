@@ -9,8 +9,8 @@ export default function OrganizerDashboardPage() {
       <div className="bg-white p-6">
         <h1 className="text-2xl font-bold text-neutral-950 comfortaa-bold">Πίνακας διοργανωτή</h1>
         <p className="mt-2 max-w-2xl text-neutral-600 comfortaa-regular">
-          Δημιουργήστε και διαχειριστείτε τις εκδηλώσεις σας. Οι εκδηλώσεις σε κατάσταση πρόχειρο δεν
-          εμφανίζονται στη δημόσια αναζήτηση μέχρι να τις δημοσιεύσετε.
+          Δημιουργήστε και διαχειριστείτε τις εκδηλώσεις σας. Οι εκδηλώσεις σε κατάσταση πρόχειρο
+          δεν εμφανίζονται στη δημόσια αναζήτηση μέχρι να τις δημοσιεύσετε.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Button

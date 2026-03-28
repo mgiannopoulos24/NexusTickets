@@ -235,8 +235,7 @@ export default function Home() {
     const el = sectionRefs.current[id];
     if (!el) return;
     setActive(key);
-    const top =
-      el.getBoundingClientRect().top + window.scrollY - SECTION_SCROLL_OFFSET_PX;
+    const top = el.getBoundingClientRect().top + window.scrollY - SECTION_SCROLL_OFFSET_PX;
     window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
   };
 

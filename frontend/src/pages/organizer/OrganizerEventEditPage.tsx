@@ -349,8 +349,7 @@ export default function OrganizerEventEditPage() {
           address: ev.address ?? '',
           city: ev.city ?? '',
           country: ev.country ?? '',
-          latitude:
-            ev.latitude != null && Number.isFinite(ev.latitude) ? String(ev.latitude) : '',
+          latitude: ev.latitude != null && Number.isFinite(ev.latitude) ? String(ev.latitude) : '',
           longitude:
             ev.longitude != null && Number.isFinite(ev.longitude) ? String(ev.longitude) : '',
           start_at: ev.start_at ?? '',
@@ -689,7 +688,8 @@ export default function OrganizerEventEditPage() {
                       {statusLabel(event?.status)}
                     </p>
                     <p className="mt-1 text-[10px] text-neutral-500 comfortaa-regular">
-                      Πρόχειρο: δεν φαίνεται στη δημόσια λίστα. Μετά τη δημοσίευση είναι ορατή σε όλους.
+                      Πρόχειρο: δεν φαίνεται στη δημόσια λίστα. Μετά τη δημοσίευση είναι ορατή σε
+                      όλους.
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {event?.status === 'draft' ? (

@@ -1,9 +1,6 @@
 import { Link } from 'react-router-dom';
 
-import {
-  CATEGORY_BROWSE_CHIPS,
-  type HomeSliderKey,
-} from '@/constants/homeEventSections';
+import { CATEGORY_BROWSE_CHIPS, type HomeSliderKey } from '@/constants/homeEventSections';
 import { useDragScroll } from '@/hooks/useDragScroll';
 import { cn } from '@/lib/utils';
 
@@ -40,7 +37,10 @@ export function CategoryFilterStrip({
             </p>
           </div>
 
-          <nav aria-label="Ενότητες αρχικής" className="-mx-4 border-t border-neutral-200/80 bg-white px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+          <nav
+            aria-label="Ενότητες αρχικής"
+            className="-mx-4 border-t border-neutral-200/80 bg-white px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
+          >
             <div
               ref={tabsDrag.ref}
               className={cn(

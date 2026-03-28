@@ -83,12 +83,16 @@ function formatDateForUi(date: Date | undefined): string {
 
 function defaultTomorrowUtcMidnight(): Date {
   const d = new Date();
-  const next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1, 0, 0, 0, 0));
+  const next = new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1, 0, 0, 0, 0),
+  );
   return next;
 }
 
 function defaultEndUtcMidnight(start: Date): Date {
-  return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() + 1, 0, 0, 0, 0));
+  return new Date(
+    Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate() + 1, 0, 0, 0, 0),
+  );
 }
 
 function NewEventTimePicker({
@@ -318,7 +322,8 @@ export default function OrganizerEventNewPage() {
     void fetch('/api/v1/categories')
       .then(async (res) => {
         const json = (await res.json()) as ApiEnvelope<CategoryDto[]>;
-        if (!res.ok || json.error) throw new Error(json.error?.message ?? 'Σφάλμα φόρτωσης κατηγοριών');
+        if (!res.ok || json.error)
+          throw new Error(json.error?.message ?? 'Σφάλμα φόρτωσης κατηγοριών');
         if (!cancelled) setCategories(json.data ?? []);
       })
       .catch((e: unknown) => {
@@ -393,13 +398,16 @@ export default function OrganizerEventNewPage() {
   };
 
   const removeTicketRow = (clientId: string) => {
-    setTicketRows((rows) => (rows.length <= 1 ? rows : rows.filter((r) => r.clientId !== clientId)));
+    setTicketRows((rows) =>
+      rows.length <= 1 ? rows : rows.filter((r) => r.clientId !== clientId),
+    );
   };
 
-  const updateTicketRow = (clientId: string, patch: Partial<Pick<TicketDraft, 'name' | 'price' | 'quantity'>>) => {
-    setTicketRows((rows) =>
-      rows.map((r) => (r.clientId === clientId ? { ...r, ...patch } : r)),
-    );
+  const updateTicketRow = (
+    clientId: string,
+    patch: Partial<Pick<TicketDraft, 'name' | 'price' | 'quantity'>>,
+  ) => {
+    setTicketRows((rows) => rows.map((r) => (r.clientId === clientId ? { ...r, ...patch } : r)));
   };
 
   const onSubmit = async () => {
@@ -436,7 +444,13 @@ export default function OrganizerEventNewPage() {
     }));
 
     for (const t of parsedTickets) {
-      if (t.name === '' || !Number.isFinite(t.price) || t.price < 0 || !Number.isFinite(t.quantity) || t.quantity < 0) {
+      if (
+        t.name === '' ||
+        !Number.isFinite(t.price) ||
+        t.price < 0 ||
+        !Number.isFinite(t.quantity) ||
+        t.quantity < 0
+      ) {
         setError('Συμπληρώστε έγκυρα στοιχεία για όλους τους τύπους εισιτηρίων.');
         return;
       }
@@ -444,7 +458,9 @@ export default function OrganizerEventNewPage() {
 
     const sumQty = parsedTickets.reduce((acc, t) => acc + t.quantity, 0);
     if (sumQty > cap) {
-      setError('Το άθροισμα των θέσεων ανά τύπο δεν μπορεί να υπερβαίνει τη συνολική χωρητικότητα.');
+      setError(
+        'Το άθροισμα των θέσεων ανά τύπο δεν μπορεί να υπερβαίνει τη συνολική χωρητικότητα.',
+      );
       return;
     }
 
@@ -523,7 +539,9 @@ export default function OrganizerEventNewPage() {
               </Link>{' '}
               / Νέα εκδήλωση
             </p>
-            <h1 className="mt-1 text-2xl font-bold text-neutral-950 comfortaa-bold">Νέα εκδήλωση</h1>
+            <h1 className="mt-1 text-2xl font-bold text-neutral-950 comfortaa-bold">
+              Νέα εκδήλωση
+            </h1>
           </div>
           <Button
             type="button"
@@ -536,7 +554,9 @@ export default function OrganizerEventNewPage() {
         </div>
 
         {error && (
-          <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--nexus-red)]">{error}</p>
+          <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--nexus-red)]">
+            {error}
+          </p>
         )}
 
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -574,7 +594,9 @@ export default function OrganizerEventNewPage() {
             <EventDetailTemplateForm value={detail} onChange={setDetail} disabled={submitting} />
 
             <div className="rounded-2xl border border-neutral-200 p-4">
-              <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">Τύποι εισιτηρίων</p>
+              <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
+                Τύποι εισιτηρίων
+              </p>
               <p className="mt-1 text-xs text-neutral-500 comfortaa-regular">
                 Το άθροισμα των θέσεων ανά τύπο δεν μπορεί να υπερβαίνει τη συνολική χωρητικότητα.
               </p>
@@ -633,7 +655,9 @@ export default function OrganizerEventNewPage() {
               <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">Λεπτομέρειες</p>
               <div className="mt-4 space-y-3">
                 <div>
-                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">Χωρητικότητα</label>
+                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                    Χωρητικότητα
+                  </label>
                   <Input
                     inputMode="numeric"
                     value={capacity}
@@ -641,15 +665,21 @@ export default function OrganizerEventNewPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">Χώρος</label>
+                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                    Χώρος
+                  </label>
                   <Input value={venue} onChange={(e) => setVenue(e.target.value)} />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">Πόλη</label>
+                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                    Πόλη
+                  </label>
                   <Input value={city} onChange={(e) => setCity(e.target.value)} />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">Χώρα</label>
+                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                    Χώρα
+                  </label>
                   <Input value={country} onChange={(e) => setCountry(e.target.value)} />
                 </div>
                 <div>
@@ -760,10 +790,7 @@ export default function OrganizerEventNewPage() {
                         key={name}
                         className="flex items-center gap-2 text-sm text-neutral-700 comfortaa-regular"
                       >
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={() => toggleCategory(name)}
-                        />
+                        <Checkbox checked={checked} onCheckedChange={() => toggleCategory(name)} />
                         {name}
                       </label>
                     );
