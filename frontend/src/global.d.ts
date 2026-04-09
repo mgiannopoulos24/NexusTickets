@@ -9,6 +9,11 @@ interface ImportMeta {
 }
 
 declare module '*.yaml' {
-  const content: Record<string, string>;
+  const content: Record<string, any>;
+  export default content;
+}
+
+declare module '*.yaml?raw' {
+  const content: string;
   export default content;
 }

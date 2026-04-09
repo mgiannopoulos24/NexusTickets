@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Building2, Calendar, Clock, ExternalLink, MapPin, Sofa, Ticket, Car } from 'lucide-react';
 
 import { EventMapEmbed } from '@/components/events/EventMapEmbed';
+import { BookingForm } from '@/components/bookings/BookingForm';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
@@ -498,9 +499,9 @@ export default function EventDetailPage() {
             </ul>
           )}
           {canBook && !soldOut && event.ticket_types.length > 0 && (
-            <p className="mt-4 text-sm text-neutral-600 comfortaa-regular">
-              Η ολοκλήρωση της κράτησης θα προστεθεί στο επόμενο βήμα της εφαρμογής.
-            </p>
+            <div className="mt-6">
+              <BookingForm event={event} />
+            </div>
           )}
         </section>
 

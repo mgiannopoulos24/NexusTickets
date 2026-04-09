@@ -4,6 +4,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import mkcert from 'vite-plugin-mkcert';
+import yaml from 'vite-plugin-yaml';
 
 // Backend dev server (override with env e.g. `VITE_API_PROXY_TARGET=http://127.0.0.1:8080 bun run dev`).
 const API_TARGET = process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:8080';
@@ -12,7 +13,7 @@ const HMR_CLIENT_PORT = Number(process.env.VITE_HMR_CLIENT_PORT || 5173);
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), mkcert()],
+  plugins: [react(), tailwindcss(), mkcert(), yaml()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

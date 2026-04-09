@@ -239,15 +239,15 @@
 - [X] `wsClient.disconnect()` called on logout
 
 ### 6.2 Event Browse
-- [ ] `[!]` `eventsApi.ts` — getEvents, getEvent, getRecommended
-- [ ] `[!]` `eventsSlice.ts` — filters, pagination UI state
-- [ ] `[!]` `EventsPage.tsx` — paginated grid + filter sidebar
-- [ ] `[!]` `EventCard.tsx` — title, date, venue, city, categories, price, availability
-- [ ] `[!]` Filter sidebar — category, date range, price range, city, free text
-- [ ] `[!]` URL search params sync with active filters
+- [X] `[!]` `eventsApi.ts` — getEvents, getEvent, getRecommended
+- [X] `[!]` `eventsSlice.ts` — filters, pagination UI state
+- [X] `[!]` `EventsPage.tsx` — paginated grid + filter sidebar
+- [X] `[!]` `EventCard.tsx` — title, date, venue, city, categories, price, availability
+- [X] `[!]` Filter sidebar — category, date range, price range, city, free text
+- [X] `[!]` URL search params sync with active filters
 - [X] `[!]` `EventDetailPage.tsx` — full info, photo gallery, map, ticket selector, booking button
 - [X] `[!]` `EventMapEmbed.tsx` — react-leaflet, lazy-loaded via route chunk, event marker
-- [ ] Recommended events section (authenticated users only)
+- [X] Recommended events section (authenticated users only)
 - [X] Record event view on detail page load (authenticated)
 - [X] Guest: show "Σύνδεση για κράτηση" instead of booking button
 

@@ -96,15 +96,24 @@ function Calendar({
           props.showWeekNumber
             ? '[&:nth-child(2)[data-selected=true]_button]:rounded-l-(--cell-radius)'
             : '[&:first-child[data-selected=true]_button]:rounded-l-(--cell-radius)',
+          variant === 'calendar-alt'
+            ? '[&[data-selected=true]]:border-2 [&[data-selected=true]]:border-green-600 [&[data-selected=true]]:rounded-md'
+            : '',
           defaultClassNames.day,
         ),
         range_start: cn(
-          'relative isolate z-0 rounded-l-(--cell-radius) bg-muted after:absolute after:inset-y-0 after:right-0 after:w-4 after:bg-muted',
+          'relative isolate z-0 rounded-l-(--cell-radius) bg-green-100 text-green-900 after:absolute after:inset-y-0 after:right-0 after:w-4 after:bg-green-100',
+          variant === 'calendar-alt' ? 'border-2 border-green-600 rounded-l-md' : '',
           defaultClassNames.range_start,
         ),
-        range_middle: cn('rounded-none', defaultClassNames.range_middle),
+        range_middle: cn(
+          'rounded-none bg-gray-200 text-gray-700',
+          variant === 'calendar-alt' ? 'bg-gray-100' : '',
+          defaultClassNames.range_middle,
+        ),
         range_end: cn(
-          'relative isolate z-0 rounded-r-(--cell-radius) bg-muted after:absolute after:inset-y-0 after:left-0 after:w-4 after:bg-muted',
+          'relative isolate z-0 rounded-r-(--cell-radius) bg-red-100 text-red-900 after:absolute after:inset-y-0 after:left-0 after:w-4 after:bg-red-100',
+          variant === 'calendar-alt' ? 'border-2 border-red-600 rounded-r-md' : '',
           defaultClassNames.range_end,
         ),
         today: cn(

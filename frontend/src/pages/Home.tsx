@@ -5,7 +5,7 @@ import Awesomplete from 'awesomplete';
 
 import { CategoryFilterStrip } from '@/components/home/CategoryFilterStrip';
 import type { HomeSectionTab } from '@/components/home/CategoryFilterStrip';
-import { EventCard } from '@/components/events/EventCard';
+import EventCard from '@/components/events/EventCard';
 import { Input } from '@/components/ui/input';
 import { SectionSwiper } from '@/components/ui/section-swiper';
 import {

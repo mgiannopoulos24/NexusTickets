@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { ButtonAlt } from '@/components/ui/button-alt';
 import { SelectAltPanelContainer, SelectAltScrollRegion } from '@/components/ui/select-alt';
 import globeIcon from '@/assets/icons/globe.svg';
+import { useLang } from '@/contexts/LangContext';
 
 const LANGUAGE_OPTIONS = [
   { value: 'bg', label: 'Български' },
@@ -18,11 +19,9 @@ const LANGUAGE_OPTIONS = [
   { value: 'el', label: 'Ελληνικά' },
 ] as const;
 
-type Locale = (typeof LANGUAGE_OPTIONS)[number]['value'];
-
 export function NavbarLanguageGlobe() {
+  const { locale, setLocale } = useLang();
   const [panelOpen, setPanelOpen] = useState(false);
-  const [locale, setLocale] = useState<Locale>('el');
   const [listOpen, setListOpen] = useState(false);
   const baseId = useId();
   const listboxId = `${baseId}-listbox`;
