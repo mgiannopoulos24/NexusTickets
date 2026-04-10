@@ -22,6 +22,8 @@ const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'));
 const PendingApprovalPage = lazy(() => import('@/components/auth/PendingApprovalPage'));
 const UnauthorizedPage = lazy(() => import('@/components/auth/UnauthorizedPage'));
+const AccountPage = lazy(() => import('@/pages/auth/AccountPage'));
+const SettingsPage = lazy(() => import('@/pages/auth/SettingsPage'));
 const AdminDashboard = lazy(() => import('@/pages/admin/AdminDashboard'));
 const AdminEventsPage = lazy(() => import('@/pages/admin/AdminEventsPage'));
 const AdminEventEditPage = lazy(() => import('@/pages/admin/AdminEventEditPage'));
@@ -29,6 +31,8 @@ const OrganizerDashboardPage = lazy(() => import('@/pages/organizer/OrganizerDas
 const OrganizerEventsPage = lazy(() => import('@/pages/organizer/OrganizerEventsPage'));
 const OrganizerEventNewPage = lazy(() => import('@/pages/organizer/OrganizerEventNewPage'));
 const OrganizerEventEditPage = lazy(() => import('@/pages/organizer/OrganizerEventEditPage'));
+const MyBookingsPage = lazy(() => import('@/pages/bookings/MyBookingsPage'));
+const EventBookingsPage = lazy(() => import('@/pages/organizer/EventBookingsPage'));
 
 const routes: RouteConfig[] = [
   {
@@ -119,6 +123,34 @@ const routes: RouteConfig[] = [
     layout: 'app',
     protected: true,
     roles: ['organizer'],
+  },
+  {
+    path: '/bookings/me',
+    element: <MyBookingsPage />,
+    layout: 'app',
+    protected: true,
+    roles: ['attendee', 'organizer', 'admin'],
+  },
+  {
+    path: '/organizer/events/:id/bookings',
+    element: <EventBookingsPage />,
+    layout: 'app',
+    protected: true,
+    roles: ['organizer'],
+  },
+  {
+    path: '/account',
+    element: <AccountPage />,
+    layout: 'app',
+    protected: true,
+    roles: ['attendee', 'organizer', 'admin'],
+  },
+  {
+    path: '/settings',
+    element: <SettingsPage />,
+    layout: 'app',
+    protected: true,
+    roles: ['attendee', 'organizer', 'admin'],
   },
 ];
 

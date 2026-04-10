@@ -46,6 +46,7 @@ export interface Event {
   status: EventStatus;
   categories: string[];
   ticket_types: TicketType[];
+  total_bookings?: number;
   event_detail?: EventDetail;
   created_at: string;
   updated_at: string;
@@ -54,11 +55,15 @@ export interface Event {
 export interface Booking {
   id: string;
   user_id: string;
+  attendee_id?: string;
   event_id: string;
+  event?: Event;
   ticket_type_id: string;
   quantity: number;
+  number_of_tickets?: number;
   total_cost: number;
   status: BookingStatus;
   created_at: string;
   updated_at: string;
+  attendee?: { id: string; username: string; first_name: string; last_name: string };
 }

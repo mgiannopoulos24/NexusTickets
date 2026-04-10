@@ -6,17 +6,10 @@ import { SelectAltPanelContainer, SelectAltScrollRegion } from '@/components/ui/
 import globeIcon from '@/assets/icons/globe.svg';
 import { useLang } from '@/contexts/LangContext';
 
+/** Locales with `src/locales/*.yaml` bundles (parsed at build time). */
 const LANGUAGE_OPTIONS = [
-  { value: 'bg', label: 'Български' },
-  { value: 'hr', label: 'Hrvatski' },
-  { value: 'cs', label: 'Čeština' },
-  { value: 'da', label: 'Dansk' },
-  { value: 'nl', label: 'Nederlands' },
-  { value: 'en', label: 'English' },
-  { value: 'fi', label: 'Suomi' },
-  { value: 'fr', label: 'Français' },
-  { value: 'de', label: 'Deutsch' },
-  { value: 'el', label: 'Ελληνικά' },
+  { value: 'en' as const, label: 'English' },
+  { value: 'el' as const, label: 'Ελληνικά' },
 ] as const;
 
 export function NavbarLanguageGlobe() {

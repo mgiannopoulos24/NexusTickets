@@ -20,7 +20,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 
@@ -61,24 +60,25 @@ export function BookingForm({ event }: BookingFormProps) {
   const selectedTicket = event.ticket_types.find((t) => t.id === selectedTicketId);
   const totalCost = selectedTicket ? selectedTicket.price * quantity : 0;
 
-  const onSubmit = (data: BookingFormValues) => {
+  const onSubmit = (_data: BookingFormValues) => {
     setIsConfirmOpen(true);
   };
 
   const handleConfirm = async () => {
-    const formData = handleSubmit(async (values) => {
-      try {
-        await createBooking({
-          event_id: event.id,
-          ticket_type_id: values.ticket_type_id,
-          quantity: values.quantity,
-        }).unwrap();
-        toast.success('Η κράτηση ολοκληρώθηκε με επιτυχία!');
-        setIsConfirmOpen(false);
-      } catch (err: any) {
-        toast.error(err?.data?.error ?? 'Παρουσιάστηκε σφάλμα κατά την κράτηση');
-      }
-    })();
+    const selectedTicketId = watch('ticket_type_id');
+    const qty = watch('quantity');
+    try {
+      await createBooking({
+        event_id: event.id,
+        ticket_type_id: selectedTicketId,
+        quantity: qty,
+      }).unwrap();
+      toast.success('Η κράτηση ολοκληρώθηκε με επιτυχία!');
+      setIsConfirmOpen(false);
+    } catch (err: unknown) {
+      const e = err as { data?: { error?: string } };
+      toast.error(e?.data?.error ?? 'Παρουσιάστηκε σφάλμα κατά την κράτηση');
+    }
   };
 
   return (

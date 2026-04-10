@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_WS_URL: string;
+  readonly VITE_GIPHY_API_KEY: string;
 }
 
 interface ImportMeta {
@@ -9,11 +10,7 @@ interface ImportMeta {
 }
 
 declare module '*.yaml' {
-  const content: Record<string, any>;
-  export default content;
-}
-
-declare module '*.yaml?raw' {
-  const content: string;
+  /** Parsed YAML as JSON-compatible data (nested maps, strings, etc.). */
+  const content: unknown;
   export default content;
 }

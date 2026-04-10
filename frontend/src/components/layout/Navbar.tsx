@@ -142,8 +142,8 @@ export function Navbar() {
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild className={selectFullItemClassName()}>
-                      <Link to="/orders" className="flex w-full items-center">
-                        Παραγγελίες
+                      <Link to="/bookings/me" className="flex w-full items-center">
+                        Οι κρατήσεις μου
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild className={selectFullItemClassName()}>

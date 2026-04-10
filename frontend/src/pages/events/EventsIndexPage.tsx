@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { useGetEventsQuery, useGetRecommendedQuery } from '@/app/eventsApi';
-import { setFilter, setPage, clearFilters } from '@/app/eventsSlice';
+import { setFilter, setPage } from '@/app/eventsSlice';
 import EventCard from '@/components/events/EventCard';
 import {
   Pagination,
@@ -14,7 +14,7 @@ import {
   PaginationEllipsis,
 } from '@/components/ui/pagination';
 import { Badge } from '@/components/ui/badge';
-import { Search, X, Sparkles, Filter } from 'lucide-react';
+import { Sparkles, Filter } from 'lucide-react';
 import { useLang } from '@/contexts/LangContext';
 import { SkeletonList } from '@/components/shared/SkeletonList';
 import { EmptyState } from '@/components/shared/EmptyState';

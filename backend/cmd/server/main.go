@@ -76,7 +76,10 @@ func main() {
 	eventPhotoRepo := postgres.NewEventPhotoRepositoryPostgres(pg.Gorm)
 	eventViewRepo := postgres.NewUserEventViewRepositoryPostgres(pg.Gorm)
 	ticketTypeRepo := postgres.NewTicketTypeRepositoryPostgres(pg.Gorm)
+	chatRoomRepo := postgres.NewChatRoomRepository(pg.Gorm)
 	categoryHandler := handler.NewCategoryHandler(categoryRepo)
+	chatService := service.NewChatService(chatRoomRepo)
+	chatHandler := handler.NewChatHandler(chatService)
 	authService := service.NewAuthService(userRepo, redisClient.Raw, cfg.JWTSecret)
 	authHandler := handler.NewAuthHandler(authService)
 	userService := service.NewUserService(userRepo)
@@ -99,6 +102,8 @@ func main() {
 	handler.RegisterBookingRoutes(v1, bookingHandler, cfg.JWTSecret)
 	handler.RegisterMessageRoutes(v1, messageHandler, cfg.JWTSecret)
 	handler.RegisterAdminExportRoutes(v1, adminExportHandler, cfg.JWTSecret)
+	handler.RegisterChatRoutes(v1, chatHandler, cfg.JWTSecret)
+	handler.RegisterChatWebSocketRoutes(app, hub, cfg.JWTSecret)
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return response.OK(c, fiber.Map{"status": "ok\n"})

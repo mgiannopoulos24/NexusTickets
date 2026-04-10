@@ -17,7 +17,7 @@ interface EventsFiltersProps {
 export function EventsFilters({ className }: EventsFiltersProps) {
   const { t } = useLang();
   const dispatch = useAppDispatch();
-  const { filters, currentPage } = useAppSelector((state) => state.events);
+  const { filters } = useAppSelector((state) => state.events);
 
   // Date range state
   const parseFilterDate = (dateStr: string | undefined) => {

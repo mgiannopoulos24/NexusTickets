@@ -17,17 +17,18 @@ type User struct {
 	FirstName string
 	LastName  string
 	Email     string
+	PhotoURL  *string
 
-	Phone    *string
-	Address  *string
-	City     *string
-	Country  *string
+	Phone     *string
+	Address   *string
+	City      *string
+	Country   *string
 	Latitude  *float64
 	Longitude *float64
 
 	VATNumber *string
 
-	Role           UserRole
+	Role          UserRole
 	AccountStatus AccountStatus
 
 	CreatedAt time.Time
@@ -41,11 +42,11 @@ type Event struct {
 	OrganizerID uuid.UUID
 	Organizer   *User
 
-	Title       string
-	Description string
-	Venue       string
+	Title            string
+	Description      string
+	Venue            string
 	FeaturedImageURL *string
-	Detail      EventDetail
+	Detail           EventDetail
 
 	Address *string
 	City    string
@@ -105,7 +106,7 @@ type Booking struct {
 type Message struct {
 	ID uuid.UUID
 
-	SenderID   uuid.UUID
+	SenderID    uuid.UUID
 	RecipientID uuid.UUID
 
 	Subject string
@@ -140,4 +141,3 @@ type EventPhoto struct {
 
 	CreatedAt time.Time
 }
-

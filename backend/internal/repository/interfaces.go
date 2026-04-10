@@ -128,3 +128,23 @@ type UserEventViewRepository interface {
 	Record(ctx context.Context, userID, eventID uuid.UUID) error
 	CountByEvent(ctx context.Context, eventID uuid.UUID) (int, error)
 }
+
+type ChatRoomRepository interface {
+	CreateRoom(ctx context.Context, room domain.ChatRoom) (domain.ChatRoom, error)
+	GetRoomByID(ctx context.Context, id uuid.UUID) (domain.ChatRoom, error)
+	GetOrCreateDirectRoom(ctx context.Context, user1ID, user2ID uuid.UUID) (domain.ChatRoom, error)
+	GetRoomByEvent(ctx context.Context, eventID uuid.UUID) (domain.ChatRoom, error)
+	ListUserRooms(ctx context.Context, userID uuid.UUID) ([]domain.Conversation, error)
+
+	AddParticipant(ctx context.Context, p domain.ChatRoomParticipant) error
+	RemoveParticipant(ctx context.Context, roomID, userID uuid.UUID) error
+	GetParticipants(ctx context.Context, roomID uuid.UUID) ([]domain.ChatRoomParticipant, error)
+
+	CreateMessage(ctx context.Context, msg domain.ChatMessage) (domain.ChatMessage, error)
+	GetMessages(ctx context.Context, roomID uuid.UUID, limit, offset int) ([]domain.ChatMessage, error)
+	GetMessageByID(ctx context.Context, id uuid.UUID) (domain.ChatMessage, error)
+
+	AddReaction(ctx context.Context, r domain.MessageReaction) (domain.MessageReaction, error)
+	RemoveReaction(ctx context.Context, messageID, userID uuid.UUID, reactionType string) error
+	GetReactions(ctx context.Context, messageID uuid.UUID) ([]domain.MessageReaction, error)
+}

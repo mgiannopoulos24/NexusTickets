@@ -26,7 +26,7 @@ type UserModel struct {
 
 	VATNumber *string `gorm:"size:64;column:vat_number"`
 
-	Role           string `gorm:"not null;size:32"`
+	Role          string `gorm:"not null;size:32"`
 	AccountStatus string `gorm:"not null;size:32;index"`
 
 	CreatedAt time.Time `gorm:"not null;default:now()"`
@@ -40,11 +40,11 @@ type EventModel struct {
 
 	OrganizerID uuid.UUID `gorm:"type:uuid;not null;index"`
 
-	Title       string `gorm:"not null;size:255"`
-	Description string `gorm:"not null"`
-	Venue       string `gorm:"not null;size:255"`
+	Title            string  `gorm:"not null;size:255"`
+	Description      string  `gorm:"not null"`
+	Venue            string  `gorm:"not null;size:255"`
 	FeaturedImageURL *string `gorm:"column:featured_image_url"`
-	EventDetail []byte `gorm:"column:event_detail;type:jsonb"`
+	EventDetail      []byte  `gorm:"column:event_detail;type:jsonb"`
 
 	Address *string `gorm:"size:255"`
 	City    string  `gorm:"not null;size:128;index"`
@@ -95,11 +95,11 @@ func (TicketTypeModel) TableName() string { return "ticket_types" }
 type BookingModel struct {
 	ID uuid.UUID `gorm:"type:uuid;primaryKey"`
 
-	UserID      uuid.UUID `gorm:"type:uuid;not null;index"`
-	EventID     uuid.UUID `gorm:"type:uuid;not null;index"`
+	UserID       uuid.UUID `gorm:"type:uuid;not null;index"`
+	EventID      uuid.UUID `gorm:"type:uuid;not null;index"`
 	TicketTypeID uuid.UUID `gorm:"type:uuid;not null;index;column:ticket_type_id"`
 
-	Quantity  int `gorm:"not null"`
+	Quantity  int     `gorm:"not null"`
 	TotalCost float64 `gorm:"not null;type:numeric(12,2)"`
 	Status    string  `gorm:"not null;size:32;index"`
 
@@ -162,3 +162,63 @@ type UserEventViewModel struct {
 
 func (UserEventViewModel) TableName() string { return "user_event_views" }
 
+type ChatRoomModel struct {
+	ID uuid.UUID `gorm:"type:uuid;primaryKey"`
+
+	IsGroup bool    `gorm:"not null;default:false"`
+	Name    *string `gorm:"size:255"`
+
+	CreatedByID *uuid.UUID `gorm:"type:uuid;column:created_by_id"`
+	EventID     *uuid.UUID `gorm:"type:uuid;index"`
+	IsReadOnly  bool       `gorm:"not null;default:false"`
+
+	CreatedAt time.Time `gorm:"not null;default:now()"`
+}
+
+func (ChatRoomModel) TableName() string { return "chat_rooms" }
+
+type ChatRoomParticipantModel struct {
+	ID         uuid.UUID  `gorm:"type:uuid;primaryKey"`
+	RoomID     uuid.UUID  `gorm:"type:uuid;not null;index"`
+	UserID     uuid.UUID  `gorm:"type:uuid;not null;index"`
+	JoinedAt   time.Time  `gorm:"not null;default:now()"`
+	LastReadAt *time.Time `gorm:"column:last_read_at"`
+
+	User UserModel `gorm:"foreignKey:user_id"`
+}
+
+func (ChatRoomParticipantModel) TableName() string { return "chat_room_participants" }
+
+type ChatMessageModel struct {
+	ID uuid.UUID `gorm:"type:uuid;primaryKey"`
+
+	RoomID   uuid.UUID `gorm:"type:uuid;not null;index"`
+	SenderID uuid.UUID `gorm:"type:uuid;not null;index"`
+
+	Content   *string    `gorm:"type:text"`
+	ImageURL  *string    `gorm:"column:image_url"`
+	FileURL   *string    `gorm:"column:file_url"`
+	FileName  *string    `gorm:"column:file_name"`
+	GifURL    *string    `gorm:"column:gif_url"`
+	ReplyToID *uuid.UUID `gorm:"type:uuid;column:reply_to_id"`
+
+	CreatedAt time.Time `gorm:"not null;default:now()"`
+
+	Sender UserModel `gorm:"foreignKey:sender_id"`
+}
+
+func (ChatMessageModel) TableName() string { return "chat_messages" }
+
+type MessageReactionModel struct {
+	ID uuid.UUID `gorm:"type:uuid;primaryKey"`
+
+	MessageID    uuid.UUID `gorm:"type:uuid;not null;index"`
+	UserID       uuid.UUID `gorm:"type:uuid;not null;index"`
+	ReactionType string    `gorm:"not null;size:32"`
+
+	CreatedAt time.Time `gorm:"not null;default:now()"`
+
+	User UserModel `gorm:"foreignKey:user_id"`
+}
+
+func (MessageReactionModel) TableName() string { return "message_reactions" }

@@ -1,11 +1,16 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import yaml from 'js-yaml';
-import enRaw from '@/locales/en.yaml?raw';
-import grRaw from '@/locales/gr.yaml?raw';
+import enTranslations from '@/locales/en.yaml';
+import grTranslations from '@/locales/gr.yaml';
 
-const translations: Record<string, any> = {
-  en: yaml.load(enRaw) as Record<string, any>,
-  el: yaml.load(grRaw) as Record<string, any>,
+type TranslationTree =
+  | string
+  | {
+      readonly [key: string]: TranslationTree;
+    };
+
+const translations: Record<'en' | 'el', TranslationTree> = {
+  en: enTranslations as TranslationTree,
+  el: grTranslations as TranslationTree,
 };
 
 type Locale = keyof typeof translations;
@@ -31,10 +36,11 @@ export function LangProvider({ children }: { children: ReactNode }) {
       if (!translationSet) return key;
 
       const keys = key.split('.');
-      let result: any = translationSet;
+      let result: TranslationTree = translationSet;
 
       for (const k of keys) {
-        if (result && typeof result === 'object' && k in result) {
+        if (typeof result === 'string') return key;
+        if (k in result) {
           result = result[k];
         } else {
           return key;

@@ -1,10 +1,10 @@
 import path from 'path';
 
+import yaml from '@rollup/plugin-yaml';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import mkcert from 'vite-plugin-mkcert';
-import yaml from 'vite-plugin-yaml';
 
 // Backend dev server (override with env e.g. `VITE_API_PROXY_TARGET=http://127.0.0.1:8080 bun run dev`).
 const API_TARGET = process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:8080';
