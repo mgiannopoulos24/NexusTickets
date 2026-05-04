@@ -1,7 +1,7 @@
 {
   description = "NexusTickets development environment";
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
   };
@@ -33,7 +33,7 @@
             pre-commit
 
             # Backend (Go 1.22+)
-            go_1_22
+            go
             gopls
             delve
             golangci-lint
