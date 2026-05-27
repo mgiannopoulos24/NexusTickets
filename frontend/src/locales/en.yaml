@@ -117,3 +117,9 @@ messages:
   confirmCancelEvent: "Confirm event cancellation? All attendees will be notified."
   confirmDeleteEvent: "Confirm event deletion?"
   confirmDeleteMessage: "Confirm message deletion?"
+home:
+  quickNav:
+    ariaLabel: "Quick navigation"
+    manage: "Manage events"
+    myBookings: "My bookings"
+    browse: "Browse events"
