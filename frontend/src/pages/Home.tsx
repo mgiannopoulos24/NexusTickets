@@ -5,6 +5,7 @@ import Awesomplete from 'awesomplete';
 
 import { CategoryFilterStrip } from '@/components/home/CategoryFilterStrip';
 import type { HomeSectionTab } from '@/components/home/CategoryFilterStrip';
+import HomeQuickNav from '@/components/home/HomeQuickNav';
 import EventCard from '@/components/events/EventCard';
 import { Input } from '@/components/ui/input';
 import { SectionSwiper } from '@/components/ui/section-swiper';
@@ -316,6 +317,8 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <HomeQuickNav />
 
       <CategoryFilterStrip
         sectionTabs={sectionTabs}
