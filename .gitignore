@@ -19,6 +19,7 @@ frontend/bun.lockb
 
 ## Archives
 *.zip
+*.csv
 
 # Local self-signed TLS (see scripts/generate-local-tls.sh)
 docker/tls/local/*.pem

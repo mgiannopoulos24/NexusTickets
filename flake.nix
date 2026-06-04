@@ -42,17 +42,9 @@
             air
             trivy
 
-            # Frontend
-            unstablePkgs.bun
-            nodejs_22
-
             # Local infra (optional, Docker still supported)
             postgresql_16
             redis
-
-            # Docker / Compose (for README workflow)
-            docker
-            docker-compose
           ];
         };
       }
