@@ -23,3 +23,7 @@ frontend/bun.lockb
 
 # Local self-signed TLS (see scripts/generate-local-tls.sh)
 docker/tls/local/*.pem
+
+# Frontend dev TLS certs (regenerate with `mkcert -cert-file frontend/localhost.pem -key-file frontend/localhost-key.pem localhost 127.0.0.1 ::1`)
+frontend/localhost.pem
+frontend/localhost-key.pem

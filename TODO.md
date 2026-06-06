@@ -159,18 +159,18 @@
 - [X] `[!]` `Content-Disposition: attachment` headers (`events.xml` / `events.json`)
 
 ### 3.10 Recommendation Engine (Requirement 13)
-- [ ] `[!]` BMF model struct + hyperparameters (K=20, lr=0.005, lambda=0.02, epochs=50)
-- [ ] `[!]` SGD training loop: R̂(u,i) = μ + b_u + b_i + P_u·Q_i^T
-- [ ] Implicit feedback encoding from bookings + views
-- [ ] Cold-start fallback (popularity + recency scoring)
-- [ ] Periodic retraining every 6h via cron
-- [ ] Redis cache per user (1h TTL)
-- [ ] Atomic model swap with `sync.RWMutex`
-- [ ] `GET /events/recommended` handler
+- [X] `[!]` BMF model struct + hyperparameters (K=20, lr=0.01, lambda=0.02, epochs=30)
+- [X] `[!]` SGD training loop: R̂(u,i) = μ + b_u + b_i + P_u·Q_i^T
+- [X] Implicit feedback encoding from CSV training data (event_interest.csv)
+- [X] Cold-start fallback (popular events by attendance count)
+- [X] Periodic retraining every 6h via goroutine ticker
+- [X] Redis cache per user (1h TTL)
+- [X] Atomic model swap with `sync.RWMutex`
+- [X] `GET /recommendations` handler (personalized + popular + status)
 
 ### 3.11 Wire DI
-- [ ] `[!]` Wire providers for all repositories, services, handlers, WebSocket Hub
-- [ ] `[!]` Run `wire` to generate `wire_gen.go`
+- [X] `[!]` Wire providers for all repositories, services, handlers, WebSocket Hub
+- [X] `[!]` Run `wire` to generate `wire_gen.go`
 
 ---
 

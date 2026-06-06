@@ -1,44 +1,73 @@
-.PHONY: dev build test lint migrate-up migrate-down seed seed-events db-reset wire local-tls
+DEFAULT_GOAL := help
 
-COMPOSE = docker compose -f docker-compose.yml
-COMPOSE_DEV = docker compose -f docker-compose.yml -f docker-compose.dev.yml
+COMPOSE      := docker compose -f docker-compose.yml
+COMPOSE_DEV  := $(COMPOSE) -f docker-compose.dev.yml
+DB_HOST     ?= localhost
+DB_PORT     ?= 5432
+GO           := cd backend && go
+BUN          := cd frontend && bun
 
-dev:
+.PHONY: help dev build test test-full test-short lint backend backend-short frontend db-reset wire
+
+help: ## List available targets
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+dev: ## Start full dev environment (Docker Compose)
 	$(COMPOSE_DEV) up --build
 
-build:
+build: ## Build production images
 	$(COMPOSE) build
 
-test:
-	@cd backend && go test ./...
-	@cd frontend && bun x tsc --noEmit
+backend: ## Run backend tests (requires DB)
+	$(GO) test ./... -count=1
 
-lint:
+backend-short: ## Run backend tests without DB
+	$(GO) test -short ./... -count=1
+
+frontend: ## TypeScript check + tests
+	$(BUN) x tsc --noEmit
+	$(BUN) run test
+
+test: ## Run all tests (prompts for DB)
+	@read -p "Run with DB? [y/N] " ans; \
+	if [ "$$ans" = "y" ] || [ "$$ans" = "Y" ]; then \
+		$(MAKE) test-full; \
+	else \
+		$(MAKE) test-short; \
+	fi
+
+test-full: ## Start DB, run all tests, stop DB
+	@echo "Starting postgres and redis..."
+	$(COMPOSE_DEV) up -d postgres redis
+	@echo "Waiting for postgres..."
+	@for i in $$(seq 1 30); do \
+		if $(COMPOSE_DEV) exec -T postgres pg_isready -q 2>/dev/null; then \
+			echo "postgres ready"; \
+			break; \
+		fi; \
+		if [ "$$i" = "30" ]; then \
+			echo "postgres did not start in time"; \
+			exit 1; \
+		fi; \
+		sleep 1; \
+	done
+	$(MAKE) backend
+	$(MAKE) frontend
+	@echo "Stopping DB services..."
+	$(COMPOSE_DEV) stop postgres redis
+
+test-short: backend-short frontend ## Run all tests without DB
+
+lint: ## Run linters
 	@cd backend && golangci-lint run
 	@cd frontend && bun run lint
 
-migrate-up:
-	@test -f backend/cmd/migrate/main.go || (echo "Missing backend/cmd/migrate (not implemented yet)"; exit 1)
-	@cd backend && DB_HOST=$${DB_HOST:-localhost} DB_PORT=$${DB_PORT:-$${POSTGRES_EXPOSED_PORT:-5432}} go run ./cmd/migrate up
-
-migrate-down:
-	@test -f backend/cmd/migrate/main.go || (echo "Missing backend/cmd/migrate (not implemented yet)"; exit 1)
-	@cd backend && DB_HOST=$${DB_HOST:-localhost} DB_PORT=$${DB_PORT:-$${POSTGRES_EXPOSED_PORT:-5432}} go run ./cmd/migrate down
-
-seed:
-	@$(MAKE) migrate-up
-
-seed-events:
-	@cd backend && DB_HOST=$${DB_HOST:-localhost} DB_PORT=$${DB_PORT:-$${POSTGRES_EXPOSED_PORT:-5432}} go run ./cmd/seed-events -n 50
-
-db-reset:
+db-reset: ## Delete postgres/redis volumes and recreate
 	@echo "This will delete local postgres/redis volumes (DATA LOSS)."
-	@$(COMPOSE_DEV) down -v
-	@$(COMPOSE_DEV) up -d postgres redis
+	$(COMPOSE_DEV) down -v
+	$(COMPOSE_DEV) up -d postgres redis
 
-wire:
+wire: ## Regenerate Wire DI
+	@cd backend && which wire >/dev/null 2>&1 || (echo "wire not installed: go install github.com/google/wire/cmd/wire@latest"; exit 1)
 	@cd backend && wire ./...
-
-local-tls:
-	@chmod +x scripts/generate-local-tls.sh
-	@./scripts/generate-local-tls.sh

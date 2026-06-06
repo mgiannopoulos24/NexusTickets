@@ -15,12 +15,10 @@ import (
 	"nexustickets/internal/config"
 	"nexustickets/internal/db"
 	"nexustickets/internal/handler"
-	wshub "nexustickets/internal/handler/ws"
 	"nexustickets/internal/middleware"
 	"nexustickets/internal/migrate"
 	"nexustickets/internal/redis"
-	"nexustickets/internal/repository/postgres"
-	"nexustickets/internal/service"
+	"nexustickets/internal/wire"
 	"nexustickets/pkg/logger"
 	"nexustickets/pkg/response"
 )
@@ -56,9 +54,7 @@ func main() {
 	app := fiber.New(fiber.Config{
 		AppName:      "NexusTickets API",
 		ErrorHandler: middleware.ErrorHandler(log),
-		// Default 4 KB is too small once the Vite proxy forwards all browser
-		// headers (JWT, sec-ch-ua, cookies, X-Forwarded-*) to the backend.
-		ReadBufferSize: 1 << 15, // 32 KB
+		ReadBufferSize: 1 << 15,
 	})
 
 	app.Use(middleware.CORS(cfg.CORSAllowedOrigins))
@@ -68,42 +64,25 @@ func main() {
 	app.Use(middleware.RateLimiter(redisClient.Raw, "global", cfg.RateLimitMaxReqs, cfg.RateLimitWindow))
 	app.Static("/uploads/media", cfg.MediaStoragePath)
 
-	userRepo := postgres.NewUserRepositoryPostgres(pg.Gorm)
-	eventRepo := postgres.NewEventRepositoryPostgres(pg.Gorm)
-	bookingRepo := postgres.NewBookingRepositoryPostgres(pg.Gorm)
-	messageRepo := postgres.NewMessageRepositoryPostgres(pg.Gorm)
-	categoryRepo := postgres.NewCategoryRepositoryPostgres(pg.Gorm)
-	eventPhotoRepo := postgres.NewEventPhotoRepositoryPostgres(pg.Gorm)
-	eventViewRepo := postgres.NewUserEventViewRepositoryPostgres(pg.Gorm)
-	ticketTypeRepo := postgres.NewTicketTypeRepositoryPostgres(pg.Gorm)
-	chatRoomRepo := postgres.NewChatRoomRepository(pg.Gorm)
-	categoryHandler := handler.NewCategoryHandler(categoryRepo)
-	chatService := service.NewChatService(chatRoomRepo)
-	chatHandler := handler.NewChatHandler(chatService)
-	authService := service.NewAuthService(userRepo, redisClient.Raw, cfg.JWTSecret)
-	authHandler := handler.NewAuthHandler(authService)
-	userService := service.NewUserService(userRepo)
-	userHandler := handler.NewUserHandler(userService)
-	hub := wshub.NewHub()
-	go hub.Run()
-	messagingService := service.NewMessagingService(messageRepo, userRepo, bookingRepo, eventRepo, redisClient.Raw, hub)
-	eventService := service.NewEventService(eventRepo, bookingRepo, categoryRepo, eventPhotoRepo, eventViewRepo, cfg.MediaStoragePath, messagingService)
-	eventHandler := handler.NewEventHandler(eventService)
-	messageHandler := handler.NewMessageHandler(messagingService, hub)
-	bookingService := service.NewBookingService(eventRepo, ticketTypeRepo, bookingRepo)
-	bookingHandler := handler.NewBookingHandler(bookingService)
-	catalogExportService := service.NewCatalogExportService(eventRepo, bookingRepo, userRepo)
-	adminExportHandler := handler.NewAdminExportHandler(catalogExportService)
+	deps, err := wire.InitializeApp(pg.Gorm, redisClient.Raw, cfg)
+	if err != nil {
+		log.Fatal("wire init failed", zap.Error(err))
+	}
+
+	go deps.Hub.Run()
+	go deps.RecommendationService.StartPeriodicRetraining()
+
 	v1 := app.Group("/api/v1")
-	handler.RegisterAuthRoutes(v1, authHandler, redisClient.Raw)
-	handler.RegisterUserRoutes(v1, userHandler, cfg.JWTSecret)
-	handler.RegisterEventRoutes(v1, eventHandler, cfg.JWTSecret)
-	handler.RegisterCategoryRoutes(v1, categoryHandler)
-	handler.RegisterBookingRoutes(v1, bookingHandler, cfg.JWTSecret)
-	handler.RegisterMessageRoutes(v1, messageHandler, cfg.JWTSecret)
-	handler.RegisterAdminExportRoutes(v1, adminExportHandler, cfg.JWTSecret)
-	handler.RegisterChatRoutes(v1, chatHandler, cfg.JWTSecret)
-	handler.RegisterChatWebSocketRoutes(app, hub, cfg.JWTSecret)
+	handler.RegisterAuthRoutes(v1, deps.AuthHandler, redisClient.Raw)
+	handler.RegisterUserRoutes(v1, deps.UserHandler, cfg.JWTSecret)
+	handler.RegisterEventRoutes(v1, deps.EventHandler, cfg.JWTSecret)
+	handler.RegisterCategoryRoutes(v1, deps.CategoryHandler)
+	handler.RegisterBookingRoutes(v1, deps.BookingHandler, cfg.JWTSecret)
+	handler.RegisterMessageRoutes(v1, deps.MessageHandler, cfg.JWTSecret)
+	handler.RegisterAdminExportRoutes(v1, deps.AdminExportHandler, cfg.JWTSecret)
+	handler.RegisterRecommendationRoutes(v1, deps.RecommendationHandler)
+	handler.RegisterChatRoutes(v1, deps.ChatHandler, cfg.JWTSecret)
+	handler.RegisterChatWebSocketRoutes(app, deps.Hub, cfg.JWTSecret)
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return response.OK(c, fiber.Map{"status": "ok\n"})

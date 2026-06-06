@@ -1,10 +1,13 @@
+/// <reference types="vitest/config" />
+// Dev TLS certs in localhost.pem + localhost-key.pem (regenerate if missing/expired):
+//   mkcert -cert-file frontend/localhost.pem -key-file frontend/localhost-key.pem localhost 127.0.0.1 ::1
 import path from 'path';
+import fs from 'fs';
 
 import yaml from '@rollup/plugin-yaml';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
-import mkcert from 'vite-plugin-mkcert';
 
 // Backend dev server (override with env e.g. `VITE_API_PROXY_TARGET=http://127.0.0.1:8080 bun run dev`).
 const API_TARGET = process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:8080';
@@ -13,13 +16,23 @@ const HMR_CLIENT_PORT = Number(process.env.VITE_HMR_CLIENT_PORT || 5173);
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), mkcert(), yaml()],
+  plugins: [react(), tailwindcss(), yaml()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
   },
+  test: {
+    environment: 'happy-dom',
+    globals: true,
+    setupFiles: ['./src/test-setup.ts'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+  },
   server: {
+    https: {
+      key: fs.readFileSync('localhost-key.pem'),
+      cert: fs.readFileSync('localhost.pem'),
+    },
     // Docker / --host 0.0.0.0: browser cannot open wss to 0.0.0.0; HMR must use a real hostname.
     // https://vite.dev/config/server-options.html#server-hmr
     hmr: {

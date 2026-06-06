@@ -42,6 +42,8 @@ const (
 
 	envTLSCertFile = "TLS_CERT_FILE"
 	envTLSKeyFile  = "TLS_KEY_FILE"
+
+	envRecDataDir = "RECOMMENDATION_DATA_DIR"
 )
 
 type Config struct {
@@ -76,6 +78,9 @@ type Config struct {
 	RedisPort     int `validate:"min=1,max=65535"`
 	RedisPassword string
 
+	// Recommendation data directory (CSV files for training).
+	RecDataDir string
+
 	// When both are non-empty, the HTTP server uses TLS (paths to PEM files).
 	TLSCertFile string
 	TLSKeyFile  string
@@ -99,6 +104,7 @@ func Load() (Config, error) {
 		DBPassword:    os.Getenv(envDBPassword),
 		RedisHost:     getEnv(envRedisHost, "redis"),
 		RedisPassword: os.Getenv(envRedisPassword),
+		RecDataDir:    strings.TrimSpace(getEnv(envRecDataDir, "../data")),
 		TLSCertFile:   strings.TrimSpace(os.Getenv(envTLSCertFile)),
 		TLSKeyFile:    strings.TrimSpace(os.Getenv(envTLSKeyFile)),
 	}
