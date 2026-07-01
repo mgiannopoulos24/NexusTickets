@@ -4,7 +4,9 @@ FROM oven/bun:1.2.22-alpine AS builder
 WORKDIR /app
 
 COPY package.json bun.lock ./
-RUN bun install
+# --ignore-scripts skips the postinstall dev-cert generation, which needs
+# files not yet copied and is irrelevant to the production static build.
+RUN bun install --frozen-lockfile --ignore-scripts
 
 COPY . .
 

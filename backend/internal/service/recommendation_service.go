@@ -35,6 +35,7 @@ type RecommendationService struct {
 	userIdxMap  map[int]int
 	eventIDs    []int
 	eventIdxMap map[int]int
+	idxToEID    map[int]int
 
 	dataDir string
 	stopCh  chan struct{}
@@ -109,6 +110,11 @@ func (s *RecommendationService) train() {
 			bmfFactors, bmfEpochs, bmfLR, bmfReg)
 	}
 
+	idxToEID := make(map[int]int, len(events.idxMap))
+	for eid, idx := range events.idxMap {
+		idxToEID[idx] = eid
+	}
+
 	s.mu.Lock()
 	s.model = model
 	s.popular = popular
@@ -116,6 +122,7 @@ func (s *RecommendationService) train() {
 	s.userIdxMap = users.idxMap
 	s.eventIDs = events.eventIDs
 	s.eventIdxMap = events.idxMap
+	s.idxToEID = idxToEID
 	s.mu.Unlock()
 
 	s.flushCache()
@@ -182,6 +189,7 @@ func (s *RecommendationService) GetForUser(userID int, limit int) []Recommendati
 	model := s.model
 	userIdxMap := s.userIdxMap
 	eventIdxMap := s.eventIdxMap
+	idxToEID := s.idxToEID
 	popular := s.popular
 	s.mu.RUnlock()
 
@@ -194,20 +202,17 @@ func (s *RecommendationService) GetForUser(userID int, limit int) []Recommendati
 		return s.cacheAndReturn(cacheKey, s.popularToRecs(popular, limit, model, eventIdxMap))
 	}
 
-	idxToEID := make(map[int]int, len(eventIdxMap))
-	for eid, idx := range eventIdxMap {
-		idxToEID[idx] = eid
-	}
-
 	ranked := rankPredictions(model, userIdx, nil, limit)
-	out := make([]Recommendation, len(ranked))
-	for i, idx := range ranked {
-		if eid, ok := idxToEID[idx]; ok {
-			out[i] = Recommendation{
-				EventID: eid,
-				Score:   model.Predict(userIdx, idx),
-			}
+	out := make([]Recommendation, 0, len(ranked))
+	for _, idx := range ranked {
+		eid, ok := idxToEID[idx]
+		if !ok {
+			continue
 		}
+		out = append(out, Recommendation{
+			EventID: eid,
+			Score:   model.Predict(userIdx, idx),
+		})
 	}
 	return s.cacheAndReturn(cacheKey, out)
 }
@@ -365,70 +370,140 @@ func (s *RecommendationService) loadEvents() (*eventData, error) {
 	return &eventData{eventIDs: eventIDs, idxMap: idxMap}, nil
 }
 
+// Implicit feedback scores (AGENTS.md §Recommendation Engine).
+const (
+	scoreView = 1.0 // user was shown / interested in an event
+	scoreBook = 3.0 // user confirmed attendance (booking)
+)
+
+// ratingKey identifies a (user, item) pair for deduplication.
+type ratingKey struct {
+	userIdx int
+	itemIdx int
+}
+
+// loadRatings builds a positive-only implicit rating set from views
+// (event_interest.csv) and bookings (event_attendees.csv). When a pair has
+// both signals the stronger (booking) score wins.
 func (s *RecommendationService) loadRatings(users *userData, events *eventData) ([]Rating, error) {
+	scores := make(map[ratingKey]float64)
+
+	if err := s.accumulateViews(users, events, scores); err != nil {
+		return nil, err
+	}
+	if err := s.accumulateBookings(users, events, scores); err != nil {
+		return nil, err
+	}
+
+	ratings := make([]Rating, 0, len(scores))
+	for k, v := range scores {
+		ratings = append(ratings, Rating{UserIdx: k.userIdx, ItemIdx: k.itemIdx, Value: v})
+	}
+	return ratings, nil
+}
+
+// accumulateViews records a View (1.0) for every event a user showed interest
+// in or was invited to.
+func (s *RecommendationService) accumulateViews(users *userData, events *eventData, scores map[ratingKey]float64) error {
 	f, err := os.Open(filepath.Join(s.dataDir, "event_interest.csv"))
 	if err != nil {
-		return nil, fmt.Errorf("open event_interest.csv: %w", err)
+		return fmt.Errorf("open event_interest.csv: %w", err)
 	}
 	defer f.Close()
 
 	r := csv.NewReader(f)
 	if _, err := r.Read(); err != nil {
-		return nil, fmt.Errorf("event_interest.csv header: %w", err)
+		return fmt.Errorf("event_interest.csv header: %w", err)
 	}
 
-	var ratings []Rating
 	for {
 		rec, err := r.Read()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("event_interest.csv row: %w", err)
+			return fmt.Errorf("event_interest.csv row: %w", err)
 		}
 		if len(rec) < 6 {
 			continue
 		}
 
-		userID, err := strconv.Atoi(rec[0])
-		if err != nil {
-			continue
-		}
-		eventID, err := strconv.Atoi(rec[1])
-		if err != nil {
-			continue
-		}
-		interested, err := strconv.Atoi(rec[4])
-		if err != nil {
-			continue
-		}
-		notInterested, err := strconv.Atoi(rec[5])
-		if err != nil {
+		// A negative signal (explicit "not interested") is not a view.
+		if notInterested, err := strconv.Atoi(rec[5]); err == nil && notInterested == 1 {
 			continue
 		}
 
-		userIdx, ok := users.idxMap[userID]
+		userIdx, eventIdx, ok := lookupPair(users, events, rec[0], rec[1])
 		if !ok {
 			continue
 		}
-		eventIdx, ok := events.idxMap[eventID]
-		if !ok {
-			continue
-		}
-
-		var value float64
-		switch {
-		case interested == 1:
-			value = 1.0
-		case notInterested == 1:
-			value = 0.0
-		default:
-			continue
-		}
-
-		ratings = append(ratings, Rating{UserIdx: userIdx, ItemIdx: eventIdx, Value: value})
+		accumulateScore(scores, userIdx, eventIdx, scoreView)
 	}
-	return ratings, nil
+	return nil
+}
+
+// accumulateBookings records a Book (3.0) for every confirmed attendance.
+func (s *RecommendationService) accumulateBookings(users *userData, events *eventData, scores map[ratingKey]float64) error {
+	f, err := os.Open(filepath.Join(s.dataDir, "event_attendees.csv"))
+	if err != nil {
+		return fmt.Errorf("open event_attendees.csv: %w", err)
+	}
+	defer f.Close()
+
+	r := csv.NewReader(f)
+	if _, err := r.Read(); err != nil {
+		return fmt.Errorf("event_attendees.csv header: %w", err)
+	}
+
+	for {
+		rec, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("event_attendees.csv row: %w", err)
+		}
+		// event_attendees.csv columns: _, event, status, user_id, start_time
+		if len(rec) < 4 || rec[2] != "yes" {
+			continue
+		}
+
+		userIdx, eventIdx, ok := lookupPair(users, events, rec[3], rec[1])
+		if !ok {
+			continue
+		}
+		accumulateScore(scores, userIdx, eventIdx, scoreBook)
+	}
+	return nil
+}
+
+// lookupPair resolves raw user/event ID strings to their model indices.
+func lookupPair(users *userData, events *eventData, userStr, eventStr string) (int, int, bool) {
+	userID, err := strconv.Atoi(userStr)
+	if err != nil {
+		return 0, 0, false
+	}
+	eventID, err := strconv.Atoi(eventStr)
+	if err != nil {
+		return 0, 0, false
+	}
+	userIdx, ok := users.idxMap[userID]
+	if !ok {
+		return 0, 0, false
+	}
+	eventIdx, ok := events.idxMap[eventID]
+	if !ok {
+		return 0, 0, false
+	}
+	return userIdx, eventIdx, true
+}
+
+// accumulateScore keeps the strongest signal for a (user, item) pair.
+func accumulateScore(scores map[ratingKey]float64, userIdx, eventIdx int, value float64) {
+	k := ratingKey{userIdx: userIdx, itemIdx: eventIdx}
+	if existing, ok := scores[k]; !ok || value > existing {
+		scores[k] = value
+	}
 }
 
 func (s *RecommendationService) loadPopular() ([]PopularItem, error) {
