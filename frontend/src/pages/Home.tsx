@@ -19,6 +19,7 @@ import {
 } from '@/constants/homeEventSections';
 import { categoryIdForSlug } from '@/lib/categorySlug';
 import { cn } from '@/lib/utils';
+import { getAccessToken } from '@/utils/api';
 import type { Event as EventModel } from '@/types/models';
 
 type ApiEnvelope<T> = {
@@ -100,6 +101,24 @@ export default function Home() {
       return json.data ?? [];
     };
 
+    // Recommended section (Req 13): calls the BMF recommendation endpoint.
+    // Personalized when the user is signed in (bearer token), popular otherwise.
+    // Falls back to popular events on any failure so the section never breaks.
+    const fetchRecommended = async (): Promise<EventModel[]> => {
+      const token = getAccessToken();
+      const headers: HeadersInit = token ? { authorization: `Bearer ${token}` } : {};
+      try {
+        const res = await fetch('/api/v1/events/recommended?limit=24', { headers });
+        const json = (await res.json()) as ApiEnvelope<EventModel[]>;
+        if (!res.ok || json.error) {
+          throw new Error(json.error?.message ?? 'Σφάλμα προτάσεων');
+        }
+        return json.data ?? [];
+      } catch {
+        return searchEvents('limit=24&offset=0');
+      }
+    };
+
     const load = async () => {
       try {
         const catRes = await fetch('/api/v1/categories');
@@ -112,7 +131,7 @@ export default function Home() {
         const baseList = 'limit=24&offset=0';
         const [popular, recommended, rawNew] = await Promise.all([
           searchEvents(baseList),
-          searchEvents(baseList),
+          fetchRecommended(),
           searchEvents('limit=48&offset=0'),
         ]);
 

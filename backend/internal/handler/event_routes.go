@@ -12,6 +12,8 @@ func RegisterEventRoutes(router fiber.Router, eventHandler *EventHandler, jwtSec
 
 	events.Get("/", eventHandler.List)
 	events.Get("/search", eventHandler.Search)
+	// Must be registered before the "/:id" route below so it isn't captured as an ID.
+	events.Get("/recommended", middleware.OptionalJWTAuth(jwtSecret), eventHandler.Recommended)
 
 	admin := events.Group("/admin")
 	admin.Use(middleware.JWTAuth(jwtSecret))

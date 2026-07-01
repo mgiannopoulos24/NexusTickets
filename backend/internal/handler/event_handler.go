@@ -102,6 +102,28 @@ func (h *EventHandler) List(c *fiber.Ctx) error {
 	return response.OK(c, out)
 }
 
+// Recommended returns personalized event recommendations for the current user,
+// falling back to popular events for guests / cold-start users (Req 13).
+func (h *EventHandler) Recommended(c *fiber.Ctx) error {
+	limit, _, err := parsePage(c.Query("limit"), c.Query("offset"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, err.Error())
+	}
+
+	// Optional auth: a signed-in user gets personalized results; guests get popular.
+	userID, _ := optionalAuthUserID(c)
+
+	events, cats, err := h.service.Recommended(c.Context(), userID, limit)
+	if err != nil {
+		return err
+	}
+	out := make([]dto.EventResponse, 0, len(events))
+	for i := range events {
+		out = append(out, toEventResponse(events[i], cats[i]))
+	}
+	return response.OK(c, out)
+}
+
 func (h *EventHandler) Search(c *fiber.Ctx) error {
 	limit, offset, err := parsePage(c.Query("limit"), c.Query("offset"))
 	if err != nil {

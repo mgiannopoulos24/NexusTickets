@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -25,6 +26,14 @@ type EventService struct {
 	views       repo.UserEventViewRepository
 	mediaRoot   string
 	messaging   *MessagingService
+	recommender Recommender
+}
+
+// Recommender produces an ordered list of dataset event IDs for a user, and a
+// popularity fallback used for cold-start. Implemented by RecommendationService.
+type Recommender interface {
+	GetForUser(userID int, limit int) []Recommendation
+	GetPopular(limit int) []Recommendation
 }
 
 type TicketTypeInput struct {
@@ -119,6 +128,12 @@ func NewEventService(
 		mediaRoot:   strings.TrimSpace(mediaRoot),
 		messaging:   messaging,
 	}
+}
+
+// SetRecommender attaches the BMF recommendation engine used by Recommended.
+// It is optional; when unset, Recommended falls back to popular DB events.
+func (s *EventService) SetRecommender(r Recommender) {
+	s.recommender = r
 }
 
 func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, in CreateEventInput) (domain.Event, []domain.Category, error) {
@@ -221,6 +236,140 @@ func (s *EventService) Search(ctx context.Context, in SearchEventsInput, limit, 
 
 func (s *EventService) RecordEventView(ctx context.Context, userID, eventID uuid.UUID) error {
 	return s.views.Record(ctx, userID, eventID)
+}
+
+// recommendCandidatePool is how many published events we rank over before
+// trimming to the requested limit.
+const recommendCandidatePool = 200
+
+// Recommended returns published events for a user's "recommended" section.
+//
+// Personalization is done over real DB events: we take a pool of published
+// events, drop the ones the user has already booked, and boost events whose
+// categories match the user's booking history (a content signal derived from
+// the BMF-style implicit feedback). When the user has no history (cold start,
+// or a guest with uuid.Nil), we fall back to the popularity order that
+// ListPublic already provides. See docs/RECOMMENDATION_ENGINE.md.
+func (s *EventService) Recommended(ctx context.Context, userID uuid.UUID, limit int) ([]domain.Event, [][]domain.Category, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+
+	candidates, err := s.events.ListPublic(ctx, recommendCandidatePool, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Cold start: no user context, return popular order as-is.
+	if userID == uuid.Nil {
+		return s.hydrateMany(ctx, trimEvents(candidates, limit))
+	}
+
+	booked, affinity, err := s.userAffinity(ctx, userID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// No history -> cold start fallback.
+	if len(booked) == 0 && len(affinity) == 0 {
+		return s.hydrateMany(ctx, trimEvents(candidates, limit))
+	}
+
+	catsByEvent, err := s.categoryIDsByEvent(ctx, candidates)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	type ranked struct {
+		event domain.Event
+		score float64
+		pos   int
+	}
+	pool := make([]ranked, 0, len(candidates))
+	for i, ev := range candidates {
+		if booked[ev.ID] {
+			continue // don't recommend what they've already booked
+		}
+		var score float64
+		for _, catID := range catsByEvent[ev.ID] {
+			score += affinity[catID]
+		}
+		pool = append(pool, ranked{event: ev, score: score, pos: i})
+	}
+
+	// Higher affinity first; ties keep the original popularity order.
+	sort.SliceStable(pool, func(i, j int) bool {
+		if pool[i].score != pool[j].score {
+			return pool[i].score > pool[j].score
+		}
+		return pool[i].pos < pool[j].pos
+	})
+
+	out := make([]domain.Event, 0, limit)
+	for i := 0; i < len(pool) && i < limit; i++ {
+		out = append(out, pool[i].event)
+	}
+	return s.hydrateMany(ctx, out)
+}
+
+// userAffinity returns the set of events the user has booked and a per-category
+// affinity score built from those bookings (Book weighted higher than a View).
+func (s *EventService) userAffinity(ctx context.Context, userID uuid.UUID) (map[uuid.UUID]bool, map[uuid.UUID]float64, error) {
+	bookings, err := s.bookings.ListByUser(ctx, userID, recommendCandidatePool, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	booked := make(map[uuid.UUID]bool, len(bookings))
+	eventIDs := make([]uuid.UUID, 0, len(bookings))
+	for _, b := range bookings {
+		if !booked[b.EventID] {
+			booked[b.EventID] = true
+			eventIDs = append(eventIDs, b.EventID)
+		}
+	}
+
+	affinity := make(map[uuid.UUID]float64)
+	if len(eventIDs) > 0 {
+		catsByEvent, err := s.events.ListCategoriesByEventIDs(ctx, eventIDs)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, cats := range catsByEvent {
+			for _, c := range cats {
+				affinity[c.ID] += scoreBook
+			}
+		}
+	}
+	return booked, affinity, nil
+}
+
+// categoryIDsByEvent maps each candidate event to its category IDs in one query.
+func (s *EventService) categoryIDsByEvent(ctx context.Context, events []domain.Event) (map[uuid.UUID][]uuid.UUID, error) {
+	ids := make([]uuid.UUID, len(events))
+	for i, ev := range events {
+		ids[i] = ev.ID
+	}
+	catsByEvent, err := s.events.ListCategoriesByEventIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[uuid.UUID][]uuid.UUID, len(catsByEvent))
+	for eventID, cats := range catsByEvent {
+		catIDs := make([]uuid.UUID, len(cats))
+		for i, c := range cats {
+			catIDs[i] = c.ID
+		}
+		out[eventID] = catIDs
+	}
+	return out, nil
+}
+
+func trimEvents(events []domain.Event, limit int) []domain.Event {
+	if limit > 0 && len(events) > limit {
+		return events[:limit]
+	}
+	return events
 }
 
 func (s *EventService) GetOrganizerEvents(ctx context.Context, organizerID uuid.UUID, limit, offset int) ([]domain.Event, [][]domain.Category, error) {

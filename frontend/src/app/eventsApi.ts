@@ -28,7 +28,8 @@ export const eventsApi = baseApi.injectEndpoints({
       query: (id) => `/events/${id}`,
       providesTags: (_result, _error, id) => [{ type: 'Event' as const, id }],
     }),
-    getRecommended: builder.query<PaginatedResponse<Event>, void>({
+    getRecommended: builder.query<ApiResponse<Event[]>, void>({
+      // Recommendations return a plain array under { data } (Req 13 endpoint).
       query: () => '/events/recommended',
       providesTags: ['Event'],
     }),

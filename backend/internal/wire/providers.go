@@ -13,8 +13,10 @@ func provideAuthService(users repo.UserRepository, redis *redisv9.Client, cfg co
 	return service.NewAuthService(users, redis, cfg.JWTSecret)
 }
 
-func provideEventService(events repo.EventRepository, bookings repo.BookingRepository, categories repo.CategoryRepository, photos repo.EventPhotoRepository, views repo.UserEventViewRepository, cfg config.Config, messaging *service.MessagingService) *service.EventService {
-	return service.NewEventService(events, bookings, categories, photos, views, cfg.MediaStoragePath, messaging)
+func provideEventService(events repo.EventRepository, bookings repo.BookingRepository, categories repo.CategoryRepository, photos repo.EventPhotoRepository, views repo.UserEventViewRepository, cfg config.Config, messaging *service.MessagingService, recommender *service.RecommendationService) *service.EventService {
+	svc := service.NewEventService(events, bookings, categories, photos, views, cfg.MediaStoragePath, messaging)
+	svc.SetRecommender(recommender)
+	return svc
 }
 
 func provideRecommendationService(cfg config.Config, redis *redisv9.Client) *service.RecommendationService {

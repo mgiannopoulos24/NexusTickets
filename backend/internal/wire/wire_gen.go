@@ -33,7 +33,8 @@ func InitializeApp(db *gorm.DB, redisClient *redis.Client, cfg config.Config) (*
 	userEventViewRepository := postgres.NewUserEventViewRepositoryPostgres(db)
 	messageRepository := postgres.NewMessageRepositoryPostgres(db)
 	messagingService := service.NewMessagingService(messageRepository, userRepository, bookingRepository, eventRepository, redisClient, hub)
-	eventService := provideEventService(eventRepository, bookingRepository, categoryRepository, eventPhotoRepository, userEventViewRepository, cfg, messagingService)
+	recommendationService := provideRecommendationService(cfg, redisClient)
+	eventService := provideEventService(eventRepository, bookingRepository, categoryRepository, eventPhotoRepository, userEventViewRepository, cfg, messagingService, recommendationService)
 	eventHandler := handler.NewEventHandler(eventService)
 	categoryHandler := handler.NewCategoryHandler(categoryRepository)
 	ticketTypeRepository := postgres.NewTicketTypeRepositoryPostgres(db)
@@ -45,7 +46,6 @@ func InitializeApp(db *gorm.DB, redisClient *redis.Client, cfg config.Config) (*
 	chatHandler := handler.NewChatHandler(chatService)
 	catalogExportService := service.NewCatalogExportService(eventRepository, bookingRepository, userRepository)
 	adminExportHandler := handler.NewAdminExportHandler(catalogExportService)
-	recommendationService := provideRecommendationService(cfg, redisClient)
 	recommendationHandler := handler.NewRecommendationHandler(recommendationService)
 	appDependencies := &AppDependencies{
 		Hub:                   hub,
