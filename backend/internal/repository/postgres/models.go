@@ -9,12 +9,12 @@ import (
 type UserModel struct {
 	ID uuid.UUID `gorm:"type:uuid;primaryKey"`
 
-	Username string `gorm:"not null;size:255;uniqueIndex"`
+	Username string `gorm:"not null;size:255;unique"`
 	Password string `gorm:"not null;column:password_hash"`
 
 	FirstName string `gorm:"not null;size:255"`
 	LastName  string `gorm:"not null;size:255"`
-	Email     string `gorm:"not null;size:255;uniqueIndex"`
+	Email     string `gorm:"not null;size:255;unique"`
 
 	Phone   *string `gorm:"size:64"`
 	Address *string `gorm:"size:255"`
@@ -59,7 +59,7 @@ type EventModel struct {
 
 	Status string `gorm:"not null;size:32;index"`
 
-	SearchVector string `gorm:"column:search_vector"`
+	SearchVector string `gorm:"-"`
 
 	CreatedAt time.Time `gorm:"not null;default:now()"`
 	UpdatedAt time.Time `gorm:"not null;default:now()"`
@@ -131,7 +131,7 @@ func (MessageModel) TableName() string { return "messages" }
 type CategoryModel struct {
 	ID uuid.UUID `gorm:"type:uuid;primaryKey"`
 
-	Name string `gorm:"not null;size:255;uniqueIndex"`
+	Name string `gorm:"not null;size:255;unique"`
 
 	CreatedAt time.Time `gorm:"not null;default:now()"`
 }

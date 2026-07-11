@@ -16,7 +16,6 @@ import (
 	"nexustickets/internal/db"
 	"nexustickets/internal/handler"
 	"nexustickets/internal/middleware"
-	"nexustickets/internal/migrate"
 	"nexustickets/internal/redis"
 	"nexustickets/internal/wire"
 	"nexustickets/pkg/logger"
@@ -47,8 +46,8 @@ func main() {
 	}
 	defer func() { _ = redisClient.Raw.Close() }()
 
-	if err := migrate.Up(cfg); err != nil {
-		log.Fatal("migrations failed", zap.Error(err))
+	if err := db.AutoMigrate(pg.Gorm); err != nil {
+		log.Fatal("auto migrate failed", zap.Error(err))
 	}
 
 	app := fiber.New(fiber.Config{

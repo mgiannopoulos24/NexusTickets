@@ -1,6 +1,9 @@
 ## Backend
 backend/tmp/
 backend/uploads/
+backend/main
+backend/seed
+backend/server
 .go/
 
 ## Frontend

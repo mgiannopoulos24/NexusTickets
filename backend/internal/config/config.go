@@ -17,8 +17,6 @@ const (
 	envDatabaseURL = "DATABASE_URL"
 	envRedisURL    = "REDIS_URL"
 
-	envMigrationsPath = "MIGRATIONS_PATH"
-
 	envCORSAllowedOrigins = "CORS_ALLOWED_ORIGINS"
 	envJWTSecret          = "JWT_SECRET"
 	envRateLimitMaxReqs   = "RATE_LIMIT_MAX_REQUESTS"
@@ -56,8 +54,6 @@ type Config struct {
 	RateLimitWindow    time.Duration `validate:"min=1000000000"`
 	MediaStoragePath   string
 
-	MigrationsPath string
-
 	// Preferred connection strings.
 	DatabaseURL string
 	RedisURL    string
@@ -93,7 +89,6 @@ func Load() (Config, error) {
 		AppEnv:             getEnv(envAppEnv, "development"),
 		CORSAllowedOrigins: getEnv(envCORSAllowedOrigins, "http://localhost,http://localhost:5173,https://localhost,https://localhost:5173"),
 		JWTSecret:          getEnv(envJWTSecret, "dev-insecure-jwt-secret-change-me"),
-		MigrationsPath:     strings.TrimSpace(getEnv(envMigrationsPath, "/migrations")),
 		MediaStoragePath:   strings.TrimSpace(getEnv(envMediaStoragePath, "uploads/media")),
 		DatabaseURL:        strings.TrimSpace(os.Getenv(envDatabaseURL)),
 		RedisURL:           strings.TrimSpace(os.Getenv(envRedisURL)),

@@ -1,6 +1,6 @@
 /// <reference types="vitest/config" />
 // Dev TLS certs in localhost.pem + localhost-key.pem (regenerate if missing/expired):
-//   mkcert -cert-file frontend/localhost.pem -key-file frontend/localhost-key.pem localhost 127.0.0.1 ::1
+//   scripts/setup-certs.sh
 import path from 'path';
 import fs from 'fs';
 

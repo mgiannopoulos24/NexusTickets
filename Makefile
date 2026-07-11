@@ -7,7 +7,7 @@ DB_PORT     ?= 5432
 GO           := cd backend && go
 BUN          := cd frontend && bun
 
-.PHONY: help dev build test test-full test-short lint backend backend-short frontend db-reset wire
+.PHONY: help dev build test test-full test-short lint backend backend-short frontend db-reset seed certs wire
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -71,3 +71,9 @@ db-reset: ## Delete postgres/redis volumes and recreate
 wire: ## Regenerate Wire DI
 	@cd backend && which wire >/dev/null 2>&1 || (echo "wire not installed: go install github.com/google/wire/cmd/wire@latest"; exit 1)
 	@cd backend && wire ./...
+
+seed: ## Seed the database with demo data (requires running DB)
+	$(COMPOSE_DEV) run --rm seed
+
+certs: ## Generate local TLS certificates via mkcert
+	@scripts/setup-certs.sh

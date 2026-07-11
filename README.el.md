@@ -65,7 +65,6 @@ nexustickets/
 │   │   ├── middleware/       # Auth, rate limiting, logging, CORS
 │   │   ├── dto/             # Structs αιτημάτων και αποκρίσεων
 │   │   └── wire/            # Providers έγχυσης εξαρτήσεων
-│   ├── migrations/          # Αρχεία μεταναστεύσεων SQL (up/down)
 │   └── pkg/                 # Κοινόχρηστα βοηθητικά (response helpers, pagination, UUID)
 ├── frontend/
 │   ├── src/
@@ -125,53 +124,61 @@ nexustickets/
 - Go 1.22+
 - Bun 1.x
 - Make
+- [mkcert](https://github.com/FiloSottile/mkcert) (για τοπικά TLS πιστοποιητικά)
 
-### Εκτέλεση με Docker Compose
+### Γρήγορη Εκκίνηση (Ανάπτυξη — Hot Reload)
 
 ```bash
-# Αντιγραφή template περιβάλλοντος και συμπλήρωση τιμών
+# 1. Αντιγραφή template περιβάλλοντος και συμπλήρωση τιμών
 cp .env.example .env
 
-# Εκκίνηση όλων των υπηρεσιών (PostgreSQL, Redis, backend, frontend)
+# 2. Δημιουργία τοπικών TLS πιστοποιητικών
+make certs
+
+# 3. Εκκίνηση όλων των υπηρεσιών (PostgreSQL, Redis, backend, frontend)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
-Το frontend είναι διαθέσιμο στο `http://localhost:5173`.  
-Το backend API είναι διαθέσιμο στο `http://localhost:8080/api/v1`.  
-Η τεκμηρίωση API βρίσκεται στο `http://localhost:8080/api/v1/docs`.
+Το frontend είναι διαθέσιμο στο `https://localhost:5173`.  
+Το backend API είναι διαθέσιμο στο `https://localhost:8080/api/v1`.
 
-### Τοπικό HTTPS (αυτοπεποιθησιακό πιστοποιητικό, production stack)
-
-Για να τρέξει το **δημιουργημένο** SPA πίσω από nginx με TLS τοπικά:
+### Παραγωγική Διάταξη (Built SPA πίσω από nginx)
 
 ```bash
-make local-tls
+cp .env.example .env
+make certs
 docker compose up --build
 ```
 
-Ανοίξτε `https://localhost`. Ο browser θα εμφανίσει προειδοποίηση πιστοποιητικού (αναμενόμενο για self-signed). Το frontend image χτίζεται με **ίδια προέλευση** (κενά `VITE_*`) ώστε API και WebSocket να περνούν από nginx μέσω HTTPS.
+Ανοίξτε `https://localhost`.
 
-> Σημείωση για PostgreSQL credentials: τα init scripts τρέχουν **μόνο** όταν το volume `postgres_data` είναι άδειο.
-> Αν αλλάξεις `POSTGRES_APP_PASSWORD` / `DB_PASSWORD` αφού έχει δημιουργηθεί το volume, το backend θα αποτυγχάνει με `password authentication failed`.
-> Σε αυτή την περίπτωση κάνετε reset τα volumes με:
->
-> ```bash
-> make db-reset
-> ```
+### Αρχικοποίηση Βάσης (Seed)
+
+```bash
+# Από τον host όσο το stack τρέχει:
+cd backend && go run ./cmd/seed
+```
+
+Δημιουργεί 3 χρήστες (`admin`, `organizer`, `attendee` — όλοι με κωδικό `ChangeMe123!`), 6 κατηγορίες και 50 ελληνικές εκδηλώσεις με τύπους εισιτηρίων.
 
 ### Εκτέλεση Χωρίς Docker
 
 ```bash
 # Backend
 cd backend
-go mod download
-make migrate-up
-make dev
+go run ./cmd/server
 
 # Frontend (ξεχωριστό terminal)
 cd frontend
 bun install
 bun run dev
+```
+
+### Επαναφορά Βάσης
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
 ```
 
 ---
@@ -183,11 +190,9 @@ make dev            Εκκίνηση backend σε λειτουργία ανάπ�
 make build          Δημιουργία παραγωγικών εκτελέσιμων
 make test           Εκτέλεση όλων των backend tests
 make lint           Εκτέλεση golangci-lint
-make migrate-up     Εφαρμογή όλων των εκκρεμών μεταναστεύσεων
-make migrate-down   Αναίρεση τελευταίας μετανάστευσης
-make seed           Αρχικοποίηση βάσης με δεδομένα
 make wire           Αναγέννηση κώδικα έγχυσης εξαρτήσεων Wire
-make local-tls      Δημιουργία self-signed TLS για nginx (`docker/tls/local`)
+make db-reset       Διαγραφή volumes postgres/redis και αναδημιουργία
+make certs          Δημιουργία τοπικών TLS πιστοποιητικών (mkcert)
 ```
 
 ---

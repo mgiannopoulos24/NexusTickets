@@ -12,7 +12,6 @@ services:
       POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:-nexus_app_dev_password_change_me}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
@@ -47,8 +46,6 @@ services:
       context: ./backend
     environment:
       APP_PORT: ${APP_PORT:-8080}
-      TLS_CERT_FILE: ${TLS_CERT_FILE:-/etc/tls/cert.pem}
-      TLS_KEY_FILE: ${TLS_KEY_FILE:-/etc/tls/key.pem}
       # DB / Redis placeholders (used as the backend grows).
       DB_HOST: ${DB_HOST:-postgres}
       DB_PORT: ${DB_PORT:-5432}
@@ -58,8 +55,6 @@ services:
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password_change_me}
-    volumes:
-      - ./docker/tls/local:/etc/tls:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -72,9 +67,10 @@ services:
           "/busybox",
           "wget",
           "-qO-",
-          "--no-check-certificate",
-          "https://127.0.0.1:8080/health",
+          "http://127.0.0.1:8080/health",
         ]
+      # Note: nginx terminates TLS for client-facing traffic; backend healthcheck
+      # remains HTTP (direct container-to-container).
       interval: 10s
       timeout: 3s
       retries: 20

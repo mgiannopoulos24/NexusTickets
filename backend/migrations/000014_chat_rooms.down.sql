@@ -1,2 +1,0 @@
-DROP TABLE IF NOT EXISTS chat_room_participants CASCADE;
-DROP TABLE IF NOT EXISTS chat_rooms CASCADE;

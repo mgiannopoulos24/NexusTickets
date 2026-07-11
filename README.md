@@ -65,7 +65,6 @@ nexustickets/
 │   │   ├── middleware/       # Auth, rate limiting, logging, CORS
 │   │   ├── dto/             # Request and response structs
 │   │   └── wire/            # Dependency injection providers
-│   ├── migrations/          # SQL migration files (up/down)
 │   └── pkg/                 # Shared utilities (response helpers, pagination, UUID)
 ├── frontend/
 │   ├── src/
@@ -127,53 +126,69 @@ It covers the architecture decisions, database design, implementation details fo
 - Node.js (for initial Angular CLI scaffolding only)
 - Make
 
-### Running with Docker Compose
+### Prerequisites
+
+- [mkcert](https://github.com/FiloSottile/mkcert) (for local TLS certs)
+
+### Quick Start (Development — Hot Reload)
 
 ```bash
-# Copy environment template and fill in values
+# 1. Copy environment template and fill in values
 cp .env.example .env
 
-# Start all services (PostgreSQL, Redis, backend, frontend)
+# 2. Generate local TLS certificates
+make certs
+
+# 3. Start all services (PostgreSQL, Redis, backend, frontend)
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
-The frontend is available at `http://localhost:5173`.  
-The backend API is available at `http://localhost:8080/api/v1`.  
-API documentation is at `http://localhost:8080/api/v1/docs`.
+The frontend is available at `https://localhost:5173`.  
+The backend API is available at `https://localhost:8080/api/v1`.
 
-### Local HTTPS (self-signed, production-style stack)
+### Production-Like Stack (Built SPA behind nginx)
 
-To run the **built** SPA behind nginx with TLS on your machine (same layout as production, but with a self-signed certificate):
+To run the **built** frontend behind nginx with TLS (same layout as production):
 
 ```bash
 cp .env.example .env
-make local-tls
+make certs
 docker compose up --build
 ```
 
-Then open `https://localhost`. Your browser will show a certificate warning once; that is expected for self-signed local certs. The frontend image is built with **same-origin** API URLs (empty `VITE_API_BASE_URL` / `VITE_WS_URL`), so REST and WebSocket traffic go through nginx over HTTPS. Ensure `CORS_ALLOWED_ORIGINS` in `.env` includes `https://localhost` (the default in development does).
+Then open `https://localhost`.
 
-> Note about PostgreSQL credentials: the init scripts run **only** when the `postgres_data` volume is empty.
-> If you change `POSTGRES_APP_PASSWORD` / `DB_PASSWORD` after the volume has already been created, the backend will fail with `password authentication failed`.
-> In that case, reset the volumes with:
->
-> ```bash
-> make db-reset
-> ```
+### Seeding the Database
+
+The first time you start the stack, the database is empty. Run the seed command inside the `backend` container (or from the host while the stack is up):
+
+```bash
+# From the host while the stack is running (connects to postgres via Docker network):
+cd backend && go run ./cmd/seed
+
+# Or start a standalone seed container by building just the seed binary.
+```
+
+This seeds 3 users (`admin`, `organizer`, `attendee` — all with password `ChangeMe123!`), 6 event categories, and 50 Greek events with ticket types.
 
 ### Running Without Docker
 
 ```bash
 # Backend
 cd backend
-go mod download
-make migrate-up
-make dev
+go run ./cmd/server
 
 # Frontend (separate terminal)
 cd frontend
 bun install
 bun run dev
+```
+
+### Resetting the Database
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
 ```
 
 ---
@@ -185,11 +200,9 @@ make dev            Start backend in development mode (hot reload)
 make build          Build production binaries
 make test           Run all backend tests
 make lint           Run golangci-lint
-make migrate-up     Apply all pending migrations
-make migrate-down   Rollback last migration
-make seed           Seed database with initial data
 make wire           Regenerate Wire dependency injection code
-make local-tls      Generate self-signed TLS key/cert for nginx (`docker/tls/local`)
+make db-reset       Delete postgres/redis volumes and recreate
+make certs          Generate local TLS certificates via mkcert
 ```
 
 ---

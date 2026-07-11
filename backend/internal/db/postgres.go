@@ -56,7 +56,7 @@ func BuildPostgresDSN(cfg config.Config) (string, error) {
 		return "", fmt.Errorf("DB_PASSWORD is required when DATABASE_URL is empty")
 	}
 
-	// URL format is required by `golang-migrate` and is also accepted by GORM's postgres driver.
+	// URL format accepted by GORM's postgres driver.
 	u := &url.URL{
 		Scheme: "postgres",
 		User:   url.UserPassword(cfg.DBUser, cfg.DBPassword),

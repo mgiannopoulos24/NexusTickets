@@ -49,6 +49,30 @@ services:
         bun install &&
         bun run dev --host 0.0.0.0 --port 5173
 
+  seed:
+    build:
+      context: ./backend
+      target: builder
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_ENV: development
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-${POSTGRES_DB:-nexustickets}}
+      DB_USER: ${DB_USER:-${POSTGRES_APP_USER:-nexustickets_app}}
+      DB_PASSWORD: ${DB_PASSWORD:-${POSTGRES_APP_PASSWORD:-nexus_app_dev_password_change_me}}
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+      - backend_go_cache:/go/pkg/mod
+      - backend_go_build_cache:/root/.cache/go-build
+    command:
+      - sh
+      - -c
+      - go run ./cmd/seed
+
 volumes:
   backend_go_cache:
   backend_go_build_cache:
