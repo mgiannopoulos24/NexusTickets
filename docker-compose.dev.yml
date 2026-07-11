@@ -8,9 +8,10 @@ services:
       - "${REDIS_EXPOSED_PORT:-6379}:6379"
 
   backend:
-    # Match HOST_UID/HOST_GID to your workstation user (see .env.example). The backend image
-    # defaults to UID 65532, which cannot create dirs under the bind-mounted ./backend (uploads/).
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    build:
+      # Dev needs Go tooling (air, go build); builder stage = golang:1.22-alpine.
+      target: builder
+    # Runs as root in dev to avoid volume permission issues with Go caches.
     working_dir: /app
     environment:
       TLS_CERT_FILE: ${TLS_CERT_FILE:-/etc/tls/cert.pem}
@@ -26,9 +27,7 @@ services:
       - sh
       - -c
       - >
-        go env -w GOMODCACHE=/go/pkg/mod &&
-        go env -w GOCACHE=/root/.cache/go-build &&
-        go install github.com/air-verse/air@latest &&
+        go install github.com/cosmtrek/air@v1.49.0 &&
         air -c .air.toml
 
   frontend:
