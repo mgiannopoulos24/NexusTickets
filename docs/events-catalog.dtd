@@ -1,43 +1,41 @@
-<!ELEMENT eventCatalog (event*)>
-<!ELEMENT event (Description, Address?, Organizer, GeoLocation?, Category*, ticketTypes, bookings)>
-<!ATTLIST event EventID CDATA #REQUIRED
-              Title CDATA #REQUIRED
-              Status CDATA #REQUIRED
-              StartTime CDATA #REQUIRED
-              EndTime CDATA #REQUIRED
-              Capacity CDATA #REQUIRED
-              City CDATA #REQUIRED
-              Country CDATA #IMPLIED
-              Venue CDATA #REQUIRED>
-<!ELEMENT Description (#PCDATA)>
-<!ELEMENT Address (#PCDATA)>
-<!ELEMENT Organizer EMPTY>
-<!ATTLIST Organizer UserID CDATA #REQUIRED
-                    Username CDATA #IMPLIED
-                    Email CDATA #IMPLIED
-                    FirstName CDATA #IMPLIED
-                    LastName CDATA #IMPLIED>
-<!ELEMENT GeoLocation EMPTY>
-<!ATTLIST GeoLocation Latitude CDATA #REQUIRED
-                        Longitude CDATA #REQUIRED>
+<!-- Event catalogue export DTD.
+     This is the DTD from the assignment (docs/assignment.pdf §7); the XML export
+     in backend/internal/export/catalog.go conforms to it exactly. -->
+<!ELEMENT Events (Event*)>
+<!ELEMENT Event (Title, Category+, EventType, Venue, Address, City, Country, GeoLocation?, StartDateTime, EndDateTime, Capacity, TicketTypes, Bookings, Organizer, Status, Description, Media?)>
+<!ATTLIST Event EventID CDATA #REQUIRED>
+<!ELEMENT Title (#PCDATA)>
 <!ELEMENT Category (#PCDATA)>
-<!ELEMENT ticketTypes (ticketType*)>
-<!ELEMENT ticketType EMPTY>
-<!ATTLIST ticketType TicketTypeID CDATA #REQUIRED
-                     Name CDATA #REQUIRED
-                     Price CDATA #REQUIRED
-                     Quantity CDATA #REQUIRED
-                     Available CDATA #REQUIRED>
-<!ELEMENT bookings (booking*)>
-<!ELEMENT booking (Attendee)>
-<!ATTLIST booking BookingID CDATA #REQUIRED
-                  Quantity CDATA #REQUIRED
-                  TotalCost CDATA #REQUIRED
-                  Status CDATA #REQUIRED
-                  TicketTypeID CDATA #REQUIRED>
+<!ELEMENT EventType (#PCDATA)>
+<!ELEMENT Venue (#PCDATA)>
+<!ELEMENT Address (#PCDATA)>
+<!ELEMENT City (#PCDATA)>
+<!ELEMENT Country (#PCDATA)>
+<!ELEMENT GeoLocation EMPTY>
+<!ATTLIST GeoLocation Latitude CDATA #REQUIRED Longitude CDATA #REQUIRED>
+<!ELEMENT StartDateTime (#PCDATA)>
+<!ELEMENT EndDateTime (#PCDATA)>
+<!ELEMENT Capacity (#PCDATA)>
+<!ELEMENT TicketTypes (TicketType+)>
+<!ELEMENT TicketType (Name, Price, Quantity, Available)>
+<!ATTLIST TicketType TicketTypeID CDATA #REQUIRED>
+<!ELEMENT Name (#PCDATA)>
+<!ELEMENT Price (#PCDATA)>
+<!ELEMENT Quantity (#PCDATA)>
+<!ELEMENT Available (#PCDATA)>
+<!ELEMENT Bookings (Booking*)>
+<!ELEMENT Booking (Attendee, Time, TicketTypeRef, NumberOfTickets, TotalCost, BookingStatus)>
+<!ATTLIST Booking BookingID CDATA #REQUIRED>
 <!ELEMENT Attendee EMPTY>
-<!ATTLIST Attendee UserID CDATA #REQUIRED
-                    Username CDATA #IMPLIED
-                    Email CDATA #IMPLIED
-                    FirstName CDATA #IMPLIED
-                    LastName CDATA #IMPLIED>
+<!ATTLIST Attendee UserID CDATA #REQUIRED>
+<!ELEMENT Time (#PCDATA)>
+<!ELEMENT TicketTypeRef (#PCDATA)>
+<!ELEMENT NumberOfTickets (#PCDATA)>
+<!ELEMENT TotalCost (#PCDATA)>
+<!ELEMENT BookingStatus (#PCDATA)>
+<!ELEMENT Organizer EMPTY>
+<!ATTLIST Organizer UserID CDATA #REQUIRED>
+<!ELEMENT Status (#PCDATA)>
+<!ELEMENT Description (#PCDATA)>
+<!ELEMENT Media (Photo*)>
+<!ELEMENT Photo (#PCDATA)>

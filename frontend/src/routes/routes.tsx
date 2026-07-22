@@ -33,6 +33,7 @@ const OrganizerEventNewPage = lazy(() => import('@/pages/organizer/OrganizerEven
 const OrganizerEventEditPage = lazy(() => import('@/pages/organizer/OrganizerEventEditPage'));
 const MyBookingsPage = lazy(() => import('@/pages/bookings/MyBookingsPage'));
 const EventBookingsPage = lazy(() => import('@/pages/organizer/EventBookingsPage'));
+const MessagesPage = lazy(() => import('@/pages/messages/MessagesPage'));
 
 const routes: RouteConfig[] = [
   {
@@ -137,6 +138,13 @@ const routes: RouteConfig[] = [
     layout: 'app',
     protected: true,
     roles: ['organizer'],
+  },
+  {
+    path: '/messages',
+    element: <MessagesPage />,
+    layout: 'app',
+    protected: true,
+    roles: ['attendee', 'organizer', 'admin'],
   },
   {
     path: '/account',

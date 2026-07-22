@@ -70,6 +70,7 @@ type EventRepository interface {
 	ListForExport(ctx context.Context, limit, offset int) ([]domain.Event, error)
 	ListTicketTypesByEventIDs(ctx context.Context, eventIDs []uuid.UUID) (map[uuid.UUID][]domain.TicketType, error)
 	ListCategoriesByEventIDs(ctx context.Context, eventIDs []uuid.UUID) (map[uuid.UUID][]domain.Category, error)
+	ListPhotosByEventIDs(ctx context.Context, eventIDs []uuid.UUID) (map[uuid.UUID][]domain.EventPhoto, error)
 }
 
 type TicketTypeRepository interface {

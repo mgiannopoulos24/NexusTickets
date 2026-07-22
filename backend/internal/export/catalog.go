@@ -3,42 +3,52 @@ package export
 import (
 	"encoding/json"
 	"encoding/xml"
-
-	"github.com/google/uuid"
+	"fmt"
 
 	"nexustickets/internal/domain"
 )
 
-const catalogRootElement = "eventCatalog"
+// catalogRootElement is the XML root that wraps all exported events.
+// Per the assignment DTD (docs/assignment.pdf §7): <!ELEMENT Events (Event*)>.
+const catalogRootElement = "Events"
 
-// EventExportXML mirrors the assignment event export DTD (see docs/events-catalog.dtd).
+// exportTimeLayout matches the DTD example format (e.g. 2025-07-12T20:30:00),
+// with no timezone suffix.
+const exportTimeLayout = "2006-01-02T15:04:05"
+
+// EventExportXML mirrors the assignment event export DTD exactly. Field order is
+// significant: encoding/xml emits elements in declaration order, and the DTD
+// content model is:
+//
+//	Event(EventID) -> Title, Category+, EventType, Venue, Address, City, Country,
+//	                  GeoLocation?, StartDateTime, EndDateTime, Capacity,
+//	                  TicketTypes, Bookings, Organizer, Status, Description, Media?
 type EventExportXML struct {
-	XMLName     xml.Name `xml:"event"`
-	EventID     string   `xml:"EventID,attr"`
-	Title       string   `xml:"Title,attr"`
-	Status      string   `xml:"Status,attr"`
-	StartTime   string   `xml:"StartTime,attr"`
-	EndTime     string   `xml:"EndTime,attr"`
-	Capacity    int      `xml:"Capacity,attr"`
-	City        string   `xml:"City,attr"`
-	Country     *string  `xml:"Country,attr,omitempty"`
-	Venue       string   `xml:"Venue,attr"`
-	Description string   `xml:"Description"`
-	Address     *string  `xml:"Address,omitempty"`
-	Organizer   OrganizerExportXML `xml:"Organizer"`
-	GeoLocation *GeoLocationExportXML `xml:"GeoLocation,omitempty"`
-	Category    []string `xml:"Category"`
-	TicketTypes TicketTypesExportXML `xml:"ticketTypes"`
-	Bookings    BookingsExportXML `xml:"bookings"`
+	XMLName       xml.Name              `xml:"Event"`
+	EventID       string                `xml:"EventID,attr"`
+	Title         string                `xml:"Title"`
+	Category      []string              `xml:"Category"`
+	EventType     string                `xml:"EventType"`
+	Venue         string                `xml:"Venue"`
+	Address       string                `xml:"Address"`
+	City          string                `xml:"City"`
+	Country       string                `xml:"Country"`
+	GeoLocation   *GeoLocationExportXML `xml:"GeoLocation,omitempty"`
+	StartDateTime string                `xml:"StartDateTime"`
+	EndDateTime   string                `xml:"EndDateTime"`
+	Capacity      int                   `xml:"Capacity"`
+	TicketTypes   TicketTypesExportXML  `xml:"TicketTypes"`
+	Bookings      BookingsExportXML     `xml:"Bookings"`
+	Organizer     OrganizerExportXML    `xml:"Organizer"`
+	Status        string                `xml:"Status"`
+	Description   string                `xml:"Description"`
+	Media         *MediaExportXML       `xml:"Media,omitempty"`
 }
 
-// OrganizerExportXML carries organizer identity (UserID attribute per DTD).
+// OrganizerExportXML is an EMPTY element carrying the organizer's UserID.
+// DTD: <!ELEMENT Organizer EMPTY> <!ATTLIST Organizer UserID CDATA #REQUIRED>.
 type OrganizerExportXML struct {
-	UserID    string  `xml:"UserID,attr"`
-	Username  string  `xml:"Username,attr,omitempty"`
-	Email     string  `xml:"Email,attr,omitempty"`
-	FirstName string  `xml:"FirstName,attr,omitempty"`
-	LastName  string  `xml:"LastName,attr,omitempty"`
+	UserID string `xml:"UserID,attr"`
 }
 
 // GeoLocationExportXML uses Latitude/Longitude attributes per DTD.
@@ -47,70 +57,71 @@ type GeoLocationExportXML struct {
 	Longitude float64 `xml:"Longitude,attr"`
 }
 
-// TicketTypesExportXML wraps repeated ticketType elements.
+// TicketTypesExportXML wraps one-or-more TicketType elements (DTD: TicketType+).
 type TicketTypesExportXML struct {
-	Items []TicketTypeExportXML `xml:"ticketType"`
+	Items []TicketTypeExportXML `xml:"TicketType"`
 }
 
-// TicketTypeExportXML uses TicketTypeID attribute per DTD.
+// TicketTypeExportXML: TicketTypeID attribute + Name, Price, Quantity, Available children.
 type TicketTypeExportXML struct {
-	TicketTypeID string  `xml:"TicketTypeID,attr"`
-	Name         string  `xml:"Name,attr"`
-	Price        float64 `xml:"Price,attr"`
-	Quantity     int     `xml:"Quantity,attr"`
-	Available    int     `xml:"Available,attr"`
-}
-
-// BookingsExportXML wraps repeated booking elements.
-type BookingsExportXML struct {
-	Items []BookingExportXML `xml:"booking"`
-}
-
-// BookingExportXML uses BookingID attribute and nested Attendee (UserID) per DTD.
-type BookingExportXML struct {
-	BookingID    string `xml:"BookingID,attr"`
-	Quantity     int    `xml:"Quantity,attr"`
-	TotalCost    float64 `xml:"TotalCost,attr"`
-	Status       string `xml:"Status,attr"`
 	TicketTypeID string `xml:"TicketTypeID,attr"`
-	Attendee     AttendeeExportXML `xml:"Attendee"`
+	Name         string `xml:"Name"`
+	Price        string `xml:"Price"`
+	Quantity     int    `xml:"Quantity"`
+	Available    int    `xml:"Available"`
 }
 
-// AttendeeExportXML carries booking user identity (UserID attribute).
+// BookingsExportXML wraps zero-or-more Booking elements (DTD: Booking*).
+type BookingsExportXML struct {
+	Items []BookingExportXML `xml:"Booking"`
+}
+
+// BookingExportXML: BookingID attribute + Attendee, Time, TicketTypeRef,
+// NumberOfTickets, TotalCost, BookingStatus children (DTD order).
+type BookingExportXML struct {
+	BookingID       string            `xml:"BookingID,attr"`
+	Attendee        AttendeeExportXML `xml:"Attendee"`
+	Time            string            `xml:"Time"`
+	TicketTypeRef   string            `xml:"TicketTypeRef"`
+	NumberOfTickets int               `xml:"NumberOfTickets"`
+	TotalCost       string            `xml:"TotalCost"`
+	BookingStatus   string            `xml:"BookingStatus"`
+}
+
+// AttendeeExportXML is an EMPTY element carrying the attendee's UserID.
 type AttendeeExportXML struct {
-	UserID    string `xml:"UserID,attr"`
-	Username  string `xml:"Username,attr,omitempty"`
-	Email     string `xml:"Email,attr,omitempty"`
-	FirstName string `xml:"FirstName,attr,omitempty"`
-	LastName  string `xml:"LastName,attr,omitempty"`
+	UserID string `xml:"UserID,attr"`
 }
 
-// EventJSON is the JSON export shape for one event (logical mirror of EventExportXML).
+// MediaExportXML wraps zero-or-more Photo elements (DTD: Media (Photo*)).
+type MediaExportXML struct {
+	Photos []string `xml:"Photo"`
+}
+
+// EventJSON is the JSON export shape for one event (logical mirror of the DTD).
 type EventJSON struct {
-	EventID     string              `json:"event_id"`
-	Title       string              `json:"title"`
-	Status      string              `json:"status"`
-	StartTime   string              `json:"start_time"`
-	EndTime     string              `json:"end_time"`
-	Capacity    int                 `json:"capacity"`
-	City        string              `json:"city"`
-	Country     *string             `json:"country,omitempty"`
-	Venue       string              `json:"venue"`
-	Description string              `json:"description"`
-	Address     *string             `json:"address,omitempty"`
-	Organizer   OrganizerJSON       `json:"organizer"`
-	GeoLocation *GeoLocationJSON    `json:"geo_location,omitempty"`
-	Categories  []string            `json:"categories"`
-	TicketTypes []TicketTypeJSON    `json:"ticket_types"`
-	Bookings    []BookingJSON       `json:"bookings"`
+	EventID       string           `json:"event_id"`
+	Title         string           `json:"title"`
+	Categories    []string         `json:"categories"`
+	EventType     string           `json:"event_type"`
+	Venue         string           `json:"venue"`
+	Address       *string          `json:"address,omitempty"`
+	City          string           `json:"city"`
+	Country       *string          `json:"country,omitempty"`
+	GeoLocation   *GeoLocationJSON `json:"geo_location,omitempty"`
+	StartDateTime string           `json:"start_date_time"`
+	EndDateTime   string           `json:"end_date_time"`
+	Capacity      int              `json:"capacity"`
+	TicketTypes   []TicketTypeJSON `json:"ticket_types"`
+	Bookings      []BookingJSON    `json:"bookings"`
+	Organizer     OrganizerJSON    `json:"organizer"`
+	Status        string           `json:"status"`
+	Description   string           `json:"description"`
+	Media         []string         `json:"media,omitempty"`
 }
 
 type OrganizerJSON struct {
-	UserID    string `json:"user_id"`
-	Username  string `json:"username"`
-	Email     string `json:"email"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
+	UserID string `json:"user_id"`
 }
 
 type GeoLocationJSON struct {
@@ -127,53 +138,63 @@ type TicketTypeJSON struct {
 }
 
 type BookingJSON struct {
-	BookingID    string       `json:"booking_id"`
-	Quantity     int          `json:"quantity"`
-	TotalCost    float64      `json:"total_cost"`
-	Status       string       `json:"status"`
-	TicketTypeID string       `json:"ticket_type_id"`
-	Attendee     AttendeeJSON `json:"attendee"`
+	BookingID       string       `json:"booking_id"`
+	Attendee        AttendeeJSON `json:"attendee"`
+	Time            string       `json:"time"`
+	TicketTypeRef   string       `json:"ticket_type_ref"`
+	NumberOfTickets int          `json:"number_of_tickets"`
+	TotalCost       float64      `json:"total_cost"`
+	BookingStatus   string       `json:"booking_status"`
 }
 
 type AttendeeJSON struct {
-	UserID    string `json:"user_id"`
-	Username  string `json:"username"`
-	Email     string `json:"email"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
+	UserID string `json:"user_id"`
 }
 
 // CatalogRootElement returns the XML root element name for the export catalogue.
 func CatalogRootElement() string { return catalogRootElement }
 
+// eventTypeFor derives the DTD's required single EventType from the event's
+// categories (first category name). EventType is not stored separately in the
+// schema; the first category is the closest semantic source. Falls back to
+// "Event" when the event has no categories.
+func eventTypeFor(categories []domain.Category) string {
+	if len(categories) > 0 {
+		return categories[0].Name
+	}
+	return "Event"
+}
+
+func derefOr(s *string, fallback string) string {
+	if s != nil {
+		return *s
+	}
+	return fallback
+}
+
+// mediaPhotos returns the photo references for an event's Media block: the
+// featured image (if any) followed by gallery photos by storage path.
+func mediaPhotos(ev domain.Event, photos []domain.EventPhoto) []string {
+	out := make([]string, 0, len(photos)+1)
+	if ev.FeaturedImageURL != nil && *ev.FeaturedImageURL != "" {
+		out = append(out, *ev.FeaturedImageURL)
+	}
+	for _, p := range photos {
+		out = append(out, p.StoragePath)
+	}
+	return out
+}
+
 // BuildEventExportXML maps a hydrated domain event to the DTD-aligned XML struct.
-func BuildEventExportXML(ev domain.Event, categories []domain.Category, users map[uuid.UUID]domain.User) EventExportXML {
+func BuildEventExportXML(ev domain.Event, categories []domain.Category, photos []domain.EventPhoto) EventExportXML {
 	catNames := make([]string, 0, len(categories))
 	for _, c := range categories {
 		catNames = append(catNames, c.Name)
 	}
 
-	var org OrganizerExportXML
-	if u, ok := users[ev.OrganizerID]; ok {
-		org = OrganizerExportXML{
-			UserID:    u.ID.String(),
-			Username:  u.Username,
-			Email:     u.Email,
-			FirstName: u.FirstName,
-			LastName:  u.LastName,
-		}
-	} else {
-		org = OrganizerExportXML{
-			UserID: ev.OrganizerID.String(),
-		}
-	}
-
 	var geo *GeoLocationExportXML
 	if ev.Latitude != nil && ev.Longitude != nil {
-		geo = &GeoLocationExportXML{
-			Latitude:  *ev.Latitude,
-			Longitude: *ev.Longitude,
-		}
+		geo = &GeoLocationExportXML{Latitude: *ev.Latitude, Longitude: *ev.Longitude}
 	}
 
 	tts := make([]TicketTypeExportXML, 0, len(ev.TicketTypes))
@@ -181,7 +202,7 @@ func BuildEventExportXML(ev domain.Event, categories []domain.Category, users ma
 		tts = append(tts, TicketTypeExportXML{
 			TicketTypeID: tt.ID.String(),
 			Name:         tt.Name,
-			Price:        tt.Price,
+			Price:        formatMoney(tt.Price),
 			Quantity:     tt.Quantity,
 			Available:    tt.Available,
 		})
@@ -189,73 +210,55 @@ func BuildEventExportXML(ev domain.Event, categories []domain.Category, users ma
 
 	bks := make([]BookingExportXML, 0, len(ev.Bookings))
 	for _, b := range ev.Bookings {
-		att := AttendeeExportXML{UserID: b.UserID.String()}
-		if u, ok := users[b.UserID]; ok {
-			att = AttendeeExportXML{
-				UserID:    u.ID.String(),
-				Username:  u.Username,
-				Email:     u.Email,
-				FirstName: u.FirstName,
-				LastName:  u.LastName,
-			}
-		}
 		bks = append(bks, BookingExportXML{
-			BookingID:    b.ID.String(),
-			Quantity:     b.Quantity,
-			TotalCost:    b.TotalCost,
-			Status:       string(b.Status),
-			TicketTypeID: b.TicketTypeID.String(),
-			Attendee:     att,
+			BookingID:       b.ID.String(),
+			Attendee:        AttendeeExportXML{UserID: b.UserID.String()},
+			Time:            b.CreatedAt.UTC().Format(exportTimeLayout),
+			TicketTypeRef:   b.TicketTypeID.String(),
+			NumberOfTickets: b.Quantity,
+			TotalCost:       formatMoney(b.TotalCost),
+			BookingStatus:   string(b.Status),
 		})
 	}
 
+	var media *MediaExportXML
+	if refs := mediaPhotos(ev, photos); len(refs) > 0 {
+		media = &MediaExportXML{Photos: refs}
+	}
+
 	return EventExportXML{
-		XMLName:     xml.Name{Local: "event"},
-		EventID:     ev.ID.String(),
-		Title:       ev.Title,
-		Status:      string(ev.Status),
-		StartTime:   ev.StartAt.UTC().Format("2006-01-02T15:04:05Z"),
-		EndTime:     ev.EndAt.UTC().Format("2006-01-02T15:04:05Z"),
-		Capacity:    ev.Capacity,
-		City:        ev.City,
-		Country:     ev.Country,
-		Venue:       ev.Venue,
-		Description: ev.Description,
-		Address:     ev.Address,
-		Organizer:   org,
-		GeoLocation: geo,
-		Category:    catNames,
-		TicketTypes: TicketTypesExportXML{Items: tts},
-		Bookings:    BookingsExportXML{Items: bks},
+		XMLName:       xml.Name{Local: "Event"},
+		EventID:       ev.ID.String(),
+		Title:         ev.Title,
+		Category:      catNames,
+		EventType:     eventTypeFor(categories),
+		Venue:         ev.Venue,
+		Address:       derefOr(ev.Address, ""),
+		City:          ev.City,
+		Country:       derefOr(ev.Country, ""),
+		GeoLocation:   geo,
+		StartDateTime: ev.StartAt.UTC().Format(exportTimeLayout),
+		EndDateTime:   ev.EndAt.UTC().Format(exportTimeLayout),
+		Capacity:      ev.Capacity,
+		TicketTypes:   TicketTypesExportXML{Items: tts},
+		Bookings:      BookingsExportXML{Items: bks},
+		Organizer:     OrganizerExportXML{UserID: ev.OrganizerID.String()},
+		Status:        string(ev.Status),
+		Description:   ev.Description,
+		Media:         media,
 	}
 }
 
 // BuildEventJSON maps a hydrated domain event to the JSON export struct.
-func BuildEventJSON(ev domain.Event, categories []domain.Category, users map[uuid.UUID]domain.User) EventJSON {
+func BuildEventJSON(ev domain.Event, categories []domain.Category, photos []domain.EventPhoto) EventJSON {
 	catNames := make([]string, 0, len(categories))
 	for _, c := range categories {
 		catNames = append(catNames, c.Name)
 	}
 
-	var org OrganizerJSON
-	if u, ok := users[ev.OrganizerID]; ok {
-		org = OrganizerJSON{
-			UserID:    u.ID.String(),
-			Username:  u.Username,
-			Email:     u.Email,
-			FirstName: u.FirstName,
-			LastName:  u.LastName,
-		}
-	} else {
-		org = OrganizerJSON{UserID: ev.OrganizerID.String()}
-	}
-
 	var geo *GeoLocationJSON
 	if ev.Latitude != nil && ev.Longitude != nil {
-		geo = &GeoLocationJSON{
-			Latitude:  *ev.Latitude,
-			Longitude: *ev.Longitude,
-		}
+		geo = &GeoLocationJSON{Latitude: *ev.Latitude, Longitude: *ev.Longitude}
 	}
 
 	tts := make([]TicketTypeJSON, 0, len(ev.TicketTypes))
@@ -271,44 +274,43 @@ func BuildEventJSON(ev domain.Event, categories []domain.Category, users map[uui
 
 	bks := make([]BookingJSON, 0, len(ev.Bookings))
 	for _, b := range ev.Bookings {
-		att := AttendeeJSON{UserID: b.UserID.String()}
-		if u, ok := users[b.UserID]; ok {
-			att = AttendeeJSON{
-				UserID:    u.ID.String(),
-				Username:  u.Username,
-				Email:     u.Email,
-				FirstName: u.FirstName,
-				LastName:  u.LastName,
-			}
-		}
 		bks = append(bks, BookingJSON{
-			BookingID:    b.ID.String(),
-			Quantity:     b.Quantity,
-			TotalCost:    b.TotalCost,
-			Status:       string(b.Status),
-			TicketTypeID: b.TicketTypeID.String(),
-			Attendee:     att,
+			BookingID:       b.ID.String(),
+			Attendee:        AttendeeJSON{UserID: b.UserID.String()},
+			Time:            b.CreatedAt.UTC().Format(exportTimeLayout),
+			TicketTypeRef:   b.TicketTypeID.String(),
+			NumberOfTickets: b.Quantity,
+			TotalCost:       b.TotalCost,
+			BookingStatus:   string(b.Status),
 		})
 	}
 
 	return EventJSON{
-		EventID:     ev.ID.String(),
-		Title:       ev.Title,
-		Status:      string(ev.Status),
-		StartTime:   ev.StartAt.UTC().Format("2006-01-02T15:04:05Z"),
-		EndTime:     ev.EndAt.UTC().Format("2006-01-02T15:04:05Z"),
-		Capacity:    ev.Capacity,
-		City:        ev.City,
-		Country:     ev.Country,
-		Venue:       ev.Venue,
-		Description: ev.Description,
-		Address:     ev.Address,
-		Organizer:   org,
-		GeoLocation: geo,
-		Categories:  catNames,
-		TicketTypes: tts,
-		Bookings:    bks,
+		EventID:       ev.ID.String(),
+		Title:         ev.Title,
+		Categories:    catNames,
+		EventType:     eventTypeFor(categories),
+		Venue:         ev.Venue,
+		Address:       ev.Address,
+		City:          ev.City,
+		Country:       ev.Country,
+		GeoLocation:   geo,
+		StartDateTime: ev.StartAt.UTC().Format(exportTimeLayout),
+		EndDateTime:   ev.EndAt.UTC().Format(exportTimeLayout),
+		Capacity:      ev.Capacity,
+		TicketTypes:   tts,
+		Bookings:      bks,
+		Organizer:     OrganizerJSON{UserID: ev.OrganizerID.String()},
+		Status:        string(ev.Status),
+		Description:   ev.Description,
+		Media:         mediaPhotos(ev, photos),
 	}
+}
+
+// formatMoney renders a monetary value with two decimals (DTD Price/TotalCost,
+// e.g. "36.00").
+func formatMoney(v float64) string {
+	return fmt.Sprintf("%.2f", v)
 }
 
 // MarshalEventJSON returns compact JSON for one event (no outer wrapper).

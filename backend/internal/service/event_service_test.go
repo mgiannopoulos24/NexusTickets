@@ -160,6 +160,14 @@ func (m *mockEventRepo) ListCategoriesByEventIDs(_ context.Context, eids []uuid.
 	return out, nil
 }
 
+func (m *mockEventRepo) ListPhotosByEventIDs(_ context.Context, eids []uuid.UUID) (map[uuid.UUID][]domain.EventPhoto, error) {
+	out := make(map[uuid.UUID][]domain.EventPhoto)
+	for _, eid := range eids {
+		out[eid] = m.photos[eid]
+	}
+	return out, nil
+}
+
 type mockCategoryRepo struct {
 	cats    map[uuid.UUID]domain.Category
 	byName  map[string]domain.Category

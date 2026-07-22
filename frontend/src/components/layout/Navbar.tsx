@@ -101,22 +101,25 @@ export function Navbar() {
           <div className="flex shrink-0 items-stretch gap-1 sm:gap-2">
             <NavbarLanguageGlobe />
             <Button
+              asChild
               variant="ghost"
               size="icon"
               className="relative cursor-pointer self-center text-neutral-600"
               aria-label={
-                unreadCount > 0 ? `Ειδοποιήσεις, ${unreadCount} μη αναγνωσμένα` : 'Ειδοποιήσεις'
+                unreadCount > 0 ? `Μηνύματα, ${unreadCount} μη αναγνωσμένα` : 'Μηνύματα'
               }
             >
-              <Bell className="size-5" />
-              {unreadCount > 0 ? (
-                <Badge
-                  variant="destructive"
-                  className="absolute -right-0.5 -top-0.5 min-w-5 justify-center border-0 bg-[#6d28d9] px-1 text-[10px] text-white hover:bg-[#6d28d9]"
-                >
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </Badge>
-              ) : null}
+              <Link to="/messages">
+                <Bell className="size-5" />
+                {unreadCount > 0 ? (
+                  <Badge
+                    variant="destructive"
+                    className="absolute -right-0.5 -top-0.5 min-w-5 justify-center border-0 bg-[#6d28d9] px-1 text-[10px] text-white hover:bg-[#6d28d9]"
+                  >
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </Badge>
+                ) : null}
+              </Link>
             </Button>
 
             {user ? (
@@ -144,6 +147,11 @@ export function Navbar() {
                     <DropdownMenuItem asChild className={selectFullItemClassName()}>
                       <Link to="/bookings/me" className="flex w-full items-center">
                         Οι κρατήσεις μου
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild className={selectFullItemClassName()}>
+                      <Link to="/messages" className="flex w-full items-center">
+                        Μηνύματα
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild className={selectFullItemClassName()}>
