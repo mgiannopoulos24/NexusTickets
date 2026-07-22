@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -228,6 +229,26 @@ func (m *mockViewsRepo) Record(_ context.Context, userID, eventID uuid.UUID) err
 
 func (m *mockViewsRepo) CountByEvent(_ context.Context, eventID uuid.UUID) (int, error) {
 	return len(m.views), nil
+}
+
+func (m *mockViewsRepo) ListAll(_ context.Context) ([]domain.UserEventView, error) {
+	out := make([]domain.UserEventView, 0, len(m.views))
+	for key := range m.views {
+		parts := strings.SplitN(key, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		userID, err := uuid.Parse(parts[0])
+		if err != nil {
+			continue
+		}
+		eventID, err := uuid.Parse(parts[1])
+		if err != nil {
+			continue
+		}
+		out = append(out, domain.UserEventView{UserID: userID, EventID: eventID})
+	}
+	return out, nil
 }
 
 type mockEventPhotoRepo struct {
@@ -565,7 +586,7 @@ func TestEventService_UpdateAndDeleteTicketType(t *testing.T) {
 	ev, _, _ := svc.Create(context.Background(), orgID, CreateEventInput{
 		Title: "Event", Description: "D", Venue: "V", City: "C",
 		StartAt: time.Now().Add(time.Hour), EndAt: time.Now().Add(2 * time.Hour),
-		Capacity: 100,
+		Capacity:    100,
 		TicketTypes: []TicketTypeInput{{Name: "General", Price: 10, Quantity: 50}},
 	})
 

@@ -11,10 +11,10 @@ import (
 )
 
 type mockBookingRepo struct {
-	bookings  map[uuid.UUID]domain.Booking
-	byUser    map[uuid.UUID][]domain.Booking
-	byEvent   map[uuid.UUID][]domain.Booking
-	byTT      map[uuid.UUID]int
+	bookings map[uuid.UUID]domain.Booking
+	byUser   map[uuid.UUID][]domain.Booking
+	byEvent  map[uuid.UUID][]domain.Booking
+	byTT     map[uuid.UUID]int
 }
 
 func newMockBookingRepo() *mockBookingRepo {
@@ -104,6 +104,16 @@ func (m *mockBookingRepo) CountByTicketType(_ context.Context, ttID uuid.UUID) (
 	return m.byTT[ttID], nil
 }
 
+func (m *mockBookingRepo) ListAllConfirmed(_ context.Context) ([]domain.Booking, error) {
+	out := make([]domain.Booking, 0, len(m.bookings))
+	for _, b := range m.bookings {
+		if b.Status == domain.BookingStatusConfirmed {
+			out = append(out, b)
+		}
+	}
+	return out, nil
+}
+
 func (m *mockBookingRepo) SetStatus(_ context.Context, bid uuid.UUID, status domain.BookingStatus) error {
 	b, ok := m.bookings[bid]
 	if !ok {
@@ -185,13 +195,13 @@ func TestBookingService_CreateBooking(t *testing.T) {
 	userID := uuid.New()
 
 	events.events[eventID] = domain.Event{
-		ID:           eventID,
-		OrganizerID:  orgID,
-		Title:        "Test Event",
-		Status:       domain.EventStatusPublished,
-		Capacity:     100,
-		StartAt:      time.Now().Add(time.Hour),
-		EndAt:        time.Now().Add(2 * time.Hour),
+		ID:          eventID,
+		OrganizerID: orgID,
+		Title:       "Test Event",
+		Status:      domain.EventStatusPublished,
+		Capacity:    100,
+		StartAt:     time.Now().Add(time.Hour),
+		EndAt:       time.Now().Add(2 * time.Hour),
 	}
 
 	ttRepo.types[ttID] = domain.TicketType{

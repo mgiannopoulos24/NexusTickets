@@ -9,6 +9,7 @@ type AdminLayoutProps = {
 
 const ADMIN_LINKS = [
   { label: 'Επισκόπηση', to: '/admin' },
+  { label: 'Χρήστες', to: '/admin/users' },
   { label: 'Εκδηλώσεις', to: '/admin/events' },
 ] as const;
 
@@ -23,7 +24,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         </div>
         <nav className="flex flex-col gap-1 px-2 py-2">
           {ADMIN_LINKS.map((l) => {
-            const active = location.pathname === l.to;
+            const active =
+              location.pathname === l.to ||
+              (l.to !== '/admin' && location.pathname.startsWith(`${l.to}/`));
             return (
               <Link
                 key={l.to}

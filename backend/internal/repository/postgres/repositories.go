@@ -451,22 +451,22 @@ func (r *eventRepositoryPostgres) Update(ctx context.Context, event domain.Event
 		Model(&EventModel{}).
 		Where("id = ?", event.ID).
 		Updates(map[string]interface{}{
-			"organizer_id":        m.OrganizerID,
-			"title":               m.Title,
-			"description":       m.Description,
-			"venue":               m.Venue,
-			"featured_image_url":  m.FeaturedImageURL,
-			"event_detail":        m.EventDetail,
-			"address":             m.Address,
-			"city":                m.City,
-			"country":             m.Country,
-			"latitude":            m.Latitude,
-			"longitude":           m.Longitude,
-			"start_time":          m.StartAt,
-			"end_time":            m.EndAt,
-			"capacity":            m.Capacity,
-			"status":              m.Status,
-			"updated_at":          m.UpdatedAt,
+			"organizer_id":       m.OrganizerID,
+			"title":              m.Title,
+			"description":        m.Description,
+			"venue":              m.Venue,
+			"featured_image_url": m.FeaturedImageURL,
+			"event_detail":       m.EventDetail,
+			"address":            m.Address,
+			"city":               m.City,
+			"country":            m.Country,
+			"latitude":           m.Latitude,
+			"longitude":          m.Longitude,
+			"start_time":         m.StartAt,
+			"end_time":           m.EndAt,
+			"capacity":           m.Capacity,
+			"status":             m.Status,
+			"updated_at":         m.UpdatedAt,
 		}).Error
 	if err != nil {
 		return domain.Event{}, fmt.Errorf("update event: %w", err)
@@ -856,6 +856,22 @@ func (r *bookingRepositoryPostgres) ListByEventIDs(ctx context.Context, eventIDs
 	return out, nil
 }
 
+func (r *bookingRepositoryPostgres) ListAllConfirmed(ctx context.Context) ([]domain.Booking, error) {
+	var models []BookingModel
+	err := r.db.WithContext(ctx).
+		Where("status = ?", string(domain.BookingStatusConfirmed)).
+		Order("created_at ASC").
+		Find(&models).Error
+	if err != nil {
+		return nil, fmt.Errorf("list all confirmed bookings: %w", err)
+	}
+	out := make([]domain.Booking, 0, len(models))
+	for _, m := range models {
+		out = append(out, bookingModelToDomain(m))
+	}
+	return out, nil
+}
+
 func (r *bookingRepositoryPostgres) CountByTicketType(ctx context.Context, ticketTypeID uuid.UUID) (int, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
@@ -1145,6 +1161,23 @@ func (r *userEventViewRepositoryPostgres) Record(ctx context.Context, userID, ev
 		return fmt.Errorf("record user event view: %w", err)
 	}
 	return nil
+}
+
+func (r *userEventViewRepositoryPostgres) ListAll(ctx context.Context) ([]domain.UserEventView, error) {
+	var models []UserEventViewModel
+	err := r.db.WithContext(ctx).Order("viewed_at ASC").Find(&models).Error
+	if err != nil {
+		return nil, fmt.Errorf("list all user event views: %w", err)
+	}
+	out := make([]domain.UserEventView, 0, len(models))
+	for _, m := range models {
+		out = append(out, domain.UserEventView{
+			UserID:   m.UserID,
+			EventID:  m.EventID,
+			ViewedAt: m.ViewedAt,
+		})
+	}
+	return out, nil
 }
 
 func (r *userEventViewRepositoryPostgres) CountByEvent(ctx context.Context, eventID uuid.UUID) (int, error) {

@@ -55,7 +55,34 @@ func TestRecommended_ColdStartReturnsPopular(t *testing.T) {
 	}
 }
 
-func TestRecommended_PersonalizedByCategoryAffinity(t *testing.T) {
+// fakeRecommender is a hand-controlled Recommender for testing EventService's
+// ranking logic without training a real BMF model.
+type fakeRecommender struct {
+	users   map[uuid.UUID]bool
+	scores  map[uuid.UUID]map[uuid.UUID]float64 // user -> event -> score
+	popular []uuid.UUID
+}
+
+func (f *fakeRecommender) HasUser(id uuid.UUID) bool { return f.users[id] }
+
+func (f *fakeRecommender) ScoreEvents(id uuid.UUID, eventIDs []uuid.UUID) map[uuid.UUID]float64 {
+	out := make(map[uuid.UUID]float64)
+	for _, e := range eventIDs {
+		if v, ok := f.scores[id][e]; ok {
+			out[e] = v
+		}
+	}
+	return out
+}
+
+func (f *fakeRecommender) PopularEventIDs(limit int) []uuid.UUID {
+	if limit <= 0 || limit > len(f.popular) {
+		limit = len(f.popular)
+	}
+	return f.popular[:limit]
+}
+
+func TestRecommended_PersonalizedByBMFScore(t *testing.T) {
 	events := newMockEventRepo()
 	bookings := newMockBookingRepo()
 
@@ -73,8 +100,17 @@ func TestRecommended_PersonalizedByCategoryAffinity(t *testing.T) {
 		Status:  domain.BookingStatusConfirmed,
 	})
 
+	// The model predicts a higher score for the music event than the sports one.
+	rec := &fakeRecommender{
+		users: map[uuid.UUID]bool{userID: true},
+		scores: map[uuid.UUID]map[uuid.UUID]float64{
+			userID: {booked: 5.0, musicEvent: 2.0, sportsEvent: 1.0},
+		},
+	}
+
 	svc := NewEventService(events, bookings, newMockCategoryRepo(),
 		newMockEventPhotoRepo(), newMockViewsRepo(), "", nil)
+	svc.SetRecommender(rec)
 
 	got, _, err := svc.Recommended(context.Background(), userID, 10)
 	if err != nil {
@@ -88,9 +124,9 @@ func TestRecommended_PersonalizedByCategoryAffinity(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("expected 2 recommendations, got %d", len(got))
 	}
-	// The music event (matching the user's affinity) must outrank the sports event.
+	// The higher-scored music event must outrank the sports event.
 	if got[0].ID != musicEvent {
-		t.Errorf("expected music event first (affinity match), got %v; sports=%v music=%v",
+		t.Errorf("expected music event first (higher BMF score), got %v; sports=%v music=%v",
 			got[0].ID, sportsEvent, musicEvent)
 	}
 }

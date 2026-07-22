@@ -94,6 +94,9 @@ type BookingRepository interface {
 	ListConfirmedByEvent(ctx context.Context, eventID uuid.UUID, limit, offset int) ([]domain.Booking, error)
 	ListDistinctConfirmedUserIDsByEvent(ctx context.Context, eventID uuid.UUID) ([]uuid.UUID, error)
 	ListByEventIDs(ctx context.Context, eventIDs []uuid.UUID) ([]domain.Booking, error)
+	// ListAllConfirmed returns every confirmed booking. Used to build the
+	// recommendation training matrix (a strong implicit-feedback signal).
+	ListAllConfirmed(ctx context.Context) ([]domain.Booking, error)
 	CountByTicketType(ctx context.Context, ticketTypeID uuid.UUID) (int, error)
 
 	SetStatus(ctx context.Context, bookingID uuid.UUID, status domain.BookingStatus) error
@@ -128,6 +131,9 @@ type EventPhotoRepository interface {
 type UserEventViewRepository interface {
 	Record(ctx context.Context, userID, eventID uuid.UUID) error
 	CountByEvent(ctx context.Context, eventID uuid.UUID) (int, error)
+	// ListAll returns every recorded view. Used as a weak implicit-feedback
+	// signal for the recommendation training matrix.
+	ListAll(ctx context.Context) ([]domain.UserEventView, error)
 }
 
 type ChatRoomRepository interface {

@@ -25,6 +25,8 @@ const UnauthorizedPage = lazy(() => import('@/components/auth/UnauthorizedPage')
 const AccountPage = lazy(() => import('@/pages/auth/AccountPage'));
 const SettingsPage = lazy(() => import('@/pages/auth/SettingsPage'));
 const AdminDashboard = lazy(() => import('@/pages/admin/AdminDashboard'));
+const AdminUsersPage = lazy(() => import('@/pages/admin/AdminUsersPage'));
+const AdminUserDetailPage = lazy(() => import('@/pages/admin/AdminUserDetailPage'));
 const AdminEventsPage = lazy(() => import('@/pages/admin/AdminEventsPage'));
 const AdminEventEditPage = lazy(() => import('@/pages/admin/AdminEventEditPage'));
 const OrganizerDashboardPage = lazy(() => import('@/pages/organizer/OrganizerDashboardPage'));
@@ -79,6 +81,20 @@ const routes: RouteConfig[] = [
   {
     path: '/admin',
     element: <AdminDashboard />,
+    layout: 'app',
+    protected: true,
+    roles: ['admin'],
+  },
+  {
+    path: '/admin/users',
+    element: <AdminUsersPage />,
+    layout: 'app',
+    protected: true,
+    roles: ['admin'],
+  },
+  {
+    path: '/admin/users/:id',
+    element: <AdminUserDetailPage />,
     layout: 'app',
     protected: true,
     roles: ['admin'],

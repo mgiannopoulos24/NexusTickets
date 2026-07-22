@@ -200,9 +200,9 @@ func seedEvents(d *gorm.DB) {
 			venue: "Κέντρο Πολιτισμού Ίδρυμα Σταύρος Νιάρχος", addr: sp("Λεωφ. Συγγρού 364"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.941), lng: fp(23.694),
 			start: f("2026-07-15T18:00:00Z"), end: f("2026-07-17T23:00:00Z"), capacity: 5000, catID: musicID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T001", name: "Early Bird", price: 25.00, quantity: 500, available: 500},
-				{id: "00000000-0000-0000-0000-00000000T002", name: "Γενική Είσοδος", price: 40.00, quantity: 3000, available: 3000},
-				{id: "00000000-0000-0000-0000-00000000T003", name: "VIP", price: 80.00, quantity: 1500, available: 1500},
+				{id: "00000000-0000-0000-0000-00000000a001", name: "Early Bird", price: 25.00, quantity: 500, available: 500},
+				{id: "00000000-0000-0000-0000-00000000a002", name: "Γενική Είσοδος", price: 40.00, quantity: 3000, available: 3000},
+				{id: "00000000-0000-0000-0000-00000000a003", name: "VIP", price: 80.00, quantity: 1500, available: 1500},
 			},
 		},
 		{
@@ -211,8 +211,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Πλατεία Αριστοτέλους", addr: sp("Πλατεία Αριστοτέλους"), city: "Θεσσαλονίκη", country: sp("Ελλάδα"), lat: fp(40.633), lng: fp(22.938),
 			start: f("2026-08-20T20:00:00Z"), end: f("2026-08-21T02:00:00Z"), capacity: 8000, catID: musicID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T004", name: "Γενική Είσοδος", price: 15.00, quantity: 6000, available: 6000},
-				{id: "00000000-0000-0000-0000-00000000T005", name: "Μπροστινή Ζώνη", price: 30.00, quantity: 2000, available: 2000},
+				{id: "00000000-0000-0000-0000-00000000a004", name: "Γενική Είσοδος", price: 15.00, quantity: 6000, available: 6000},
+				{id: "00000000-0000-0000-0000-00000000a005", name: "Μπροστινή Ζώνη", price: 30.00, quantity: 2000, available: 2000},
 			},
 		},
 		{
@@ -221,8 +221,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Παλιό Αεροδρόμιο Ελληνικού", addr: sp("Λεωφ. Ποσειδώνος"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.894), lng: fp(23.748),
 			start: f("2026-06-26T16:00:00Z"), end: f("2026-06-28T06:00:00Z"), capacity: 15000, catID: musicID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T006", name: "Ημερήσιο", price: 35.00, quantity: 8000, available: 8000},
-				{id: "00000000-0000-0000-0000-00000000T007", name: "Τριήμερο", price: 70.00, quantity: 7000, available: 7000},
+				{id: "00000000-0000-0000-0000-00000000a006", name: "Ημερήσιο", price: 35.00, quantity: 8000, available: 8000},
+				{id: "00000000-0000-0000-0000-00000000a007", name: "Τριήμερο", price: 70.00, quantity: 7000, available: 7000},
 			},
 		},
 		{
@@ -231,8 +231,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Θέατρο Λυκαβηττού", addr: sp("Λόφος Λυκαβηττού"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.981), lng: fp(23.746),
 			start: f("2026-07-03T21:00:00Z"), end: f("2026-07-03T23:30:00Z"), capacity: 4000, catID: musicID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T008", name: "Γενική Είσοδος", price: 20.00, quantity: 3000, available: 3000},
-				{id: "00000000-0000-0000-0000-00000000T009", name: "VIP", price: 50.00, quantity: 1000, available: 1000},
+				{id: "00000000-0000-0000-0000-00000000a008", name: "Γενική Είσοδος", price: 20.00, quantity: 3000, available: 3000},
+				{id: "00000000-0000-0000-0000-00000000a009", name: "VIP", price: 50.00, quantity: 1000, available: 1000},
 			},
 		},
 		{
@@ -241,8 +241,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Πλατεία Νερού", addr: sp("Λεωφ. Ποσειδώνος"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.896), lng: fp(23.684),
 			start: f("2026-06-19T17:00:00Z"), end: f("2026-06-21T23:00:00Z"), capacity: 20000, catID: musicID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T00A", name: "Ημερήσιο", price: 40.00, quantity: 10000, available: 10000},
-				{id: "00000000-0000-0000-0000-00000000T00B", name: "Τριήμερο", price: 90.00, quantity: 10000, available: 10000},
+				{id: "00000000-0000-0000-0000-00000000a00A", name: "Ημερήσιο", price: 40.00, quantity: 10000, available: 10000},
+				{id: "00000000-0000-0000-0000-00000000a00B", name: "Τριήμερο", price: 90.00, quantity: 10000, available: 10000},
 			},
 		},
 		{
@@ -251,8 +251,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "ΟΑΚΑ", addr: sp("Λεωφ. Κηφισίας 37"), city: "Μαρούσι", country: sp("Ελλάδα"), lat: fp(38.038), lng: fp(23.786),
 			start: f("2026-09-02T20:00:00Z"), end: f("2026-09-02T23:30:00Z"), capacity: 30000, catID: musicID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T00C", name: "Γενική Είσοδος", price: 50.00, quantity: 20000, available: 20000},
-				{id: "00000000-0000-0000-0000-00000000T00D", name: "VIP", price: 120.00, quantity: 10000, available: 10000},
+				{id: "00000000-0000-0000-0000-00000000a00C", name: "Γενική Είσοδος", price: 50.00, quantity: 20000, available: 20000},
+				{id: "00000000-0000-0000-0000-00000000a00D", name: "VIP", price: 120.00, quantity: 10000, available: 10000},
 			},
 		},
 		{
@@ -261,7 +261,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Πλατεία Διοικητηρίου", addr: sp("Πλατεία Διοικητηρίου"), city: "Ξάνθη", country: sp("Ελλάδα"), lat: fp(41.135), lng: fp(24.887),
 			start: f("2026-09-15T19:00:00Z"), end: f("2026-09-16T01:00:00Z"), capacity: 3000, catID: musicID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T00E", name: "Γενική Είσοδος", price: 5.00, quantity: 3000, available: 3000},
+				{id: "00000000-0000-0000-0000-00000000a00E", name: "Γενική Είσοδος", price: 5.00, quantity: 3000, available: 3000},
 			},
 		},
 		{
@@ -270,8 +270,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Ηρώδειο", addr: sp("Διονυσίου Αρεοπαγίτου"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.971), lng: fp(23.726),
 			start: f("2026-08-02T21:00:00Z"), end: f("2026-08-02T23:30:00Z"), capacity: 5000, catID: musicID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T00F", name: "Άνω Διάζωμα", price: 30.00, quantity: 3000, available: 3000},
-				{id: "00000000-0000-0000-0000-00000000T010", name: "Κάτω Διάζωμα", price: 60.00, quantity: 2000, available: 2000},
+				{id: "00000000-0000-0000-0000-00000000a00F", name: "Άνω Διάζωμα", price: 30.00, quantity: 3000, available: 3000},
+				{id: "00000000-0000-0000-0000-00000000a010", name: "Κάτω Διάζωμα", price: 60.00, quantity: 2000, available: 2000},
 			},
 		},
 		{
@@ -280,8 +280,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Αρχαίο Θέατρο Επιδαύρου", addr: sp("Επίδαυρος"), city: "Ναύπλιο", country: sp("Ελλάδα"), lat: fp(37.635), lng: fp(23.157),
 			start: f("2026-07-25T21:00:00Z"), end: f("2026-07-25T23:30:00Z"), capacity: 14000, catID: theaterID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T011", name: "Άνω Διάζωμα", price: 25.00, quantity: 10000, available: 10000},
-				{id: "00000000-0000-0000-0000-00000000T012", name: "Κάτω Διάζωμα", price: 45.00, quantity: 4000, available: 4000},
+				{id: "00000000-0000-0000-0000-00000000a011", name: "Άνω Διάζωμα", price: 25.00, quantity: 10000, available: 10000},
+				{id: "00000000-0000-0000-0000-00000000a012", name: "Κάτω Διάζωμα", price: 45.00, quantity: 4000, available: 4000},
 			},
 		},
 		{
@@ -290,8 +290,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Θέατρο Αθηνών", addr: sp("Οδός Σταδίου 48"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.975), lng: fp(23.733),
 			start: f("2026-10-10T19:00:00Z"), end: f("2026-10-10T21:30:00Z"), capacity: 600, catID: theaterID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T013", name: "Κανονικό", price: 20.00, quantity: 400, available: 400},
-				{id: "00000000-0000-0000-0000-00000000T014", name: "Φοιτητικό", price: 12.00, quantity: 200, available: 200},
+				{id: "00000000-0000-0000-0000-00000000a013", name: "Κανονικό", price: 20.00, quantity: 400, available: 400},
+				{id: "00000000-0000-0000-0000-00000000a014", name: "Φοιτητικό", price: 12.00, quantity: 200, available: 200},
 			},
 		},
 		{
@@ -300,8 +300,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Θέατρο Τέχνης Καρόλου Κουν", addr: sp("Οδός Πεσμαζόγλου 5"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.978), lng: fp(23.733),
 			start: f("2026-05-05T18:00:00Z"), end: f("2026-05-05T21:00:00Z"), capacity: 300, catID: theaterID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T015", name: "Κανονικό", price: 18.00, quantity: 200, available: 200},
-				{id: "00000000-0000-0000-0000-00000000T016", name: "Φοιτητικό", price: 10.00, quantity: 100, available: 100},
+				{id: "00000000-0000-0000-0000-00000000a015", name: "Κανονικό", price: 18.00, quantity: 200, available: 200},
+				{id: "00000000-0000-0000-0000-00000000a016", name: "Φοιτητικό", price: 10.00, quantity: 100, available: 100},
 			},
 		},
 		{
@@ -310,8 +310,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Ωδείο Ηρώδου του Αττικού", addr: sp("Διονυσίου Αρεοπαγίτου"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.971), lng: fp(23.726),
 			start: f("2026-08-15T21:00:00Z"), end: f("2026-08-15T23:30:00Z"), capacity: 5000, catID: theaterID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T017", name: "Άνω Διάζωμα", price: 25.00, quantity: 3000, available: 3000},
-				{id: "00000000-0000-0000-0000-00000000T018", name: "Κάτω Διάζωμα", price: 50.00, quantity: 2000, available: 2000},
+				{id: "00000000-0000-0000-0000-00000000a017", name: "Άνω Διάζωμα", price: 25.00, quantity: 3000, available: 3000},
+				{id: "00000000-0000-0000-0000-00000000a018", name: "Κάτω Διάζωμα", price: 50.00, quantity: 2000, available: 2000},
 			},
 		},
 		{
@@ -320,8 +320,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Σταθμός — Θέατρο Σύγχρονου Λόγου", addr: sp("Λεωφ. Βασιλίσσης Σοφίας 26"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.981), lng: fp(23.761),
 			start: f("2026-04-20T19:00:00Z"), end: f("2026-04-20T21:30:00Z"), capacity: 250, catID: theaterID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T019", name: "Κανονικό", price: 15.00, quantity: 180, available: 180},
-				{id: "00000000-0000-0000-0000-00000000T01A", name: "Φοιτητικό", price: 8.00, quantity: 70, available: 70},
+				{id: "00000000-0000-0000-0000-00000000a019", name: "Κανονικό", price: 15.00, quantity: 180, available: 180},
+				{id: "00000000-0000-0000-0000-00000000a01A", name: "Φοιτητικό", price: 8.00, quantity: 70, available: 70},
 			},
 		},
 		{
@@ -330,7 +330,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Αρχαίο Θέατρο Δωδώνης", addr: sp("Δωδώνη"), city: "Ιωάννινα", country: sp("Ελλάδα"), lat: fp(39.547), lng: fp(20.788),
 			start: f("2026-07-10T21:00:00Z"), end: f("2026-07-10T23:30:00Z"), capacity: 10000, catID: theaterID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T01B", name: "Γενική Είσοδος", price: 15.00, quantity: 10000, available: 10000},
+				{id: "00000000-0000-0000-0000-00000000a01B", name: "Γενική Είσοδος", price: 15.00, quantity: 10000, available: 10000},
 			},
 		},
 		{
@@ -339,8 +339,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Θέατρο Πειραιώς 260", addr: sp("Πειραιώς 260"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.947), lng: fp(23.642),
 			start: f("2026-06-05T20:00:00Z"), end: f("2026-06-05T22:30:00Z"), capacity: 800, catID: theaterID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T01C", name: "Κανονικό", price: 22.00, quantity: 500, available: 500},
-				{id: "00000000-0000-0000-0000-00000000T01D", name: "Φοιτητικό", price: 14.00, quantity: 300, available: 300},
+				{id: "00000000-0000-0000-0000-00000000a01C", name: "Κανονικό", price: 22.00, quantity: 500, available: 500},
+				{id: "00000000-0000-0000-0000-00000000a01D", name: "Φοιτητικό", price: 14.00, quantity: 300, available: 300},
 			},
 		},
 		{
@@ -349,8 +349,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Αρχαίο Θέατρο Φιλίππων", addr: sp("Φίλιπποι"), city: "Καβάλα", country: sp("Ελλάδα"), lat: fp(41.013), lng: fp(24.283),
 			start: f("2026-08-08T21:00:00Z"), end: f("2026-08-08T23:30:00Z"), capacity: 8000, catID: theaterID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T01E", name: "Άνω Διάζωμα", price: 20.00, quantity: 5000, available: 5000},
-				{id: "00000000-0000-0000-0000-00000000T01F", name: "Κάτω Διάζωμα", price: 40.00, quantity: 3000, available: 3000},
+				{id: "00000000-0000-0000-0000-00000000a01E", name: "Άνω Διάζωμα", price: 20.00, quantity: 5000, available: 5000},
+				{id: "00000000-0000-0000-0000-00000000a01F", name: "Κάτω Διάζωμα", price: 40.00, quantity: 3000, available: 3000},
 			},
 		},
 		{
@@ -359,7 +359,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Παναθηναϊκό Στάδιο", addr: sp("Λεωφ. Βασιλέως Κωνσταντίνου"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.968), lng: fp(23.721),
 			start: f("2026-11-08T07:00:00Z"), end: f("2026-11-08T18:00:00Z"), capacity: 55000, catID: sportsID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T020", name: "Εγγραφή Αγώνα", price: 50.00, quantity: 55000, available: 55000},
+				{id: "00000000-0000-0000-0000-00000000a020", name: "Εγγραφή Αγώνα", price: 50.00, quantity: 55000, available: 55000},
 			},
 		},
 		{
@@ -368,9 +368,9 @@ func seedEvents(d *gorm.DB) {
 			venue: "ΟΑΚΑ — Κλειστό Γήπεδο Μπάσκετ", addr: sp("Λεωφ. Κηφισίας 37"), city: "Μαρούσι", country: sp("Ελλάδα"), lat: fp(38.042), lng: fp(23.788),
 			start: f("2026-05-10T20:00:00Z"), end: f("2026-05-10T23:00:00Z"), capacity: 18500, catID: sportsID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T021", name: "Απλή Θέση", price: 20.00, quantity: 10000, available: 10000},
-				{id: "00000000-0000-0000-0000-00000000T022", name: "Επισήμων", price: 50.00, quantity: 5000, available: 5000},
-				{id: "00000000-0000-0000-0000-00000000T023", name: "VIP Lounge", price: 100.00, quantity: 3500, available: 3500},
+				{id: "00000000-0000-0000-0000-00000000a021", name: "Απλή Θέση", price: 20.00, quantity: 10000, available: 10000},
+				{id: "00000000-0000-0000-0000-00000000a022", name: "Επισήμων", price: 50.00, quantity: 5000, available: 5000},
+				{id: "00000000-0000-0000-0000-00000000a023", name: "VIP Lounge", price: 100.00, quantity: 3500, available: 3500},
 			},
 		},
 		{
@@ -379,8 +379,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Γήπεδο Αγιά Σοφιά", addr: sp("Λεωφ. Φιλικής Εταιρείας 1"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.949), lng: fp(23.664),
 			start: f("2026-10-12T21:45:00Z"), end: f("2026-10-12T23:45:00Z"), capacity: 32000, catID: sportsID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T024", name: "Θύρα 1-8", price: 30.00, quantity: 20000, available: 20000},
-				{id: "00000000-0000-0000-0000-00000000T025", name: "Θύρα 9-16", price: 50.00, quantity: 12000, available: 12000},
+				{id: "00000000-0000-0000-0000-00000000a024", name: "Θύρα 1-8", price: 30.00, quantity: 20000, available: 20000},
+				{id: "00000000-0000-0000-0000-00000000a025", name: "Θύρα 9-16", price: 50.00, quantity: 12000, available: 12000},
 			},
 		},
 		{
@@ -389,8 +389,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Ολυμπιακό Κέντρο Αντισφαίρισης", addr: sp("Λεωφ. Κηφισίας 37"), city: "Μαρούσι", country: sp("Ελλάδα"), lat: fp(38.045), lng: fp(23.793),
 			start: f("2026-09-28T10:00:00Z"), end: f("2026-10-04T20:00:00Z"), capacity: 8000, catID: sportsID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T026", name: "Ημερήσιο", price: 15.00, quantity: 6000, available: 6000},
-				{id: "00000000-0000-0000-0000-00000000T027", name: "Εβδομαδιαίο", price: 60.00, quantity: 2000, available: 2000},
+				{id: "00000000-0000-0000-0000-00000000a026", name: "Ημερήσιο", price: 15.00, quantity: 6000, available: 6000},
+				{id: "00000000-0000-0000-0000-00000000a027", name: "Εβδομαδιαίο", price: 60.00, quantity: 2000, available: 2000},
 			},
 		},
 		{
@@ -399,7 +399,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Παρασκευή Εκκίνηση — Καστέλλα", addr: sp("Λόφος Καστέλλας"), city: "Πειραιάς", country: sp("Ελλάδα"), lat: fp(37.937), lng: fp(23.656),
 			start: f("2026-09-10T08:00:00Z"), end: f("2026-09-12T18:00:00Z"), capacity: 50000, catID: sportsID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T028", name: "Γενική Είσοδος", price: 10.00, quantity: 50000, available: 50000},
+				{id: "00000000-0000-0000-0000-00000000a028", name: "Γενική Είσοδος", price: 10.00, quantity: 50000, available: 50000},
 			},
 		},
 		{
@@ -408,8 +408,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Στάδιο Καραϊσκάκη", addr: sp("Πειραιώς 1"), city: "Πειραιάς", country: sp("Ελλάδα"), lat: fp(37.947), lng: fp(23.665),
 			start: f("2026-06-20T18:00:00Z"), end: f("2026-06-20T22:00:00Z"), capacity: 15000, catID: sportsID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T029", name: "Απλή Θέση", price: 10.00, quantity: 10000, available: 10000},
-				{id: "00000000-0000-0000-0000-00000000T02A", name: "Επισήμων", price: 30.00, quantity: 5000, available: 5000},
+				{id: "00000000-0000-0000-0000-00000000a029", name: "Απλή Θέση", price: 10.00, quantity: 10000, available: 10000},
+				{id: "00000000-0000-0000-0000-00000000a02A", name: "Επισήμων", price: 30.00, quantity: 5000, available: 5000},
 			},
 		},
 		{
@@ -418,7 +418,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Πλατεία Μαβίλη", addr: sp("Πλατεία Μαβίλη"), city: "Ιωάννινα", country: sp("Ελλάδα"), lat: fp(39.667), lng: fp(20.854),
 			start: f("2026-05-14T09:00:00Z"), end: f("2026-05-17T17:00:00Z"), capacity: 2000, catID: sportsID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T02B", name: "Εγγραφή", price: 20.00, quantity: 2000, available: 2000},
+				{id: "00000000-0000-0000-0000-00000000a02B", name: "Εγγραφή", price: 20.00, quantity: 2000, available: 2000},
 			},
 		},
 		{
@@ -427,8 +427,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Στάδιο Ειρήνης και Φιλίας", addr: sp("Λεωφ. Ποσειδώνος 1"), city: "Πειραιάς", country: sp("Ελλάδα"), lat: fp(37.941), lng: fp(23.672),
 			start: f("2026-08-28T21:00:00Z"), end: f("2026-08-28T23:30:00Z"), capacity: 12000, catID: sportsID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T02C", name: "Απλή Θέση", price: 25.00, quantity: 8000, available: 8000},
-				{id: "00000000-0000-0000-0000-00000000T02D", name: "VIP", price: 60.00, quantity: 4000, available: 4000},
+				{id: "00000000-0000-0000-0000-00000000a02C", name: "Απλή Θέση", price: 25.00, quantity: 8000, available: 8000},
+				{id: "00000000-0000-0000-0000-00000000a02D", name: "VIP", price: 60.00, quantity: 4000, available: 4000},
 			},
 		},
 		{
@@ -437,8 +437,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Συνεδριακό Κέντρο Metropolitan Expo", addr: sp("Λεωφ. Αθηνών 40"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.920), lng: fp(23.943),
 			start: f("2026-09-18T09:00:00Z"), end: f("2026-09-19T19:00:00Z"), capacity: 3000, catID: techID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T02E", name: "Κανονικό", price: 100.00, quantity: 2000, available: 2000},
-				{id: "00000000-0000-0000-0000-00000000T02F", name: "Φοιτητικό", price: 50.00, quantity: 1000, available: 1000},
+				{id: "00000000-0000-0000-0000-00000000a02E", name: "Κανονικό", price: 100.00, quantity: 2000, available: 2000},
+				{id: "00000000-0000-0000-0000-00000000a02F", name: "Φοιτητικό", price: 50.00, quantity: 1000, available: 1000},
 			},
 		},
 		{
@@ -447,7 +447,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Διεθνές Κέντρο Ψηφιακού Μετασχηματισμού", addr: sp("Λεωφ. Δικαστηρίων 1"), city: "Θεσσαλονίκη", country: sp("Ελλάδα"), lat: fp(40.637), lng: fp(22.937),
 			start: f("2026-11-27T10:00:00Z"), end: f("2026-11-28T22:00:00Z"), capacity: 500, catID: techID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T030", name: "Δωρεάν Συμμετοχή", price: 0.00, quantity: 500, available: 500},
+				{id: "00000000-0000-0000-0000-00000000a030", name: "Δωρεάν Συμμετοχή", price: 0.00, quantity: 500, available: 500},
 			},
 		},
 		{
@@ -456,8 +456,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Συνεδριακό Κέντρο ΔΕΘ Helexpo", addr: sp("Εγνατία 154"), city: "Θεσσαλονίκη", country: sp("Ελλάδα"), lat: fp(40.625), lng: fp(22.954),
 			start: f("2026-04-24T09:00:00Z"), end: f("2026-04-25T18:00:00Z"), capacity: 1200, catID: techID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T031", name: "Κανονικό", price: 80.00, quantity: 800, available: 800},
-				{id: "00000000-0000-0000-0000-00000000T032", name: "Φοιτητικό", price: 30.00, quantity: 400, available: 400},
+				{id: "00000000-0000-0000-0000-00000000a031", name: "Κανονικό", price: 80.00, quantity: 800, available: 800},
+				{id: "00000000-0000-0000-0000-00000000a032", name: "Φοιτητικό", price: 30.00, quantity: 400, available: 400},
 			},
 		},
 		{
@@ -466,8 +466,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Divani Caravel", addr: sp("Λεωφ. Βασιλέως Αλεξάνδρου 2"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.977), lng: fp(23.759),
 			start: f("2026-10-08T10:00:00Z"), end: f("2026-10-09T18:00:00Z"), capacity: 800, catID: techID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T033", name: "Κανονικό", price: 150.00, quantity: 500, available: 500},
-				{id: "00000000-0000-0000-0000-00000000T034", name: "Φοιτητικό", price: 60.00, quantity: 300, available: 300},
+				{id: "00000000-0000-0000-0000-00000000a033", name: "Κανονικό", price: 150.00, quantity: 500, available: 500},
+				{id: "00000000-0000-0000-0000-00000000a034", name: "Φοιτητικό", price: 60.00, quantity: 300, available: 300},
 			},
 		},
 		{
@@ -476,8 +476,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Εθνικό Ίδρυμα Ερευνών", addr: sp("Λεωφ. Βασιλέως Κωνσταντίνου 48"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.980), lng: fp(23.769),
 			start: f("2026-06-10T09:00:00Z"), end: f("2026-06-10T17:00:00Z"), capacity: 400, catID: techID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T035", name: "Γενική Είσοδος", price: 50.00, quantity: 300, available: 300},
-				{id: "00000000-0000-0000-0000-00000000T036", name: "Φοιτητικό", price: 20.00, quantity: 100, available: 100},
+				{id: "00000000-0000-0000-0000-00000000a035", name: "Γενική Είσοδος", price: 50.00, quantity: 300, available: 300},
+				{id: "00000000-0000-0000-0000-00000000a036", name: "Φοιτητικό", price: 20.00, quantity: 100, available: 100},
 			},
 		},
 		{
@@ -486,8 +486,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Οικονομικό Πανεπιστήμιο Αθηνών", addr: sp("Πατησίων 76"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.994), lng: fp(23.732),
 			start: f("2026-05-22T09:00:00Z"), end: f("2026-05-22T18:00:00Z"), capacity: 600, catID: techID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T037", name: "Κανονικό", price: 40.00, quantity: 400, available: 400},
-				{id: "00000000-0000-0000-0000-00000000T038", name: "Φοιτητικό", price: 15.00, quantity: 200, available: 200},
+				{id: "00000000-0000-0000-0000-00000000a037", name: "Κανονικό", price: 40.00, quantity: 400, available: 400},
+				{id: "00000000-0000-0000-0000-00000000a038", name: "Φοιτητικό", price: 15.00, quantity: 200, available: 200},
 			},
 		},
 		{
@@ -496,7 +496,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Πανεπιστήμιο Πατρών — Συνεδριακό Κέντρο", addr: sp("Πανεπιστημιούπολη Ρίου"), city: "Πάτρα", country: sp("Ελλάδα"), lat: fp(38.290), lng: fp(21.786),
 			start: f("2026-05-08T10:00:00Z"), end: f("2026-05-08T17:00:00Z"), capacity: 1000, catID: techID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T039", name: "Δωρεάν", price: 0.00, quantity: 1000, available: 1000},
+				{id: "00000000-0000-0000-0000-00000000a039", name: "Δωρεάν", price: 0.00, quantity: 1000, available: 1000},
 			},
 		},
 		{
@@ -505,7 +505,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Πολυχώρος Αθηναΐς", addr: sp("Καστοριάς 34"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.979), lng: fp(23.703),
 			start: f("2026-07-04T10:00:00Z"), end: f("2026-07-06T10:00:00Z"), capacity: 300, catID: techID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T03A", name: "Εγγραφή", price: 10.00, quantity: 300, available: 300},
+				{id: "00000000-0000-0000-0000-00000000a03A", name: "Εγγραφή", price: 10.00, quantity: 300, available: 300},
 			},
 		},
 		{
@@ -514,8 +514,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Μέγαρο Μουσικής Αθηνών", addr: sp("Λεωφ. Βασιλίσσης Σοφίας 69"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.980), lng: fp(23.753),
 			start: f("2026-04-25T10:00:00Z"), end: f("2026-04-25T19:00:00Z"), capacity: 2000, catID: eduID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T03B", name: "Γενική Είσοδος", price: 30.00, quantity: 1500, available: 1500},
-				{id: "00000000-0000-0000-0000-00000000T03C", name: "VIP", price: 60.00, quantity: 500, available: 500},
+				{id: "00000000-0000-0000-0000-00000000a03B", name: "Γενική Είσοδος", price: 30.00, quantity: 1500, available: 1500},
+				{id: "00000000-0000-0000-0000-00000000a03C", name: "VIP", price: 60.00, quantity: 500, available: 500},
 			},
 		},
 		{
@@ -524,7 +524,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Impact Hub Athens", addr: sp("Καραϊσκάκη 28"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.988), lng: fp(23.722),
 			start: f("2026-06-13T10:00:00Z"), end: f("2026-06-13T17:00:00Z"), capacity: 150, catID: eduID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T03D", name: "Δωρεάν", price: 0.00, quantity: 150, available: 150},
+				{id: "00000000-0000-0000-0000-00000000a03D", name: "Δωρεάν", price: 0.00, quantity: 150, available: 150},
 			},
 		},
 		{
@@ -533,7 +533,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Πολιτιστικό Κέντρο Ηρακλείου", addr: sp("Λεωφ. Ανδρέα Παπανδρέου 1"), city: "Ηράκλειο", country: sp("Ελλάδα"), lat: fp(35.337), lng: fp(25.123),
 			start: f("2026-09-26T10:00:00Z"), end: f("2026-09-26T18:00:00Z"), capacity: 500, catID: eduID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T03E", name: "Δωρεάν", price: 0.00, quantity: 500, available: 500},
+				{id: "00000000-0000-0000-0000-00000000a03E", name: "Δωρεάν", price: 0.00, quantity: 500, available: 500},
 			},
 		},
 		{
@@ -542,7 +542,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Δημαρχείο Αθηναίων", addr: sp("Πλατεία Κοτζιά"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.984), lng: fp(23.728),
 			start: f("2026-10-10T09:00:00Z"), end: f("2026-10-10T16:00:00Z"), capacity: 300, catID: eduID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T03F", name: "Δωρεάν", price: 0.00, quantity: 300, available: 300},
+				{id: "00000000-0000-0000-0000-00000000a03F", name: "Δωρεάν", price: 0.00, quantity: 300, available: 300},
 			},
 		},
 		{
@@ -551,8 +551,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Πανεπιστήμιο Πατρών", addr: sp("Πανεπιστημιούπολη"), city: "Πάτρα", country: sp("Ελλάδα"), lat: fp(38.291), lng: fp(21.789),
 			start: f("2026-11-15T09:30:00Z"), end: f("2026-11-15T16:00:00Z"), capacity: 400, catID: eduID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T040", name: "Γενική Είσοδος", price: 5.00, quantity: 250, available: 250},
-				{id: "00000000-0000-0000-0000-00000000T041", name: "Φοιτητικό", price: 2.00, quantity: 150, available: 150},
+				{id: "00000000-0000-0000-0000-00000000a040", name: "Γενική Είσοδος", price: 5.00, quantity: 250, available: 250},
+				{id: "00000000-0000-0000-0000-00000000a041", name: "Φοιτητικό", price: 2.00, quantity: 150, available: 150},
 			},
 		},
 		{
@@ -561,7 +561,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Πανεπιστήμιο Μακεδονίας", addr: sp("Εγνατία 156"), city: "Θεσσαλονίκη", country: sp("Ελλάδα"), lat: fp(40.626), lng: fp(22.955),
 			start: f("2026-05-20T10:00:00Z"), end: f("2026-05-20T17:00:00Z"), capacity: 2000, catID: eduID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T042", name: "Δωρεάν", price: 0.00, quantity: 2000, available: 2000},
+				{id: "00000000-0000-0000-0000-00000000a042", name: "Δωρεάν", price: 0.00, quantity: 2000, available: 2000},
 			},
 		},
 		{
@@ -570,8 +570,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Τεχνόπολη Δήμου Αθηναίων", addr: sp("Πειραιώς 100"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.978), lng: fp(23.714),
 			start: f("2026-05-30T10:00:00Z"), end: f("2026-06-01T20:00:00Z"), capacity: 5000, catID: eduID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T043", name: "Γενική Είσοδος", price: 8.00, quantity: 3000, available: 3000},
-				{id: "00000000-0000-0000-0000-00000000T044", name: "Οικογενειακό", price: 20.00, quantity: 2000, available: 2000},
+				{id: "00000000-0000-0000-0000-00000000a043", name: "Γενική Είσοδος", price: 8.00, quantity: 3000, available: 3000},
+				{id: "00000000-0000-0000-0000-00000000a044", name: "Οικογενειακό", price: 20.00, quantity: 2000, available: 2000},
 			},
 		},
 		{
@@ -580,8 +580,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Αναπύρωμα Ελ. Βενιζέλου", addr: sp("Πανεπιστημιούπολη Ζωγράφου"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.968), lng: fp(23.769),
 			start: f("2026-07-20T09:00:00Z"), end: f("2026-07-24T17:00:00Z"), capacity: 100, catID: eduID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T045", name: "Εγγραφή", price: 200.00, quantity: 80, available: 80},
-				{id: "00000000-0000-0000-0000-00000000T046", name: "Υποτροφία", price: 50.00, quantity: 20, available: 20},
+				{id: "00000000-0000-0000-0000-00000000a045", name: "Εγγραφή", price: 200.00, quantity: 80, available: 80},
+				{id: "00000000-0000-0000-0000-00000000a046", name: "Υποτροφία", price: 50.00, quantity: 20, available: 20},
 			},
 		},
 		{
@@ -590,7 +590,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Γερμανικό Ινστιτούτο Goethe", addr: sp("Ομήρου 14"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.977), lng: fp(23.742),
 			start: f("2026-06-24T09:00:00Z"), end: f("2026-06-25T16:00:00Z"), capacity: 200, catID: eduID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T047", name: "Δωρεάν", price: 0.00, quantity: 200, available: 200},
+				{id: "00000000-0000-0000-0000-00000000a047", name: "Δωρεάν", price: 0.00, quantity: 200, available: 200},
 			},
 		},
 		{
@@ -599,7 +599,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Zάππειον Μέγαρο", addr: sp("Εθνικός Κήπος"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.971), lng: fp(23.738),
 			start: f("2026-09-24T12:00:00Z"), end: f("2026-09-27T21:00:00Z"), capacity: 5000, catID: artID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T048", name: "Γενική Είσοδος", price: 15.00, quantity: 5000, available: 5000},
+				{id: "00000000-0000-0000-0000-00000000a048", name: "Γενική Είσοδος", price: 15.00, quantity: 5000, available: 5000},
 			},
 		},
 		{
@@ -608,8 +608,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Αποθήκη 1 — Λιμάνι Θεσσαλονίκης", addr: sp("Λιμάνι Θεσσαλονίκης"), city: "Θεσσαλονίκη", country: sp("Ελλάδα"), lat: fp(40.633), lng: fp(22.936),
 			start: f("2026-11-05T15:00:00Z"), end: f("2026-11-15T23:00:00Z"), capacity: 8000, catID: artID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T049", name: "Ημερήσιο", price: 8.00, quantity: 5000, available: 5000},
-				{id: "00000000-0000-0000-0000-00000000T04A", name: "Φοιτητικό", price: 5.00, quantity: 3000, available: 3000},
+				{id: "00000000-0000-0000-0000-00000000a049", name: "Ημερήσιο", price: 8.00, quantity: 5000, available: 5000},
+				{id: "00000000-0000-0000-0000-00000000a04A", name: "Φοιτητικό", price: 5.00, quantity: 3000, available: 3000},
 			},
 		},
 		{
@@ -618,7 +618,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Ανώτατη Σχολή Καλών Τεχνών", addr: sp("Πειραιώς 256"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.951), lng: fp(23.639),
 			start: f("2026-07-02T10:00:00Z"), end: f("2026-07-30T21:00:00Z"), capacity: 2000, catID: artID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T04B", name: "Γενική Είσοδος", price: 5.00, quantity: 2000, available: 2000},
+				{id: "00000000-0000-0000-0000-00000000a04B", name: "Γενική Είσοδος", price: 5.00, quantity: 2000, available: 2000},
 			},
 		},
 		{
@@ -627,7 +627,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Πλατεία Κολοκοτρώνη — Πετράλωνα", addr: sp("Πλατεία Κολοκοτρώνη"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.966), lng: fp(23.714),
 			start: f("2026-06-27T11:00:00Z"), end: f("2026-06-28T22:00:00Z"), capacity: 3000, catID: artID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T04C", name: "Δωρεάν", price: 0.00, quantity: 3000, available: 3000},
+				{id: "00000000-0000-0000-0000-00000000a04C", name: "Δωρεάν", price: 0.00, quantity: 3000, available: 3000},
 			},
 		},
 		{
@@ -636,7 +636,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Μουσείο Μπενάκη", addr: sp("Κουμπάρη 1"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.976), lng: fp(23.740),
 			start: f("2026-05-05T10:00:00Z"), end: f("2026-06-05T20:00:00Z"), capacity: 1000, catID: artID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T04D", name: "Γενική Είσοδος", price: 8.00, quantity: 1000, available: 1000},
+				{id: "00000000-0000-0000-0000-00000000a04D", name: "Γενική Είσοδος", price: 8.00, quantity: 1000, available: 1000},
 			},
 		},
 		{
@@ -645,8 +645,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Δημοτικό Θέατρο Καλαμάτας", addr: sp("Αριστομένους 34"), city: "Καλαμάτα", country: sp("Ελλάδα"), lat: fp(37.039), lng: fp(22.113),
 			start: f("2026-08-25T20:00:00Z"), end: f("2026-08-29T23:00:00Z"), capacity: 1500, catID: artID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T04E", name: "Ημερήσιο", price: 12.00, quantity: 1000, available: 1000},
-				{id: "00000000-0000-0000-0000-00000000T04F", name: "Πενθήμερο", price: 40.00, quantity: 500, available: 500},
+				{id: "00000000-0000-0000-0000-00000000a04E", name: "Ημερήσιο", price: 12.00, quantity: 1000, available: 1000},
+				{id: "00000000-0000-0000-0000-00000000a04F", name: "Πενθήμερο", price: 40.00, quantity: 500, available: 500},
 			},
 		},
 		{
@@ -655,7 +655,7 @@ func seedEvents(d *gorm.DB) {
 			venue: "Κρατικό Μουσείο Σύγχρονης Τέχνης", addr: sp("Κολοκοτρώνη 25"), city: "Θεσσαλονίκη", country: sp("Ελλάδα"), lat: fp(40.625), lng: fp(22.948),
 			start: f("2026-10-15T11:00:00Z"), end: f("2026-12-15T19:00:00Z"), capacity: 0, catID: artID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T050", name: "Γενική Είσοδος", price: 10.00, quantity: 0, available: 0},
+				{id: "00000000-0000-0000-0000-00000000a050", name: "Γενική Είσοδος", price: 10.00, quantity: 0, available: 0},
 			},
 		},
 		{
@@ -664,8 +664,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Μέγαρο Μουσικής Αθηνών — Αίθουσα Χ. Λαμπράκη", addr: sp("Λεωφ. Βασιλίσσης Σοφίας 69"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.980), lng: fp(23.753),
 			start: f("2026-12-12T20:00:00Z"), end: f("2026-12-12T22:30:00Z"), capacity: 2000, catID: artID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T051", name: "Ζώνη Α", price: 40.00, quantity: 1000, available: 1000},
-				{id: "00000000-0000-0000-0000-00000000T052", name: "Ζώνη Β", price: 25.00, quantity: 1000, available: 1000},
+				{id: "00000000-0000-0000-0000-00000000a051", name: "Ζώνη Α", price: 40.00, quantity: 1000, available: 1000},
+				{id: "00000000-0000-0000-0000-00000000a052", name: "Ζώνη Β", price: 25.00, quantity: 1000, available: 1000},
 			},
 		},
 		{
@@ -674,8 +674,8 @@ func seedEvents(d *gorm.DB) {
 			venue: "Θέατρο Σκιών Σπαθάρη", addr: sp("Πλάκα, Τριπόδων 22"), city: "Αθήνα", country: sp("Ελλάδα"), lat: fp(37.972), lng: fp(23.728),
 			start: f("2026-08-15T19:00:00Z"), end: f("2026-08-15T21:00:00Z"), capacity: 200, catID: artID,
 			tickets: []ticketSeed{
-				{id: "00000000-0000-0000-0000-00000000T053", name: "Γενική Είσοδος", price: 8.00, quantity: 150, available: 150},
-				{id: "00000000-0000-0000-0000-00000000T054", name: "Παιδικό", price: 5.00, quantity: 50, available: 50},
+				{id: "00000000-0000-0000-0000-00000000a053", name: "Γενική Είσοδος", price: 8.00, quantity: 150, available: 150},
+				{id: "00000000-0000-0000-0000-00000000a054", name: "Παιδικό", price: 5.00, quantity: 50, available: 50},
 			},
 		},
 	}

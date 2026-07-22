@@ -33,7 +33,7 @@ func InitializeApp(db *gorm.DB, redisClient *redis.Client, cfg config.Config) (*
 	userEventViewRepository := postgres.NewUserEventViewRepositoryPostgres(db)
 	messageRepository := postgres.NewMessageRepositoryPostgres(db)
 	messagingService := service.NewMessagingService(messageRepository, userRepository, bookingRepository, eventRepository, redisClient, hub)
-	recommendationService := provideRecommendationService(cfg, redisClient)
+	recommendationService := provideRecommendationService(bookingRepository, userEventViewRepository)
 	eventService := provideEventService(eventRepository, bookingRepository, categoryRepository, eventPhotoRepository, userEventViewRepository, cfg, messagingService, recommendationService)
 	eventHandler := handler.NewEventHandler(eventService)
 	categoryHandler := handler.NewCategoryHandler(categoryRepository)
@@ -46,7 +46,6 @@ func InitializeApp(db *gorm.DB, redisClient *redis.Client, cfg config.Config) (*
 	chatHandler := handler.NewChatHandler(chatService)
 	catalogExportService := service.NewCatalogExportService(eventRepository, bookingRepository, userRepository)
 	adminExportHandler := handler.NewAdminExportHandler(catalogExportService)
-	recommendationHandler := handler.NewRecommendationHandler(recommendationService)
 	appDependencies := &AppDependencies{
 		Hub:                   hub,
 		AuthHandler:           authHandler,
@@ -57,7 +56,6 @@ func InitializeApp(db *gorm.DB, redisClient *redis.Client, cfg config.Config) (*
 		MessageHandler:        messageHandler,
 		ChatHandler:           chatHandler,
 		AdminExportHandler:    adminExportHandler,
-		RecommendationHandler: recommendationHandler,
 		RecommendationService: recommendationService,
 	}
 	return appDependencies, nil
@@ -75,7 +73,6 @@ type AppDependencies struct {
 	MessageHandler        *handler.MessageHandler
 	ChatHandler           *handler.ChatHandler
 	AdminExportHandler    *handler.AdminExportHandler
-	RecommendationHandler *handler.RecommendationHandler
 	RecommendationService *service.RecommendationService
 }
 
@@ -85,4 +82,4 @@ var ServiceSet = wire.NewSet(
 	provideAuthService, service.NewUserService, service.NewChatService, service.NewMessagingService, provideEventService, service.NewBookingService, service.NewCatalogExportService, provideRecommendationService,
 )
 
-var HandlerSet = wire.NewSet(handler.NewAuthHandler, handler.NewUserHandler, handler.NewEventHandler, handler.NewCategoryHandler, handler.NewBookingHandler, handler.NewMessageHandler, handler.NewChatHandler, handler.NewAdminExportHandler, handler.NewRecommendationHandler)
+var HandlerSet = wire.NewSet(handler.NewAuthHandler, handler.NewUserHandler, handler.NewEventHandler, handler.NewCategoryHandler, handler.NewBookingHandler, handler.NewMessageHandler, handler.NewChatHandler, handler.NewAdminExportHandler)

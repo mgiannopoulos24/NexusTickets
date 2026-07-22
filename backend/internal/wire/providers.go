@@ -19,6 +19,6 @@ func provideEventService(events repo.EventRepository, bookings repo.BookingRepos
 	return svc
 }
 
-func provideRecommendationService(cfg config.Config, redis *redisv9.Client) *service.RecommendationService {
-	return service.NewRecommendationService(cfg.RecDataDir, redis)
+func provideRecommendationService(bookings repo.BookingRepository, views repo.UserEventViewRepository) *service.RecommendationService {
+	return service.NewRecommendationService(bookings, views)
 }

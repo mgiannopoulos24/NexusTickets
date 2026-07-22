@@ -161,12 +161,12 @@
 ### 3.10 Recommendation Engine (Requirement 13)
 - [X] `[!]` BMF model struct + hyperparameters (K=20, lr=0.01, lambda=0.02, epochs=30)
 - [X] `[!]` SGD training loop: R̂(u,i) = μ + b_u + b_i + P_u·Q_i^T
-- [X] Implicit feedback encoding from CSV training data (event_interest.csv)
-- [X] Cold-start fallback (popular events by attendance count)
-- [X] Periodic retraining every 6h via goroutine ticker
-- [X] Redis cache per user (1h TTL)
+- [X] `[!]` Trained on **real DB interactions** (confirmed bookings=3.0 + event views=1.0, keyed by UUID) → recommends real events
+- [X] Cold-start fallback (popular events by confirmed-booking count)
+- [X] Periodic retraining every 6h via goroutine ticker (+ once at startup)
 - [X] Atomic model swap with `sync.RWMutex`
-- [X] `GET /recommendations` handler (personalized + popular + status)
+- [X] Served via `GET /events/recommended` (BMF-ranked, booked events excluded, hydrated `Event[]`)
+- [X] Provided Kaggle dataset kept for offline evaluation only (see §4)
 
 ### 3.11 Wire DI
 - [X] `[!]` Wire providers for all repositories, services, handlers, WebSocket Hub
@@ -176,8 +176,9 @@
 
 ## 4. Backend — Testing
 
-- [ ] Unit tests: auth_service, event_service, booking_service (capacity enforcement)
-- [ ] Unit tests: messaging_service, recommendation engine
+- [X] Unit tests: auth_service, event_service, booking_service (capacity enforcement)
+- [X] Unit tests: messaging_service, recommendation engine (BMF training + scoring + cold-start)
+- [X] Offline BMF evaluation on provided dataset (RMSE ≈ 0.19, `TestBMFOfflineEvaluation`, skips if dataset absent)
 - [ ] Integration tests: auth handlers, event CRUD, booking creation (concurrent)
 - [ ] Integration tests: XML export validates against DTD
 - [ ] WebSocket integration test: connect, send message, verify broadcast to recipient
@@ -252,40 +253,41 @@
 - [X] Guest: show "Σύνδεση για κράτηση" instead of booking button
 
 ### 6.3 Bookings
-- [ ] `[!]` `bookingsApi.ts` — createBooking, getMyBookings
-- [ ] `[!]` Booking form — ticket type select, quantity input, live cost preview
-- [ ] `[!]` Confirmation dialog before submit (booking cannot be reversed)
-- [ ] `[!]` `MyBookingsPage.tsx` — list with event title, date, status, cost
-- [ ] Success toast (Sonner) after confirmed booking
+- [X] `[!]` `bookingsApi.ts` — createBooking, getMyBookings
+- [X] `[!]` Booking form — ticket type select, quantity input, live cost preview
+- [X] `[!]` Confirmation dialog before submit (booking cannot be reversed)
+- [X] `[!]` `MyBookingsPage.tsx` — list with event title, date, status, cost
+- [X] Success toast (Sonner) after confirmed booking
 
 ### 6.4 Organizer
-- [ ] `[!]` `OrganizerEventsPage.tsx` — my events, status badges, action buttons
-- [ ] `[!]` `CreateEventPage.tsx` — all DTD fields, multi-select categories, dynamic ticket types, photo upload
-- [ ] `[!]` `EditEventPage.tsx` — pre-populated, same as create
-- [ ] `[!]` Live capacity validator (sum of ticket quantities vs capacity, client-side)
-- [ ] `[!]` Publish action — confirmation dialog
-- [ ] `[!]` Cancel action — confirmation dialog, warn about bulk notification to attendees
-- [ ] `[!]` Delete action — only shown when allowed (DRAFT or no bookings)
-- [ ] `EventBookingsPage.tsx` — all bookings for an event, paginated
+- [X] `[!]` `OrganizerEventsPage.tsx` — my events, status badges, action buttons
+- [X] `[!]` `CreateEventPage.tsx` — all DTD fields, multi-select categories, dynamic ticket types, photo upload
+- [X] `[!]` `EditEventPage.tsx` — pre-populated, same as create
+- [X] `[!]` Live capacity validator (sum of ticket quantities vs capacity, client-side)
+- [X] `[!]` Publish action — confirmation dialog
+- [X] `[!]` Cancel action — confirmation dialog, warn about bulk notification to attendees
+- [X] `[!]` Delete action — only shown when allowed (DRAFT or no bookings)
+- [X] `EventBookingsPage.tsx` — all bookings for an event, paginated
 - [ ] Photo upload — drag & drop, preview, delete
 
 ### 6.5 Messaging — WebSocket (Requirement 10)
-- [ ] `[!]` `messagingSlice.ts` — unreadCount, pendingMessages (incoming WS buffer)
-- [ ] `[!]` `messagingApi.ts` — getInbox, getSent, sendMessage, deleteMessage, markRead (REST)
-- [ ] `[!]` `InboxPage.tsx` — list, unread highlighted, pagination; reset unread on open
-- [ ] `[!]` `SentPage.tsx` — sent messages list, pagination
-- [ ] `[!]` `MessageDetailPage.tsx` — full body, reply button
-- [ ] `[!]` Compose/reply form — recipient, subject, body
-- [ ] `[!]` Delete action for inbox/sent
-- [ ] `[!]` Unread badge in Navbar — sourced from `state.messaging.unreadCount` (WebSocket-driven)
-- [ ] On inbox open: call markRead REST + dispatch `setUnreadCount(0)` in Redux
+- [X] `[!]` `messagingSlice.ts` — unreadCount, pendingMessages (incoming WS buffer)
+- [X] `[!]` `messagingApi.ts` — getInbox, getSent, sendMessage, deleteMessage, markRead (REST)
+- [X] `[!]` `InboxPage.tsx` — list, unread highlighted, pagination; reset unread on open
+- [X] `[!]` `SentPage.tsx` — sent messages list, pagination
+- [X] `[!]` `MessageDetailPage.tsx` — full body, reply button
+- [X] `[!]` Compose/reply form — recipient, subject, body
+- [X] `[!]` Delete action for inbox/sent
+- [X] `[!]` Unread badge in Navbar — sourced from `state.messaging.unreadCount` (WebSocket-driven)
+- [X] On inbox open: call markRead REST + dispatch `setUnreadCount(0)` in Redux
 
 ### 6.6 Admin
-- [ ] `[!]` `adminApi.ts` — getUsers, approveUser, rejectUser, exportXml, exportJson
-- [ ] `[!]` `UsersPage.tsx` — table: username, name, email, role, status; pagination; filter by status
-- [ ] `[!]` `UserDetailPage.tsx` — all fields, approve/reject for pending accounts
-- [ ] `[!]` Export XML — triggers file download from `GET /admin/events/export/xml`
-- [ ] `[!]` Export JSON — triggers file download from `GET /admin/events/export/json`
+- [X] `[!]` `usersApi.ts` — listUsers, getUser, approveUser, rejectUser (RTK Query, tag invalidation)
+- [X] `[!]` `AdminUsersPage.tsx` — table: username, name, email, role, status; pagination; filter by status + search
+- [X] `[!]` `AdminUserDetailPage.tsx` — all fields, approve/reject for pending accounts
+- [X] `[!]` Export XML — triggers file download from `GET /events/export/xml`
+- [X] `[!]` Export JSON — triggers file download from `GET /events/export/json`
+- [X] `AdminDashboard.tsx` — landing with pending-users counter + quick nav; `/admin/users` route + sidebar link
 
 ---
 
@@ -339,7 +341,7 @@
 - [ ] `docs/api.md` (REST + WebSocket protocol)
 - [ ] `docs/database.md` + ER diagram
 - [ ] `docs/architecture.md`
-- [ ] `docs/recommendation.md`
+- [X] `docs/recommendation.md` (BMF design, DB-driven training, offline evaluation)
 - [ ] Configure `gofiber/swagger`, annotate all handlers
 - [ ] `swag init` → `docs/swagger.json`
 

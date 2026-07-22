@@ -141,3 +141,11 @@ type EventPhoto struct {
 
 	CreatedAt time.Time
 }
+
+// UserEventView records that a user viewed an event's detail page. It is an
+// implicit-feedback signal consumed by the recommendation engine.
+type UserEventView struct {
+	UserID   uuid.UUID
+	EventID  uuid.UUID
+	ViewedAt time.Time
+}

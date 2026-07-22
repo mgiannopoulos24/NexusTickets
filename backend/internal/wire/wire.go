@@ -25,7 +25,6 @@ type AppDependencies struct {
 	MessageHandler        *handler.MessageHandler
 	ChatHandler           *handler.ChatHandler
 	AdminExportHandler    *handler.AdminExportHandler
-	RecommendationHandler *handler.RecommendationHandler
 	RecommendationService *service.RecommendationService
 }
 
@@ -61,7 +60,6 @@ var HandlerSet = wire.NewSet(
 	handler.NewMessageHandler,
 	handler.NewChatHandler,
 	handler.NewAdminExportHandler,
-	handler.NewRecommendationHandler,
 )
 
 func InitializeApp(db *gorm.DB, redisClient *redisv9.Client, cfg config.Config) (*AppDependencies, error) {

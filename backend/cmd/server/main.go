@@ -51,8 +51,8 @@ func main() {
 	}
 
 	app := fiber.New(fiber.Config{
-		AppName:      "NexusTickets API",
-		ErrorHandler: middleware.ErrorHandler(log),
+		AppName:        "NexusTickets API",
+		ErrorHandler:   middleware.ErrorHandler(log),
 		ReadBufferSize: 1 << 15,
 	})
 
@@ -79,7 +79,6 @@ func main() {
 	handler.RegisterBookingRoutes(v1, deps.BookingHandler, cfg.JWTSecret)
 	handler.RegisterMessageRoutes(v1, deps.MessageHandler, cfg.JWTSecret)
 	handler.RegisterAdminExportRoutes(v1, deps.AdminExportHandler, cfg.JWTSecret)
-	handler.RegisterRecommendationRoutes(v1, deps.RecommendationHandler)
 	handler.RegisterChatRoutes(v1, deps.ChatHandler, cfg.JWTSecret)
 	handler.RegisterChatWebSocketRoutes(app, deps.Hub, cfg.JWTSecret)
 
