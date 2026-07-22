@@ -14,6 +14,17 @@ const API_TARGET = process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:8080';
 // Host port published to the browser (Docker: set to match FRONTEND_PORT mapping, e.g. 3000:5173 → 3000).
 const HMR_CLIENT_PORT = Number(process.env.VITE_HMR_CLIENT_PORT || 5173);
 
+// Dev HTTPS only when the mkcert files are present. Without this guard, running
+// tests / CI / a container (no certs) crashes at config load. Local dev with
+// certs still gets HTTPS as before.
+const devHttps =
+  fs.existsSync('localhost-key.pem') && fs.existsSync('localhost.pem')
+    ? {
+        key: fs.readFileSync('localhost-key.pem'),
+        cert: fs.readFileSync('localhost.pem'),
+      }
+    : undefined;
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss(), yaml()],
@@ -29,10 +40,7 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
   },
   server: {
-    https: {
-      key: fs.readFileSync('localhost-key.pem'),
-      cert: fs.readFileSync('localhost.pem'),
-    },
+    https: devHttps,
     // Docker / --host 0.0.0.0: browser cannot open wss to 0.0.0.0; HMR must use a real hostname.
     // https://vite.dev/config/server-options.html#server-hmr
     hmr: {

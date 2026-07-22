@@ -2,9 +2,11 @@ import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 
 import { AdminLayout } from '@/components/layout/AdminLayout';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import type { Event } from '@/types/models';
 import { cn } from '@/lib/utils';
+import { downloadAuthenticatedFile } from '@/lib/downloadExport';
 
 type ApiEnvelope<T> = {
   data: T | null;
@@ -17,6 +19,28 @@ export default function AdminEventsPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<'xml' | 'json' | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const handleExport = async (format: 'xml' | 'json') => {
+    if (!accessToken) {
+      setExportError('missing bearer token');
+      return;
+    }
+    setExporting(format);
+    setExportError(null);
+    try {
+      await downloadAuthenticatedFile(
+        `/api/v1/events/export/${format}`,
+        accessToken,
+        `events.${format}`,
+      );
+    } catch (e: unknown) {
+      setExportError(e instanceof Error ? e.message : 'Σφάλμα εξαγωγής');
+    } finally {
+      setExporting(null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -63,7 +87,30 @@ export default function AdminEventsPage() {
               Διαχείριση εκδηλώσεων και κατηγοριών.
             </p>
           </div>
+          <div className="flex shrink-0 gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={exporting !== null}
+              onClick={() => void handleExport('xml')}
+            >
+              {exporting === 'xml' ? 'Εξαγωγή…' : 'Εξαγωγή XML'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={exporting !== null}
+              onClick={() => void handleExport('json')}
+            >
+              {exporting === 'json' ? 'Εξαγωγή…' : 'Εξαγωγή JSON'}
+            </Button>
+          </div>
         </div>
+        {exportError && (
+          <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--nexus-red)]">
+            {exportError}
+          </p>
+        )}
 
         {loading ? (
           <p className="mt-6 text-sm text-neutral-600 comfortaa-regular">Φόρτωση…</p>

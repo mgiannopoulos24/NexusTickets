@@ -389,6 +389,26 @@ func (r *eventRepositoryPostgres) ListTicketTypesByEventIDs(ctx context.Context,
 	return out, nil
 }
 
+func (r *eventRepositoryPostgres) ListPhotosByEventIDs(ctx context.Context, eventIDs []uuid.UUID) (map[uuid.UUID][]domain.EventPhoto, error) {
+	if len(eventIDs) == 0 {
+		return map[uuid.UUID][]domain.EventPhoto{}, nil
+	}
+	var models []EventPhotoModel
+	err := r.db.WithContext(ctx).
+		Where("event_id IN ?", eventIDs).
+		Order("event_id ASC, position ASC").
+		Find(&models).Error
+	if err != nil {
+		return nil, fmt.Errorf("list photos by event ids: %w", err)
+	}
+	out := make(map[uuid.UUID][]domain.EventPhoto)
+	for _, m := range models {
+		p := eventPhotoModelToDomain(m)
+		out[p.EventID] = append(out[p.EventID], p)
+	}
+	return out, nil
+}
+
 func (r *eventRepositoryPostgres) ListCategoriesByEventIDs(ctx context.Context, eventIDs []uuid.UUID) (map[uuid.UUID][]domain.Category, error) {
 	if len(eventIDs) == 0 {
 		return map[uuid.UUID][]domain.Category{}, nil

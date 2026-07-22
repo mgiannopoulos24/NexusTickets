@@ -164,6 +164,85 @@ func TestMessagingService_GetSent(t *testing.T) {
 	}
 }
 
+func TestMessagingService_GetInbox(t *testing.T) {
+	msgs := newMockMessageRepo()
+	users := newMockUserRepo()
+	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), redis.NewClient(&redis.Options{Addr: "localhost:6379"}), wshub.NewHub())
+
+	recipientID := uuid.New()
+	users.add(domain.User{ID: recipientID, Username: "r", Email: "r@r.com"})
+
+	msgs.Create(context.Background(), domain.Message{SenderID: uuid.New(), RecipientID: recipientID, Subject: "S1", Body: "B1"})
+	msgs.Create(context.Background(), domain.Message{SenderID: uuid.New(), RecipientID: recipientID, Subject: "S2", Body: "B2"})
+
+	// Two unread before reading the inbox.
+	if got := msgs.unreadCnt[recipientID]; got != 2 {
+		t.Fatalf("precondition: unread = %d, want 2", got)
+	}
+
+	inbox, err := svc.GetInbox(context.Background(), recipientID, 10, 0)
+	if err != nil {
+		t.Fatalf("GetInbox: %v", err)
+	}
+	if len(inbox) != 2 {
+		t.Fatalf("expected 2 inbox messages, got %d", len(inbox))
+	}
+	// Opening the inbox marks everything read.
+	if got := msgs.unreadCnt[recipientID]; got != 0 {
+		t.Fatalf("unread after GetInbox = %d, want 0", got)
+	}
+}
+
+func TestMessagingService_GetUnreadCount(t *testing.T) {
+	msgs := newMockMessageRepo()
+	users := newMockUserRepo()
+	rdb := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), rdb, wshub.NewHub())
+
+	recipientID := uuid.New()
+	// Ensure no stale Redis cache from a previous run.
+	rdb.Del(context.Background(), unreadRedisKey(recipientID))
+
+	msgs.Create(context.Background(), domain.Message{SenderID: uuid.New(), RecipientID: recipientID, Subject: "S", Body: "B"})
+
+	n, err := svc.GetUnreadCount(context.Background(), recipientID)
+	if err != nil {
+		t.Fatalf("GetUnreadCount: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("unread count = %d, want 1", n)
+	}
+}
+
+func TestMessagingService_DeleteForUser(t *testing.T) {
+	msgs := newMockMessageRepo()
+	users := newMockUserRepo()
+	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), redis.NewClient(&redis.Options{Addr: "localhost:6379"}), wshub.NewHub())
+
+	senderID := uuid.New()
+	recipientID := uuid.New()
+	created, _ := msgs.Create(context.Background(), domain.Message{SenderID: senderID, RecipientID: recipientID, Subject: "S", Body: "B"})
+
+	// Recipient deletes their copy -> flagged deleted for recipient.
+	if err := svc.DeleteForUser(context.Background(), created.ID, recipientID); err != nil {
+		t.Fatalf("DeleteForUser: %v", err)
+	}
+	if !msgs.messages[created.ID].DeletedByRecipient {
+		t.Errorf("message not flagged DeletedByRecipient")
+	}
+
+	// A user who is neither sender nor recipient cannot delete it.
+	stranger := uuid.New()
+	if err := svc.DeleteForUser(context.Background(), created.ID, stranger); !errors.Is(err, domain.ErrForbidden) {
+		t.Errorf("stranger delete: expected ErrForbidden, got %v", err)
+	}
+
+	// Deleting a non-existent message returns ErrNotFound.
+	if err := svc.DeleteForUser(context.Background(), uuid.New(), recipientID); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("missing message: expected ErrNotFound, got %v", err)
+	}
+}
+
 func TestMessagingService_NotifyEventCancellation(t *testing.T) {
 	msgs := newMockMessageRepo()
 	users := newMockUserRepo()

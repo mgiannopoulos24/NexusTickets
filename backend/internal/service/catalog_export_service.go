@@ -87,23 +87,22 @@ func (s *CatalogExportService) encodeExportBatchXML(ctx context.Context, enc *xm
 	if err != nil {
 		return err
 	}
+	photoByEvent, err := s.events.ListPhotosByEventIDs(ctx, ids)
+	if err != nil {
+		return err
+	}
 	allBookings, err := s.bookings.ListByEventIDs(ctx, ids)
 	if err != nil {
 		return err
 	}
 	byEvent := groupBookingsByEvent(allBookings)
-	userIDs := collectExportUserIDs(events, allBookings)
-	users, err := s.users.ListByIDs(ctx, userIDs)
-	if err != nil {
-		return err
-	}
 
 	for i := range events {
 		ev := events[i]
 		ev.TicketTypes = ttByEvent[ev.ID]
 		ev.Bookings = byEvent[ev.ID]
 		cats := catByEvent[ev.ID]
-		node := export.BuildEventExportXML(ev, cats, users)
+		node := export.BuildEventExportXML(ev, cats, photoByEvent[ev.ID])
 		if err := enc.Encode(node); err != nil {
 			return err
 		}
@@ -144,23 +143,22 @@ func (s *CatalogExportService) ExportCatalogJSON(ctx context.Context, w io.Write
 		if err != nil {
 			return err
 		}
+		photoByEvent, err := s.events.ListPhotosByEventIDs(ctx, ids)
+		if err != nil {
+			return err
+		}
 		allBookings, err := s.bookings.ListByEventIDs(ctx, ids)
 		if err != nil {
 			return err
 		}
 		byEvent := groupBookingsByEvent(allBookings)
-		userIDs := collectExportUserIDs(events, allBookings)
-		users, err := s.users.ListByIDs(ctx, userIDs)
-		if err != nil {
-			return err
-		}
 
 		for i := range events {
 			ev := events[i]
 			ev.TicketTypes = ttByEvent[ev.ID]
 			ev.Bookings = byEvent[ev.ID]
 			cats := catByEvent[ev.ID]
-			j := export.BuildEventJSON(ev, cats, users)
+			j := export.BuildEventJSON(ev, cats, photoByEvent[ev.ID])
 			b, err := export.MarshalEventJSON(j)
 			if err != nil {
 				return err
@@ -192,24 +190,6 @@ func groupBookingsByEvent(bookings []domain.Booking) map[uuid.UUID][]domain.Book
 		out[b.EventID] = append(out[b.EventID], b)
 	}
 	return out
-}
-
-func collectExportUserIDs(events []domain.Event, bookings []domain.Booking) []uuid.UUID {
-	seen := make(map[uuid.UUID]struct{})
-	var ids []uuid.UUID
-	for _, e := range events {
-		if _, ok := seen[e.OrganizerID]; !ok {
-			seen[e.OrganizerID] = struct{}{}
-			ids = append(ids, e.OrganizerID)
-		}
-	}
-	for _, b := range bookings {
-		if _, ok := seen[b.UserID]; !ok {
-			seen[b.UserID] = struct{}{}
-			ids = append(ids, b.UserID)
-		}
-	}
-	return ids
 }
 
 func flushWriter(w io.Writer) error {
