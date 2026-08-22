@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	redisv9 "github.com/redis/go-redis/v9"
@@ -70,11 +71,27 @@ func (s *MessagingService) SendMessage(ctx context.Context, in SendMessageInput)
 		return domain.Message{}, ErrMessageSelfRecipient
 	}
 
-	if _, err := s.users.GetByID(ctx, in.RecipientID); err != nil {
+	recipient, err := s.users.GetByID(ctx, in.RecipientID)
+	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return domain.Message{}, domain.ErrNotFound
 		}
 		return domain.Message{}, err
+	}
+	sender, err := s.users.GetByID(ctx, in.SenderID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return domain.Message{}, domain.ErrNotFound
+		}
+		return domain.Message{}, err
+	}
+
+	allowed, err := s.canCorrespond(ctx, sender, recipient)
+	if err != nil {
+		return domain.Message{}, err
+	}
+	if !allowed {
+		return domain.Message{}, domain.ErrMessagingNotAllowed
 	}
 
 	created, err := s.messages.Create(ctx, domain.Message{
@@ -102,6 +119,103 @@ func (s *MessagingService) SendMessage(ctx context.Context, in SendMessageInput)
 	return created, nil
 }
 
+// canCorrespond implements the assignment's §10 rule that organizer/attendee
+// messaging opens up once a booking exists between them. An administrator is
+// always reachable (and can always reach anyone) so support requests and
+// approval questions have a channel that does not depend on a booking.
+func (s *MessagingService) canCorrespond(ctx context.Context, sender, recipient domain.User) (bool, error) {
+	if sender.Role == domain.UserRoleAdmin || recipient.Role == domain.UserRoleAdmin {
+		return true, nil
+	}
+
+	// Either direction: the sender booked one of the recipient's events, or the
+	// recipient booked one of the sender's.
+	booked, err := s.bookings.ExistsBetweenAttendeeAndOrganizer(ctx, sender.ID, recipient.ID)
+	if err != nil {
+		return false, err
+	}
+	if booked {
+		return true, nil
+	}
+	return s.bookings.ExistsBetweenAttendeeAndOrganizer(ctx, recipient.ID, sender.ID)
+}
+
+// Correspondent is someone the current user is allowed to message, along with
+// why they are reachable.
+type Correspondent struct {
+	User domain.User
+	// Support marks an administrator, reachable regardless of bookings.
+	Support bool
+}
+
+// ListRecipients returns everyone the user may currently write to: the people
+// they share a booking with, plus the administrators (support). Sorted with
+// support last so the booking-related contacts lead.
+func (s *MessagingService) ListRecipients(ctx context.Context, userID uuid.UUID) ([]Correspondent, error) {
+	ids, err := s.bookings.ListCorrespondentIDs(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	byID, err := s.users.ListByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]Correspondent, 0, len(byID)+1)
+	seen := make(map[uuid.UUID]struct{}, len(byID)+1)
+	for _, id := range ids {
+		u, ok := byID[id]
+		if !ok || u.ID == userID {
+			continue
+		}
+		if _, dup := seen[u.ID]; dup {
+			continue
+		}
+		seen[u.ID] = struct{}{}
+		out = append(out, Correspondent{User: u})
+	}
+
+	admins, err := s.users.ListByRole(ctx, domain.UserRoleAdmin)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range admins {
+		if a.ID == userID {
+			continue
+		}
+		if _, dup := seen[a.ID]; dup {
+			continue
+		}
+		seen[a.ID] = struct{}{}
+		out = append(out, Correspondent{User: a, Support: true})
+	}
+
+	return out, nil
+}
+
+// LookupUsers resolves user identities in one batch, for rendering mailboxes.
+func (s *MessagingService) LookupUsers(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]domain.User, error) {
+	return s.users.ListByIDs(ctx, ids)
+}
+
+// CanCorrespondWith reports whether the two users may exchange messages. The
+// handler uses it to tell the UI which recipients to offer.
+func (s *MessagingService) CanCorrespondWith(ctx context.Context, senderID, recipientID uuid.UUID) (bool, error) {
+	if senderID == recipientID {
+		return false, nil
+	}
+	sender, err := s.users.GetByID(ctx, senderID)
+	if err != nil {
+		return false, err
+	}
+	recipient, err := s.users.GetByID(ctx, recipientID)
+	if err != nil {
+		return false, err
+	}
+	return s.canCorrespond(ctx, sender, recipient)
+}
+
 func (s *MessagingService) redisIncrUnreadThenReconcile(ctx context.Context, recipientID uuid.UUID) error {
 	key := unreadRedisKey(recipientID)
 	if _, err := s.redis.Incr(ctx, key).Result(); err != nil {
@@ -117,14 +231,52 @@ func (s *MessagingService) redisIncrUnreadThenReconcile(ctx context.Context, rec
 	return nil
 }
 
+// GetInbox returns a page of received messages and marks exactly that page
+// read. Earlier revisions cleared the whole mailbox on any fetch, which wiped
+// the "new message" indicator for messages the user had never seen.
 func (s *MessagingService) GetInbox(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Message, error) {
-	if err := s.messages.MarkAsRead(ctx, userID); err != nil {
+	messages, err := s.messages.ListInbox(ctx, userID, limit, offset)
+	if err != nil {
 		return nil, err
 	}
-	if err := s.redis.Set(ctx, unreadRedisKey(userID), 0, 0).Err(); err != nil {
+
+	unreadIDs := make([]uuid.UUID, 0, len(messages))
+	for _, m := range messages {
+		if m.ReadAt == nil {
+			unreadIDs = append(unreadIDs, m.ID)
+		}
+	}
+	if len(unreadIDs) == 0 {
+		return messages, nil
+	}
+
+	if err := s.messages.MarkAsReadByIDs(ctx, userID, unreadIDs); err != nil {
+		return nil, err
+	}
+
+	count, err := s.messages.GetUnreadCount(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.redis.Set(ctx, unreadRedisKey(userID), count, 0).Err(); err != nil {
 		return nil, fmt.Errorf("redis set unread on inbox: %w", err)
 	}
-	return s.messages.ListInbox(ctx, userID, limit, offset)
+	s.broadcastUnreadCount(userID, count)
+
+	// Reflect the write in what we hand back, so the caller does not have to
+	// re-fetch to see the page as read.
+	now := time.Now().UTC()
+	marked := make(map[uuid.UUID]struct{}, len(unreadIDs))
+	for _, id := range unreadIDs {
+		marked[id] = struct{}{}
+	}
+	for i := range messages {
+		if _, ok := marked[messages[i].ID]; ok {
+			readAt := now
+			messages[i].ReadAt = &readAt
+		}
+	}
+	return messages, nil
 }
 
 func (s *MessagingService) GetSent(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Message, error) {

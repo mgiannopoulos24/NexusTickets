@@ -31,3 +31,9 @@ type UpdateProfileRequest struct {
 	Longitude *float64 `json:"longitude"`
 	VATNumber *string  `json:"vat_number"`
 }
+
+// ChangeRoleRequest switches an account between the attendee and organizer
+// roles (admin only).
+type ChangeRoleRequest struct {
+	Role string `json:"role"`
+}

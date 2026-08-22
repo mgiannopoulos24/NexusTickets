@@ -70,4 +70,3 @@ func TestSentinelErrorWrapping(t *testing.T) {
 		t.Fatal("expected errors.Is(ErrNotFound, ErrCapacityExceeded) to be false")
 	}
 }
-

@@ -26,6 +26,8 @@ type AppDependencies struct {
 	ChatHandler           *handler.ChatHandler
 	AdminExportHandler    *handler.AdminExportHandler
 	RecommendationService *service.RecommendationService
+	// EventService is exposed so main can run the COMPLETED sweeper.
+	EventService *service.EventService
 }
 
 var RepositorySet = wire.NewSet(

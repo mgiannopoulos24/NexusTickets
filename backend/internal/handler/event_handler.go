@@ -48,21 +48,22 @@ func (h *EventHandler) Create(c *fiber.Ctx) error {
 	}
 
 	event, cats, err := h.service.Create(c.Context(), organizerID, service.CreateEventInput{
-		Title:       req.Title,
-		Description: req.Description,
-		Venue:       req.Venue,
+		Title:            req.Title,
+		Description:      req.Description,
+		Venue:            req.Venue,
+		EventType:        req.EventType,
 		FeaturedImageURL: req.FeaturedImageURL,
-		EventDetail: req.EventDetail,
-		Address:     req.Address,
-		City:        req.City,
-		Country:     req.Country,
-		Latitude:    req.Latitude,
-		Longitude:   req.Longitude,
-		StartAt:     startAt,
-		EndAt:       endAt,
-		Capacity:    req.Capacity,
-		Categories:  req.Categories,
-		TicketTypes: toTicketTypeInputs(req.TicketTypes),
+		EventDetail:      req.EventDetail,
+		Address:          req.Address,
+		City:             req.City,
+		Country:          req.Country,
+		Latitude:         req.Latitude,
+		Longitude:        req.Longitude,
+		StartAt:          startAt,
+		EndAt:            endAt,
+		Capacity:         req.Capacity,
+		Categories:       req.Categories,
+		TicketTypes:      toTicketTypeInputs(req.TicketTypes),
 	})
 	if err != nil {
 		return err
@@ -75,12 +76,15 @@ func (h *EventHandler) Get(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid event id")
 	}
-	event, cats, err := h.service.Get(c.Context(), eventID)
+	viewerID, _ := optionalAuthUserID(c)
+	viewerRole, _ := c.Locals("role").(string)
+
+	event, cats, err := h.service.GetForViewer(c.Context(), eventID, viewerID, domain.UserRole(viewerRole))
 	if err != nil {
 		return err
 	}
-	if uid, ok := optionalAuthUserID(c); ok {
-		_ = h.service.RecordEventView(c.Context(), uid, eventID)
+	if viewerID != uuid.Nil {
+		_ = h.service.RecordEventView(c.Context(), viewerID, eventID)
 	}
 	return response.OK(c, toEventResponse(event, cats))
 }
@@ -239,18 +243,19 @@ func (h *EventHandler) Update(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 	}
 	in := service.UpdateEventInput{
-		Title:       req.Title,
-		Description: req.Description,
-		Venue:       req.Venue,
+		Title:            req.Title,
+		Description:      req.Description,
+		Venue:            req.Venue,
+		EventType:        req.EventType,
 		FeaturedImageURL: req.FeaturedImageURL,
-		EventDetail: req.EventDetail,
-		Address:     req.Address,
-		City:        req.City,
-		Country:     req.Country,
-		Latitude:    req.Latitude,
-		Longitude:   req.Longitude,
-		Capacity:    req.Capacity,
-		Categories:  req.Categories,
+		EventDetail:      req.EventDetail,
+		Address:          req.Address,
+		City:             req.City,
+		Country:          req.Country,
+		Latitude:         req.Latitude,
+		Longitude:        req.Longitude,
+		Capacity:         req.Capacity,
+		Categories:       req.Categories,
 	}
 	if req.StartAt != nil {
 		ts, parseErr := time.Parse(time.RFC3339, strings.TrimSpace(*req.StartAt))
@@ -604,6 +609,7 @@ func (h *EventHandler) AdminUpdateEvent(c *fiber.Ctx) error {
 		Title:            req.Title,
 		Description:      req.Description,
 		Venue:            req.Venue,
+		EventType:        req.EventType,
 		FeaturedImageURL: req.FeaturedImageURL,
 		EventDetail:      req.EventDetail,
 		Address:          req.Address,
@@ -631,13 +637,11 @@ func (h *EventHandler) AdminUpdateEvent(c *fiber.Ctx) error {
 	if req.Status != nil {
 		raw := strings.TrimSpace(*req.Status)
 		if raw != "" {
-			st := domain.EventStatus(raw)
-			switch st {
-			case domain.EventStatusDraft, domain.EventStatusPublished, domain.EventStatusCancelled:
-				in.Status = &st
-			default:
-				return fiber.NewError(fiber.StatusBadRequest, "invalid status (use draft, published, or cancelled)")
+			st := domain.EventStatus(strings.ToLower(raw))
+			if !domain.ValidEventStatus(st) {
+				return fiber.NewError(fiber.StatusBadRequest, "invalid status (use draft, published, completed, or cancelled)")
 			}
+			in.Status = &st
 		}
 	}
 
@@ -655,6 +659,7 @@ func toEventResponse(event domain.Event, cats []domain.Category) dto.EventRespon
 	}
 
 	respTickets := make([]dto.TicketTypeResponse, 0, len(event.TicketTypes))
+	sold, remaining := 0, 0
 	for _, tt := range event.TicketTypes {
 		respTickets = append(respTickets, dto.TicketTypeResponse{
 			ID:        tt.ID.String(),
@@ -663,40 +668,61 @@ func toEventResponse(event domain.Event, cats []domain.Category) dto.EventRespon
 			Quantity:  tt.Quantity,
 			Available: tt.Available,
 		})
+		sold += tt.Quantity - tt.Available
+		remaining += tt.Available
+	}
+
+	respPhotos := make([]dto.EventPhotoResponse, 0, len(event.Photos))
+	for _, ph := range event.Photos {
+		respPhotos = append(respPhotos, dto.EventPhotoResponse{
+			ID:       ph.ID.String(),
+			URL:      "/uploads/media/" + ph.StoragePath,
+			Position: ph.Position,
+		})
 	}
 
 	return dto.EventResponse{
-		ID:          event.ID.String(),
-		OrganizerID: event.OrganizerID.String(),
-		Title:       event.Title,
-		Description: event.Description,
-		Venue:       event.Venue,
+		ID:               event.ID.String(),
+		OrganizerID:      event.OrganizerID.String(),
+		Title:            event.Title,
+		Description:      event.Description,
+		Venue:            event.Venue,
+		EventType:        event.EventType,
 		FeaturedImageURL: event.FeaturedImageURL,
-		EventDetail: event.Detail,
-		Address:     event.Address,
-		City:        event.City,
-		Country:     event.Country,
-		Latitude:    event.Latitude,
-		Longitude:   event.Longitude,
-		StartAt:     event.StartAt.UTC().Format(time.RFC3339),
-		EndAt:       event.EndAt.UTC().Format(time.RFC3339),
-		Capacity:    event.Capacity,
-		Status:      string(event.Status),
-		Categories:  respCats,
-		TicketTypes: respTickets,
-		CreatedAt:   event.CreatedAt.UTC().Format(time.RFC3339),
-		UpdatedAt:   event.UpdatedAt.UTC().Format(time.RFC3339),
+		EventDetail:      event.Detail,
+		Address:          event.Address,
+		City:             event.City,
+		Country:          event.Country,
+		Latitude:         event.Latitude,
+		Longitude:        event.Longitude,
+		StartAt:          event.StartAt.UTC().Format(time.RFC3339),
+		EndAt:            event.EndAt.UTC().Format(time.RFC3339),
+		Capacity:         event.Capacity,
+		Status:           string(event.Status),
+		Categories:       respCats,
+		TicketTypes:      respTickets,
+		Photos:           respPhotos,
+		TicketsSold:      sold,
+		TicketsRemaining: remaining,
+		CreatedAt:        event.CreatedAt.UTC().Format(time.RFC3339),
+		UpdatedAt:        event.UpdatedAt.UTC().Format(time.RFC3339),
 	}
 }
 
 func toTicketTypeInputs(in []dto.TicketTypeRequest) []service.TicketTypeInput {
 	out := make([]service.TicketTypeInput, 0, len(in))
 	for _, tt := range in {
-		out = append(out, service.TicketTypeInput{
+		input := service.TicketTypeInput{
 			Name:     tt.Name,
 			Price:    tt.Price,
 			Quantity: tt.Quantity,
-		})
+		}
+		if tt.ID != nil && strings.TrimSpace(*tt.ID) != "" {
+			if id, err := uuid.Parse(strings.TrimSpace(*tt.ID)); err == nil {
+				input.ID = &id
+			}
+		}
+		out = append(out, input)
 	}
 	return out
 }

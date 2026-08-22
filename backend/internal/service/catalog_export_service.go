@@ -39,6 +39,11 @@ func (s *CatalogExportService) ExportCatalogXML(ctx context.Context, w io.Writer
 	if _, err := w.Write([]byte(xml.Header)); err != nil {
 		return err
 	}
+	// Point the document at the DTD it is built to satisfy, so the export can be
+	// validated directly (assignment §12: "σε μορφή XML σύμφωνα με το DTD").
+	if _, err := io.WriteString(w, export.CatalogDoctype()+"\n"); err != nil {
+		return err
+	}
 	if _, err := io.WriteString(w, "<"+export.CatalogRootElement()+">\n"); err != nil {
 		return err
 	}

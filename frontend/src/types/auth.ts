@@ -1,3 +1,5 @@
+import type { AssignableRole } from '@/types/enums';
+
 export type RegisterRequest = {
   username: string;
   password: string;
@@ -9,7 +11,11 @@ export type RegisterRequest = {
   address: string | null;
   city: string | null;
   country: string | null;
+  latitude: number | null;
+  longitude: number | null;
   vat_number: string | null;
+  /** 'attendee' (default) or 'organizer'. */
+  role: AssignableRole;
 };
 
 export type AuthTokensPayload = {

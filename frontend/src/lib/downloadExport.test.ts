@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { downloadAuthenticatedFile } from '@/lib/downloadExport';
 
 describe('downloadAuthenticatedFile', () => {
-  const originalFetch = global.fetch;
+  const originalFetch = globalThis.fetch;
   const originalCreate = URL.createObjectURL;
   const originalRevoke = URL.revokeObjectURL;
 
@@ -15,7 +15,7 @@ describe('downloadAuthenticatedFile', () => {
   });
 
   afterEach(() => {
-    global.fetch = originalFetch;
+    globalThis.fetch = originalFetch;
     URL.createObjectURL = originalCreate;
     URL.revokeObjectURL = originalRevoke;
     vi.restoreAllMocks();
@@ -24,7 +24,7 @@ describe('downloadAuthenticatedFile', () => {
   it('sends the bearer token and triggers a download', async () => {
     const blob = new Blob(['<Events></Events>'], { type: 'application/xml' });
     const fetchMock = vi.fn(async () => new Response(blob, { status: 200 }));
-    global.fetch = fetchMock as unknown as typeof fetch;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     await downloadAuthenticatedFile('/api/v1/events/export/xml', 'tok123', 'events.xml');
 
@@ -36,7 +36,7 @@ describe('downloadAuthenticatedFile', () => {
   });
 
   it('throws when the response is not ok', async () => {
-    global.fetch = vi.fn(async () => new Response('nope', { status: 403 })) as unknown as typeof fetch;
+    globalThis.fetch = vi.fn(async () => new Response('nope', { status: 403 })) as unknown as typeof fetch;
 
     await expect(
       downloadAuthenticatedFile('/api/v1/events/export/xml', 'tok', 'events.xml'),

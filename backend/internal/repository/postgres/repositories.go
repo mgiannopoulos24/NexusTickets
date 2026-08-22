@@ -134,6 +134,38 @@ func (r *userRepositoryPostgres) Reject(ctx context.Context, id uuid.UUID) (doma
 	return r.GetByID(ctx, id)
 }
 
+// SetRole changes an account's role. Only attendee/organizer are assignable;
+// the caller (UserService.ChangeRole) enforces that and refuses admin accounts.
+func (r *userRepositoryPostgres) SetRole(ctx context.Context, id uuid.UUID, role domain.UserRole) (domain.User, error) {
+	res := r.db.WithContext(ctx).Model(&UserModel{}).
+		Where("id = ?", id).
+		Updates(map[string]any{"role": string(role), "updated_at": nowUTC()})
+	if res.Error != nil {
+		return domain.User{}, fmt.Errorf("set user role: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return domain.User{}, domain.ErrNotFound
+	}
+	return r.GetByID(ctx, id)
+}
+
+// ListByRole returns approved accounts holding the given role.
+func (r *userRepositoryPostgres) ListByRole(ctx context.Context, role domain.UserRole) ([]domain.User, error) {
+	var models []UserModel
+	err := r.db.WithContext(ctx).
+		Where("role = ? AND account_status = ?", string(role), string(domain.AccountStatusApproved)).
+		Order("username ASC").
+		Find(&models).Error
+	if err != nil {
+		return nil, fmt.Errorf("list users by role: %w", err)
+	}
+	out := make([]domain.User, 0, len(models))
+	for _, m := range models {
+		out = append(out, userModelToDomain(m))
+	}
+	return out, nil
+}
+
 func (r *userRepositoryPostgres) List(ctx context.Context, limit, offset int) ([]domain.User, error) {
 	if limit < 1 {
 		limit = 20
@@ -499,6 +531,18 @@ func (r *eventRepositoryPostgres) SetStatus(ctx context.Context, id uuid.UUID, s
 	return nil
 }
 
+// MarkCompleted moves published events whose end time has passed into the
+// COMPLETED terminal state (assignment §7). Returns how many rows changed.
+func (r *eventRepositoryPostgres) MarkCompleted(ctx context.Context, before time.Time) (int64, error) {
+	res := r.db.WithContext(ctx).Model(&EventModel{}).
+		Where("status = ? AND end_time < ?", string(domain.EventStatusPublished), before.UTC()).
+		Updates(map[string]any{"status": string(domain.EventStatusCompleted), "updated_at": nowUTC()})
+	if res.Error != nil {
+		return 0, fmt.Errorf("mark events completed: %w", res.Error)
+	}
+	return res.RowsAffected, nil
+}
+
 func (r *eventRepositoryPostgres) SetCategories(ctx context.Context, eventID uuid.UUID, categoryIDs []uuid.UUID) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("event_id = ?", eventID).Delete(&EventCategoryModel{}).Error; err != nil {
@@ -543,32 +587,77 @@ func (r *eventRepositoryPostgres) GetCategories(ctx context.Context, eventID uui
 	return out, nil
 }
 
+// SetTicketTypes reconciles the event's ticket types against the desired set.
+//
+// It deliberately does NOT delete-then-reinsert every row: bookings reference
+// ticket_types via a non-deferrable FK with ON DELETE RESTRICT, so wiping the
+// table would abort the transaction for any event that has ever been booked
+// (and would silently re-issue sold seats on events that had not). Instead we
+// diff by primary key — rows present in both are UPDATEd in place, rows only in
+// the desired set are INSERTed, and rows only in the database are DELETEd.
+//
+// A delete of a ticket type that still has bookings will surface as an FK error
+// from PostgreSQL; callers are expected to have refused that case already
+// (see EventService.Update / DeleteTicketType).
 func (r *eventRepositoryPostgres) SetTicketTypes(ctx context.Context, eventID uuid.UUID, ticketTypes []domain.TicketType) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("event_id = ?", eventID).Delete(&TicketTypeModel{}).Error; err != nil {
-			return fmt.Errorf("clear ticket types: %w", err)
+		var current []TicketTypeModel
+		if err := tx.Where("event_id = ?", eventID).Find(&current).Error; err != nil {
+			return fmt.Errorf("load ticket types: %w", err)
 		}
-		if len(ticketTypes) == 0 {
-			return nil
+		existing := make(map[uuid.UUID]TicketTypeModel, len(current))
+		for _, m := range current {
+			existing[m.ID] = m
 		}
 
-		rows := make([]TicketTypeModel, 0, len(ticketTypes))
+		keep := make(map[uuid.UUID]struct{}, len(ticketTypes))
+		inserts := make([]TicketTypeModel, 0, len(ticketTypes))
+
 		for _, tt := range ticketTypes {
-			tt.ID = ensureID(tt.ID)
 			tt.EventID = eventID
+			if prev, ok := existing[tt.ID]; ok && tt.ID != uuid.Nil {
+				keep[tt.ID] = struct{}{}
+				tt.CreatedAt = prev.CreatedAt
+				tt.UpdatedAt = nowUTC()
+				if err := tx.Model(&TicketTypeModel{}).
+					Where("id = ?", tt.ID).
+					Updates(map[string]any{
+						"name":       tt.Name,
+						"price":      tt.Price,
+						"quantity":   tt.Quantity,
+						"available":  tt.Available,
+						"updated_at": tt.UpdatedAt,
+					}).Error; err != nil {
+					return fmt.Errorf("update ticket type: %w", err)
+				}
+				continue
+			}
+
+			tt.ID = ensureID(tt.ID)
+			keep[tt.ID] = struct{}{}
 			if tt.CreatedAt.IsZero() {
 				tt.CreatedAt = nowUTC()
 			}
-			if tt.UpdatedAt.IsZero() {
-				tt.UpdatedAt = nowUTC()
+			tt.UpdatedAt = nowUTC()
+			inserts = append(inserts, ticketTypeDomainToModel(tt))
+		}
+
+		removed := make([]uuid.UUID, 0, len(current))
+		for id := range existing {
+			if _, ok := keep[id]; !ok {
+				removed = append(removed, id)
 			}
-			rows = append(rows, ticketTypeDomainToModel(tt))
 		}
-		if len(rows) == 0 {
-			return nil
+		if len(removed) > 0 {
+			if err := tx.Where("id IN ?", removed).Delete(&TicketTypeModel{}).Error; err != nil {
+				return fmt.Errorf("delete ticket types: %w", err)
+			}
 		}
-		if err := tx.Create(&rows).Error; err != nil {
-			return fmt.Errorf("insert ticket types: %w", err)
+
+		if len(inserts) > 0 {
+			if err := tx.Create(&inserts).Error; err != nil {
+				return fmt.Errorf("insert ticket types: %w", err)
+			}
 		}
 		return nil
 	})
@@ -872,6 +961,44 @@ func (r *bookingRepositoryPostgres) ListAllConfirmed(ctx context.Context) ([]dom
 	return out, nil
 }
 
+// ExistsBetweenAttendeeAndOrganizer reports whether attendeeID holds a booking
+// on any event organized by organizerID. It is the gate for direct messaging
+// (assignment §10: messaging becomes available after a booking).
+func (r *bookingRepositoryPostgres) ExistsBetweenAttendeeAndOrganizer(ctx context.Context, attendeeID, organizerID uuid.UUID) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&BookingModel{}).
+		Joins("JOIN events e ON e.id = bookings.event_id").
+		Where("bookings.user_id = ? AND e.organizer_id = ?", attendeeID, organizerID).
+		Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("check booking between users: %w", err)
+	}
+	return count > 0, nil
+}
+
+// ListCorrespondentIDs returns every user the given user shares a booking with:
+// the organizers of events they booked, plus the attendees who booked events
+// they organize. This is the address book for direct messaging (§10).
+func (r *bookingRepositoryPostgres) ListCorrespondentIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT DISTINCT e.organizer_id AS id
+		FROM bookings b
+		JOIN events e ON e.id = b.event_id
+		WHERE b.user_id = ? AND e.organizer_id <> ?
+		UNION
+		SELECT DISTINCT b.user_id AS id
+		FROM bookings b
+		JOIN events e ON e.id = b.event_id
+		WHERE e.organizer_id = ? AND b.user_id <> ?
+	`, userID, userID, userID, userID).Scan(&ids).Error
+	if err != nil {
+		return nil, fmt.Errorf("list correspondents: %w", err)
+	}
+	return ids, nil
+}
+
 func (r *bookingRepositoryPostgres) CountByTicketType(ctx context.Context, ticketTypeID uuid.UUID) (int, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
@@ -1024,6 +1151,21 @@ func (r *messageRepositoryPostgres) MarkAsRead(ctx context.Context, userID uuid.
 		Update("read_at", nowUTC())
 	if res.Error != nil {
 		return fmt.Errorf("mark messages as read: %w", res.Error)
+	}
+	return nil
+}
+
+// MarkAsReadByIDs marks only the given messages read. Listing the inbox marks
+// the page the caller actually received, rather than the entire mailbox.
+func (r *messageRepositoryPostgres) MarkAsReadByIDs(ctx context.Context, userID uuid.UUID, ids []uuid.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	res := r.db.WithContext(ctx).Model(&MessageModel{}).
+		Where("recipient_id = ? AND id IN ? AND read_at IS NULL AND deleted_by_recipient = ?", userID, ids, false).
+		Update("read_at", nowUTC())
+	if res.Error != nil {
+		return fmt.Errorf("mark messages as read by ids: %w", res.Error)
 	}
 	return nil
 }

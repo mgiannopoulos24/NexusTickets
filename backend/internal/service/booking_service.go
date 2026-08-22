@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -14,6 +15,7 @@ type BookingService struct {
 	events      repo.EventRepository
 	ticketTypes repo.TicketTypeRepository
 	bookings    repo.BookingRepository
+	users       repo.UserRepository
 }
 
 type CreateBookingInput struct {
@@ -26,11 +28,13 @@ func NewBookingService(
 	events repo.EventRepository,
 	ticketTypes repo.TicketTypeRepository,
 	bookings repo.BookingRepository,
+	users repo.UserRepository,
 ) *BookingService {
 	return &BookingService{
 		events:      events,
 		ticketTypes: ticketTypes,
 		bookings:    bookings,
+		users:       users,
 	}
 }
 
@@ -54,6 +58,11 @@ func (s *BookingService) CreateBooking(ctx context.Context, userID uuid.UUID, ro
 	}
 	if event.Status != domain.EventStatusPublished {
 		return domain.Booking{}, domain.ErrEventNotBookable
+	}
+	// The completion sweeper runs on a ticker, so a just-finished event can
+	// still read as published here. Check the clock as well as the status.
+	if !event.EndAt.IsZero() && event.EndAt.Before(time.Now().UTC()) {
+		return domain.Booking{}, domain.ErrEventEnded
 	}
 
 	tt, err := s.ticketTypes.GetByID(ctx, in.TicketTypeID)
@@ -83,6 +92,73 @@ func (s *BookingService) CreateBooking(ctx context.Context, userID uuid.UUID, ro
 		return domain.Booking{}, err
 	}
 	return created, nil
+}
+
+// BookingContext carries the rows a set of bookings point at, looked up in a
+// few batch queries rather than one per booking.
+type BookingContext struct {
+	Events      map[uuid.UUID]domain.Event
+	TicketTypes map[uuid.UUID]domain.TicketType
+	Attendees   map[uuid.UUID]domain.User
+}
+
+// HydrateBookings resolves the events, ticket types and attendees referenced by
+// the given bookings so a list can be rendered in one round trip.
+func (s *BookingService) HydrateBookings(ctx context.Context, bookings []domain.Booking) (BookingContext, error) {
+	out := BookingContext{
+		Events:      map[uuid.UUID]domain.Event{},
+		TicketTypes: map[uuid.UUID]domain.TicketType{},
+		Attendees:   map[uuid.UUID]domain.User{},
+	}
+	if len(bookings) == 0 {
+		return out, nil
+	}
+
+	eventIDs := make(map[uuid.UUID]struct{}, len(bookings))
+	ticketTypeIDs := make(map[uuid.UUID]struct{}, len(bookings))
+	userIDs := make([]uuid.UUID, 0, len(bookings))
+	seenUser := make(map[uuid.UUID]struct{}, len(bookings))
+
+	for _, b := range bookings {
+		eventIDs[b.EventID] = struct{}{}
+		ticketTypeIDs[b.TicketTypeID] = struct{}{}
+		if _, ok := seenUser[b.UserID]; !ok {
+			seenUser[b.UserID] = struct{}{}
+			userIDs = append(userIDs, b.UserID)
+		}
+	}
+
+	for id := range eventIDs {
+		ev, err := s.events.GetByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				continue
+			}
+			return BookingContext{}, err
+		}
+		out.Events[id] = ev
+	}
+
+	for id := range ticketTypeIDs {
+		tt, err := s.ticketTypes.GetByID(ctx, id)
+		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				continue
+			}
+			return BookingContext{}, err
+		}
+		out.TicketTypes[id] = tt
+	}
+
+	if s.users != nil {
+		people, err := s.users.ListByIDs(ctx, userIDs)
+		if err != nil {
+			return BookingContext{}, err
+		}
+		out.Attendees = people
+	}
+
+	return out, nil
 }
 
 // GetBooking returns the booking if the caller is the booker or the event organizer.

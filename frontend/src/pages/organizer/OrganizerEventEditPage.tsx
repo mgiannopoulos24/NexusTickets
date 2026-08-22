@@ -4,6 +4,27 @@ import { Link, useParams } from 'react-router-dom';
 import { EventDetailTemplateForm } from '@/components/admin/EventDetailTemplateForm';
 import { EventMapEmbed } from '@/components/events/EventMapEmbed';
 import { OrganizerLayout } from '@/components/layout/OrganizerLayout';
+import { apiErrorMessage } from '@/app/apiEnvelope';
+import {
+  useCancelEventMutation,
+  useDeleteEventPhotoMutation,
+  useGetEventQuery,
+  useListCategoriesQuery,
+  usePublishEventMutation,
+  useUpdateEventMutation,
+  useUploadEventPhotoMutation,
+  useUploadFeaturedImageMutation,
+  type EventWritePayload,
+} from '@/app/eventsApi';
+import { TicketTypesEditor } from '@/components/events/TicketTypesEditor';
+import { ErrorMessage } from '@/components/shared/ErrorMessage';
+import { SkeletonList } from '@/components/shared/SkeletonList';
+import {
+  parseTicketDrafts,
+  ticketTypesToDrafts,
+  type TicketTypeDraft,
+} from '@/lib/ticketTypeDrafts';
+import { DEFAULT_EVENT_TYPE, EVENT_TYPES } from '@/constants/eventTypes';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,20 +40,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import type { EventDetail } from '@/types/eventDetail';
-import { emptyEventDetail, normalizeEventDetail } from '@/types/eventDetail';
-import type { Event } from '@/types/models';
-import { PencilIcon } from 'lucide-react';
+import { normalizeEventDetail } from '@/types/eventDetail';
+import type { Category, Event } from '@/types/models';
+import { PencilIcon, Trash2Icon } from 'lucide-react';
 import TimePicker from 'react-time-picker';
 import 'react-time-picker/dist/TimePicker.css';
 import 'react-clock/dist/Clock.css';
-
-type ApiEnvelope<T> = {
-  data: T | null;
-  error?: { code: string; message: string } | null;
-  meta?: unknown;
-};
-
-type CategoryDto = { id: string; name: string };
 
 function isUUID(raw: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw);
@@ -52,6 +65,8 @@ type FormState = {
   end_at: string;
   featured_image_url: string;
   categories: Set<string>;
+  event_type: string;
+  capacity: string;
 };
 
 function pad2(n: number): string {
@@ -108,9 +123,9 @@ function AdminTimePicker({
 }) {
   const [clockOpen, setClockOpen] = useState(true);
 
-  useEffect(() => {
-    if (disabled) setClockOpen(false);
-  }, [disabled]);
+  // A disabled picker is always closed; derived rather than pushed into state
+  // by an effect.
+  const isOpen = clockOpen && !disabled;
 
   const parsed = parseTimeHHMM(value);
   const pickerValue = parsed ? `${pad2(parsed.hour)}:${pad2(parsed.minute)}:00` : null;
@@ -127,7 +142,7 @@ function AdminTimePicker({
     >
       <TimePicker
         className="w-full max-w-none"
-        isOpen={clockOpen}
+        isOpen={isOpen}
         onClockOpen={() => setClockOpen(true)}
         onClockClose={() => setClockOpen(false)}
         value={pickerValue}
@@ -276,116 +291,136 @@ function DateTimeDialogField({
   );
 }
 
+/** Builds the editable form state from a freshly loaded event. */
+function formFromEvent(ev: Event): FormState {
+  return {
+    title: ev.title ?? '',
+    description: ev.description ?? '',
+    venue: ev.venue ?? '',
+    address: ev.address ?? '',
+    city: ev.city ?? '',
+    country: ev.country ?? '',
+    latitude: ev.latitude != null && Number.isFinite(ev.latitude) ? String(ev.latitude) : '',
+    longitude: ev.longitude != null && Number.isFinite(ev.longitude) ? String(ev.longitude) : '',
+    start_at: ev.start_at ?? '',
+    end_at: ev.end_at ?? '',
+    featured_image_url: ev.featured_image_url ?? '',
+    categories: new Set(ev.categories ?? []),
+    event_type: ev.event_type || DEFAULT_EVENT_TYPE,
+    capacity: String(ev.capacity ?? 0),
+  };
+}
+
+/**
+ * Loads the event and the category list, then hands them to the form.
+ *
+ * The form is keyed by event id so switching events remounts it and its state
+ * re-seeds from the new props — React's own answer to "reset state when the
+ * data changes", instead of copying the response into state from an effect.
+ */
 export default function OrganizerEventEditPage() {
-  const { id } = useParams();
-  const { accessToken, user } = useAuth();
-  const [event, setEvent] = useState<Event | null>(null);
-  const [categories, setCategories] = useState<CategoryDto[]>([]);
-  const [form, setForm] = useState<FormState | null>(null);
-  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
-  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
-  const [startTime, setStartTime] = useState<string>('12:00');
-  const [endTime, setEndTime] = useState<string>('12:00');
-  const [featuredPreview, setFeaturedPreview] = useState<string | null>(null);
+  const { id = '' } = useParams();
+  const { user } = useAuth();
+
+  const validId = isUUID(id);
+  const eventQuery = useGetEventQuery(id, { skip: !validId });
+  const { data: categories } = useListCategoriesQuery();
+
+  const event = eventQuery.data;
+  const notMine = !!event && !!user && event.organizer_id !== user.id;
+
+  if (!validId) {
+    return (
+      <OrganizerLayout>
+        <div className="p-6">
+          <ErrorMessage message="Μη έγκυρο αναγνωριστικό εκδήλωσης." />
+        </div>
+      </OrganizerLayout>
+    );
+  }
+
+  if (eventQuery.isLoading || !categories) {
+    return (
+      <OrganizerLayout>
+        <div className="p-6">
+          <SkeletonList rows={8} />
+        </div>
+      </OrganizerLayout>
+    );
+  }
+
+  if (eventQuery.error || !event) {
+    return (
+      <OrganizerLayout>
+        <div className="p-6">
+          <ErrorMessage
+            message={apiErrorMessage(eventQuery.error, 'Δεν ήταν δυνατή η φόρτωση της εκδήλωσης.')}
+            onRetry={() => void eventQuery.refetch()}
+          />
+        </div>
+      </OrganizerLayout>
+    );
+  }
+
+  if (notMine) {
+    return (
+      <OrganizerLayout>
+        <div className="p-6">
+          <ErrorMessage message="Δεν έχετε δικαίωμα επεξεργασίας αυτής της εκδήλωσης." />
+        </div>
+      </OrganizerLayout>
+    );
+  }
+
+  return <OrganizerEventEditForm key={event.id} initialEvent={event} categories={categories} />;
+}
+
+function OrganizerEventEditForm({
+  initialEvent,
+  categories,
+}: {
+  initialEvent: Event;
+  categories: Category[];
+}) {
+  const eventId = initialEvent.id;
+
+  const [updateEvent] = useUpdateEventMutation();
+  const [publishEvent] = usePublishEventMutation();
+  const [cancelEvent] = useCancelEventMutation();
+  const [uploadFeaturedImage] = useUploadFeaturedImageMutation();
+  const [uploadPhoto, { isLoading: uploadingPhoto }] = useUploadEventPhotoMutation();
+  const [deletePhoto] = useDeleteEventPhotoMutation();
+  const { refetch: refetchEvent } = useGetEventQuery(eventId);
+
+  const [event, setEvent] = useState<Event>(initialEvent);
+  const [form, setForm] = useState<FormState>(() => formFromEvent(initialEvent));
+
+  const initialStart = initialEvent.start_at ? fromRfc3339ToDateAndTime(initialEvent.start_at) : null;
+  const initialEnd = initialEvent.end_at ? fromRfc3339ToDateAndTime(initialEvent.end_at) : null;
+
+  const [startDate, setStartDate] = useState<Date | undefined>(initialStart?.date);
+  const [endDate, setEndDate] = useState<Date | undefined>(initialEnd?.date);
+  const [startTime, setStartTime] = useState<string>(initialStart?.timeHHMM ?? '12:00');
+  const [endTime, setEndTime] = useState<string>(initialEnd?.timeHHMM ?? '12:00');
+  const [featuredPreview, setFeaturedPreview] = useState<string | null>(
+    initialEvent.featured_image_url ?? null,
+  );
   const featuredObjectUrlRef = useRef<string | null>(null);
   const [uploadingFeatured, setUploadingFeatured] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState<string | null>(null);
-  const [detail, setDetail] = useState<EventDetail>(emptyEventDetail());
+  const [detail, setDetail] = useState<EventDetail>(() =>
+    normalizeEventDetail(initialEvent.event_detail),
+  );
+  const [ticketDrafts, setTicketDrafts] = useState<TicketTypeDraft[]>(() =>
+    ticketTypesToDrafts(initialEvent.ticket_types ?? []),
+  );
+
+  // A cancelled or completed event is a historical record: the API rejects
+  // edits to it, so the form is shown read-only rather than failing on save.
+  const isLocked = event?.status === 'cancelled' || event?.status === 'completed';
   const [lifecycleLoading, setLifecycleLoading] = useState(false);
-
-  const eventId = id ?? '';
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!eventId) return;
-    if (!isUUID(eventId)) {
-      setError('invalid event id');
-      setLoading(false);
-      return;
-    }
-    if (!accessToken) {
-      setError('missing bearer token');
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    setSaveError(null);
-    setSaveOk(null);
-
-    const load = async () => {
-      const [evRes, catRes] = await Promise.all([
-        fetch(`/api/v1/events/${encodeURIComponent(eventId)}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }),
-        fetch('/api/v1/categories'),
-      ]);
-      const evJson = (await evRes.json()) as ApiEnvelope<Event>;
-      const catJson = (await catRes.json()) as ApiEnvelope<CategoryDto[]>;
-
-      if (!evRes.ok || evJson.error)
-        throw new Error(evJson.error?.message ?? 'Σφάλμα φόρτωσης εκδήλωσης');
-      if (!catRes.ok || catJson.error)
-        throw new Error(catJson.error?.message ?? 'Σφάλμα φόρτωσης κατηγοριών');
-
-      const ev = evJson.data;
-      if (!ev) throw new Error('Άκυρη απάντηση');
-
-      if (user && ev.organizer_id !== user.id) {
-        throw new Error('Δεν έχετε δικαίωμα επεξεργασίας αυτής της εκδήλωσης.');
-      }
-
-      if (!cancelled) {
-        setEvent(ev);
-        setCategories(catJson.data ?? []);
-        setForm({
-          title: ev.title ?? '',
-          description: ev.description ?? '',
-          venue: ev.venue ?? '',
-          address: ev.address ?? '',
-          city: ev.city ?? '',
-          country: ev.country ?? '',
-          latitude: ev.latitude != null && Number.isFinite(ev.latitude) ? String(ev.latitude) : '',
-          longitude:
-            ev.longitude != null && Number.isFinite(ev.longitude) ? String(ev.longitude) : '',
-          start_at: ev.start_at ?? '',
-          end_at: ev.end_at ?? '',
-          featured_image_url: ev.featured_image_url ?? '',
-          categories: new Set(ev.categories ?? []),
-        });
-
-        const startParsed = ev.start_at ? fromRfc3339ToDateAndTime(ev.start_at) : null;
-        const endParsed = ev.end_at ? fromRfc3339ToDateAndTime(ev.end_at) : null;
-        if (startParsed) {
-          setStartDate(startParsed.date);
-          setStartTime(startParsed.timeHHMM);
-        }
-        if (endParsed) {
-          setEndDate(endParsed.date);
-          setEndTime(endParsed.timeHHMM);
-        }
-
-        setFeaturedPreview(ev.featured_image_url ?? null);
-        setDetail(normalizeEventDetail(ev.event_detail));
-      }
-    };
-
-    void load()
-      .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Σφάλμα');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [eventId, accessToken, user]);
 
   const categoryNames = useMemo(() => categories.map((c) => c.name), [categories]);
 
@@ -439,15 +474,11 @@ export default function OrganizerEventEditPage() {
   };
 
   const onUploadFeatured = async (file: File) => {
-    if (!eventId) return;
-    if (!accessToken) {
-      setSaveError('missing bearer token');
-      return;
-    }
     setSaveError(null);
     setSaveOk(null);
     setUploadingFeatured(true);
 
+    // Show the local file straight away; swap to the stored URL once saved.
     if (featuredObjectUrlRef.current) {
       URL.revokeObjectURL(featuredObjectUrlRef.current);
       featuredObjectUrlRef.current = null;
@@ -457,43 +488,56 @@ export default function OrganizerEventEditPage() {
     setFeaturedPreview(objectUrl);
 
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch(
-        `/api/v1/events/organizer/${encodeURIComponent(eventId)}/featured-image`,
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${accessToken}` },
-          body: fd,
-        },
-      );
-      const json = (await res.json()) as ApiEnvelope<Event>;
-      if (!res.ok || json.error)
-        throw new Error(json.error?.message ?? 'Αποτυχία μεταφόρτωσης εικόνας');
-
-      const next = json.data?.featured_image_url ?? '';
-      setForm((prev) => (prev ? { ...prev, featured_image_url: next } : prev));
-      setEvent(json.data ?? null);
+      const saved = await uploadFeaturedImage({ id: eventId, file }).unwrap();
+      const next = saved.featured_image_url ?? '';
+      setForm((prev) => ({ ...prev, featured_image_url: next }));
+      setEvent(saved);
       if (next) setFeaturedPreview(next);
       setSaveOk('Αποθηκεύτηκε');
     } catch (e: unknown) {
-      setSaveError(e instanceof Error ? e.message : 'Σφάλμα');
+      setSaveError(apiErrorMessage(e, 'Αποτυχία μεταφόρτωσης εικόνας'));
       if (featuredObjectUrlRef.current) {
         URL.revokeObjectURL(featuredObjectUrlRef.current);
         featuredObjectUrlRef.current = null;
       }
-      setFeaturedPreview(form?.featured_image_url?.trim() || null);
+      setFeaturedPreview(form.featured_image_url?.trim() || null);
     } finally {
       setUploadingFeatured(false);
     }
   };
 
-  const onSave = async () => {
-    if (!form || !eventId) return;
-    if (!accessToken) {
-      setSaveError('missing bearer token');
-      return;
+  /** Adds one image to the event's gallery (DTD <Media><Photo>). */
+  const onUploadPhoto = async (file: File) => {
+    setSaveError(null);
+    setSaveOk(null);
+    try {
+      await uploadPhoto({ id: eventId, file }).unwrap();
+      await refreshEvent();
+      setSaveOk('Η φωτογραφία προστέθηκε');
+    } catch (e: unknown) {
+      setSaveError(apiErrorMessage(e, 'Αποτυχία μεταφόρτωσης φωτογραφίας'));
     }
+  };
+
+  const onDeletePhoto = async (photoId: string) => {
+    setSaveError(null);
+    setSaveOk(null);
+    try {
+      await deletePhoto({ id: eventId, photoId }).unwrap();
+      await refreshEvent();
+      setSaveOk('Η φωτογραφία διαγράφηκε');
+    } catch (e: unknown) {
+      setSaveError(apiErrorMessage(e, 'Αποτυχία διαγραφής φωτογραφίας'));
+    }
+  };
+
+  /** Re-reads the event so gallery changes show without a page reload. */
+  const refreshEvent = async () => {
+    const fresh = await refetchEvent().unwrap();
+    setEvent(fresh);
+  };
+
+  const onSave = async () => {
     setSaving(true);
     setSaveError(null);
     setSaveOk(null);
@@ -502,6 +546,25 @@ export default function OrganizerEventEditPage() {
       const lonRaw = form.longitude.trim().replace(',', '.');
       const latNum = latRaw === '' ? Number.NaN : Number.parseFloat(latRaw);
       const lonNum = lonRaw === '' ? Number.NaN : Number.parseFloat(lonRaw);
+
+      const capacityNum = Number.parseInt(form.capacity.trim(), 10);
+      if (!Number.isFinite(capacityNum) || capacityNum < 0) {
+        setSaveError('Μη έγκυρη χωρητικότητα.');
+        setSaving(false);
+        return;
+      }
+      if (form.categories.size === 0) {
+        setSaveError('Επιλέξτε τουλάχιστον μία κατηγορία.');
+        setSaving(false);
+        return;
+      }
+
+      const parsed = parseTicketDrafts(ticketDrafts, capacityNum);
+      if ('error' in parsed) {
+        setSaveError(parsed.error);
+        setSaving(false);
+        return;
+      }
 
       const payload: Record<string, unknown> = {
         title: form.title,
@@ -514,23 +577,27 @@ export default function OrganizerEventEditPage() {
         end_at: form.end_at,
         featured_image_url: form.featured_image_url || null,
         categories: Array.from(form.categories),
+        event_type: form.event_type,
+        capacity: capacityNum,
+        ticket_types: parsed.tickets,
         event_detail: detail,
       };
       if (latRaw !== '' && Number.isFinite(latNum)) payload.latitude = latNum;
       if (lonRaw !== '' && Number.isFinite(lonNum)) payload.longitude = lonNum;
 
-      const res = await fetch(`/api/v1/events/organizer/${encodeURIComponent(eventId)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify(payload),
-      });
-      const json = (await res.json()) as ApiEnvelope<Event>;
-      if (!res.ok || json.error) throw new Error(json.error?.message ?? 'Αποτυχία αποθήκευσης');
-      setEvent(json.data ?? null);
-      if (json.data?.event_detail) setDetail(normalizeEventDetail(json.data.event_detail));
+      const saved = await updateEvent({
+        id: eventId,
+        body: payload as Partial<EventWritePayload>,
+      }).unwrap();
+
+      setEvent(saved);
+      setDetail(normalizeEventDetail(saved.event_detail));
+      // New ticket types come back with server ids; re-seed so a second save
+      // updates them instead of creating duplicates.
+      setTicketDrafts(ticketTypesToDrafts(saved.ticket_types ?? []));
       setSaveOk('Αποθηκεύτηκε');
     } catch (e: unknown) {
-      setSaveError(e instanceof Error ? e.message : 'Σφάλμα');
+      setSaveError(apiErrorMessage(e, 'Αποτυχία αποθήκευσης'));
     } finally {
       setSaving(false);
     }
@@ -540,32 +607,25 @@ export default function OrganizerEventEditPage() {
     if (s === 'draft') return 'Πρόχειρο';
     if (s === 'published') return 'Δημοσιευμένο';
     if (s === 'cancelled') return 'Ακυρωμένο';
+    if (s === 'completed') return 'Ολοκληρωμένο';
     return s ?? '—';
   };
 
   const onPublish = async () => {
-    if (!eventId || !accessToken) return;
     setLifecycleLoading(true);
     setSaveError(null);
     setSaveOk(null);
     try {
-      const res = await fetch(`/api/v1/events/organizer/${encodeURIComponent(eventId)}/publish`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      const json = (await res.json()) as ApiEnvelope<Event>;
-      if (!res.ok || json.error) throw new Error(json.error?.message ?? 'Αποτυχία δημοσίευσης');
-      setEvent(json.data ?? null);
+      setEvent(await publishEvent(eventId).unwrap());
       setSaveOk('Δημοσιεύτηκε');
     } catch (e: unknown) {
-      setSaveError(e instanceof Error ? e.message : 'Σφάλμα');
+      setSaveError(apiErrorMessage(e, 'Αποτυχία δημοσίευσης'));
     } finally {
       setLifecycleLoading(false);
     }
   };
 
   const onCancelEvent = async () => {
-    if (!eventId || !accessToken) return;
     if (
       !window.confirm(
         'Να ακυρωθεί η εκδήλωση; Οι συμμετέχοντες ενδέχεται να ειδοποιηθούν μέσω του συστήματος μηνυμάτων.',
@@ -577,16 +637,10 @@ export default function OrganizerEventEditPage() {
     setSaveError(null);
     setSaveOk(null);
     try {
-      const res = await fetch(`/api/v1/events/organizer/${encodeURIComponent(eventId)}/cancel`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      const json = (await res.json()) as ApiEnvelope<Event>;
-      if (!res.ok || json.error) throw new Error(json.error?.message ?? 'Αποτυχία ακύρωσης');
-      setEvent(json.data ?? null);
+      setEvent(await cancelEvent(eventId).unwrap());
       setSaveOk('Η εκδήλωση ακυρώθηκε');
     } catch (e: unknown) {
-      setSaveError(e instanceof Error ? e.message : 'Σφάλμα');
+      setSaveError(apiErrorMessage(e, 'Αποτυχία ακύρωσης'));
     } finally {
       setLifecycleLoading(false);
     }
@@ -610,18 +664,21 @@ export default function OrganizerEventEditPage() {
           <Button
             type="button"
             onClick={() => void onSave()}
-            disabled={loading || saving || lifecycleLoading || !form}
+            disabled={saving || lifecycleLoading || isLocked}
             className="rounded-none border-2 border-[#6d28d9] bg-transparent px-4 py-1.5 text-sm text-[#6d28d9] hover:bg-[#6d28d9] hover:text-white comfortaa-regular"
           >
             {saving ? 'Αποθήκευση…' : 'Αποθήκευση'}
           </Button>
         </div>
 
-        {error && (
-          <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--nexus-red)]">
-            {error}
+        {isLocked && (
+          <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 comfortaa-regular">
+            {event?.status === 'cancelled'
+              ? 'Η εκδήλωση έχει ακυρωθεί και δεν μπορεί να τροποποιηθεί.'
+              : 'Η εκδήλωση έχει ολοκληρωθεί και δεν μπορεί να τροποποιηθεί.'}
           </p>
         )}
+
         {saveError && (
           <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--nexus-red)]">
             {saveError}
@@ -633,10 +690,7 @@ export default function OrganizerEventEditPage() {
           </p>
         )}
 
-        {loading || !form ? (
-          <p className="mt-6 text-sm text-neutral-600 comfortaa-regular">Φόρτωση…</p>
-        ) : (
-          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-5">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-neutral-800 comfortaa-regular">
@@ -846,6 +900,131 @@ export default function OrganizerEventEditPage() {
               </div>
 
               <div className="rounded-2xl border border-neutral-200 p-4">
+                <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
+                  Τύπος & χωρητικότητα
+                </p>
+                <div className="mt-4 space-y-3">
+                  <div>
+                    <label
+                      htmlFor="edit-event-type"
+                      className="mb-1 block text-xs text-neutral-600 comfortaa-regular"
+                    >
+                      Τύπος εκδήλωσης
+                    </label>
+                    <select
+                      id="edit-event-type"
+                      value={form.event_type}
+                      disabled={isLocked}
+                      onChange={(e) => setForm({ ...form, event_type: e.target.value })}
+                      className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+                    >
+                      {EVENT_TYPES.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="edit-capacity"
+                      className="mb-1 block text-xs text-neutral-600 comfortaa-regular"
+                    >
+                      Χωρητικότητα
+                    </label>
+                    <Input
+                      id="edit-capacity"
+                      inputMode="numeric"
+                      value={form.capacity}
+                      disabled={isLocked}
+                      onChange={(e) => setForm({ ...form, capacity: e.target.value })}
+                    />
+                    <p className="mt-1 text-[10px] text-neutral-500 comfortaa-regular">
+                      Κρατημένες θέσεις: {event?.tickets_sold ?? 0} · Διαθέσιμες:{' '}
+                      {event?.tickets_remaining ?? 0}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-neutral-200 p-4">
+                <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
+                  Τύποι εισιτηρίων
+                </p>
+                <p className="mt-1 text-[10px] text-neutral-500 comfortaa-regular">
+                  Τύποι με υπάρχουσες κρατήσεις διατηρούν τις πουλημένες θέσεις τους και δεν
+                  διαγράφονται.
+                </p>
+                <TicketTypesEditor
+                  className="mt-4"
+                  drafts={ticketDrafts}
+                  onChange={setTicketDrafts}
+                  capacity={Number.parseInt(form.capacity.trim(), 10) || 0}
+                  disabled={isLocked}
+                />
+              </div>
+
+              <div className="rounded-2xl border border-neutral-200 p-4">
+                <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
+                  Φωτογραφίες (gallery)
+                </p>
+                <p className="mt-1 text-[10px] text-neutral-500 comfortaa-regular">
+                  Εμφανίζονται στη σελίδα της εκδήλωσης και εξάγονται στο &lt;Media&gt; του XML.
+                </p>
+
+                {(event?.photos?.length ?? 0) > 0 ? (
+                  <ul className="mt-3 grid grid-cols-3 gap-2">
+                    {(event?.photos ?? []).map((photo, i) => (
+                      <li key={photo.id} className="group relative">
+                        <img
+                          src={photo.url}
+                          alt={`Φωτογραφία ${i + 1}`}
+                          className="aspect-square w-full rounded-lg border border-neutral-200 object-cover"
+                        />
+                        <button
+                          type="button"
+                          aria-label={`Διαγραφή φωτογραφίας ${i + 1}`}
+                          disabled={isLocked}
+                          onClick={() => void onDeletePhoto(photo.id)}
+                          className={cn(
+                            'absolute top-1 right-1 rounded-full bg-white/90 p-1 text-[var(--nexus-red)] shadow-sm',
+                            'transition-opacity hover:bg-white disabled:cursor-not-allowed disabled:opacity-40',
+                          )}
+                        >
+                          <Trash2Icon className="size-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-3 text-xs text-neutral-500 comfortaa-regular">
+                    Καμία φωτογραφία ακόμη.
+                  </p>
+                )}
+
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={uploadingPhoto || isLocked}
+                  onChange={(e) => {
+                    const f = e.currentTarget.files?.[0];
+                    if (f) void onUploadPhoto(f);
+                    e.currentTarget.value = '';
+                  }}
+                  className={cn(
+                    'mt-3 block w-full text-sm text-neutral-700 file:mr-2 file:rounded-none',
+                    'file:bg-transparent file:border-2 file:border-[#6d28d9] file:px-2 file:py-1 file:text-xs file:text-[#6d28d9] file:hover:bg-[#6d28d9] file:hover:text-white',
+                    'comfortaa-regular',
+                  )}
+                />
+                {uploadingPhoto && (
+                  <p className="mt-2 text-[11px] text-neutral-500 comfortaa-regular">
+                    Μεταφόρτωση…
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-neutral-200 p-4">
                 <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">Κατηγορίες</p>
                 <div className="mt-4 space-y-2">
                   {categoryNames.map((name) => {
@@ -855,7 +1034,11 @@ export default function OrganizerEventEditPage() {
                         key={name}
                         className="flex items-center gap-2 text-sm text-neutral-700 comfortaa-regular"
                       >
-                        <Checkbox checked={checked} onCheckedChange={() => toggleCategory(name)} />
+                        <Checkbox
+                          checked={checked}
+                          disabled={isLocked}
+                          onCheckedChange={() => toggleCategory(name)}
+                        />
                         {name}
                       </label>
                     );
@@ -863,8 +1046,7 @@ export default function OrganizerEventEditPage() {
                 </div>
               </div>
             </aside>
-          </div>
-        )}
+        </div>
       </div>
     </OrganizerLayout>
   );

@@ -11,11 +11,11 @@ import (
 )
 
 type mockChatRoomRepo struct {
-	rooms       map[uuid.UUID]domain.ChatRoom
-	messages    map[uuid.UUID]domain.ChatMessage
-	reactions   map[uuid.UUID]domain.MessageReaction
+	rooms        map[uuid.UUID]domain.ChatRoom
+	messages     map[uuid.UUID]domain.ChatMessage
+	reactions    map[uuid.UUID]domain.MessageReaction
 	participants map[uuid.UUID][]domain.ChatRoomParticipant
-	convos      []domain.Conversation
+	convos       []domain.Conversation
 }
 
 func newMockChatRoomRepo() *mockChatRoomRepo {
@@ -220,7 +220,7 @@ func TestChatService_GetRoomByID(t *testing.T) {
 	svc := NewChatService(repo)
 
 	room, _ := repo.CreateRoom(context.Background(), domain.ChatRoom{
-		IsGroup:  true,
+		IsGroup: true,
 		Name:    strPtr("Group Chat"),
 	})
 

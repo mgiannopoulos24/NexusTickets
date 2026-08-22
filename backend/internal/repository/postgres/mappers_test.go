@@ -9,7 +9,7 @@ import (
 	"nexustickets/internal/domain"
 )
 
-func strPtr(s string) *string { return &s }
+func strPtr(s string) *string     { return &s }
 func floatPtr(f float64) *float64 { return &f }
 
 func TestUserMapping_RoundTrip(t *testing.T) {
@@ -18,23 +18,23 @@ func TestUserMapping_RoundTrip(t *testing.T) {
 	updatedAt := time.Date(2026, 3, 18, 10, 5, 0, 0, time.UTC)
 
 	u := domain.User{
-		ID:           userID,
-		Username:     "user1",
-		PasswordHash: "hashed_pw",
-		FirstName:    "First",
-		LastName:     "Last",
-		Email:        "user1@example.com",
-		Phone:        strPtr("+30 210 1234567"),
-		Address:      strPtr("Some street 123"),
-		City:         strPtr("Athens"),
-		Country:      strPtr("Greece"),
-		Latitude:     floatPtr(37.9838),
-		Longitude:    floatPtr(23.7275),
-		VATNumber:    strPtr("VAT-123"),
-		Role:         domain.UserRoleOrganizer,
+		ID:            userID,
+		Username:      "user1",
+		PasswordHash:  "hashed_pw",
+		FirstName:     "First",
+		LastName:      "Last",
+		Email:         "user1@example.com",
+		Phone:         strPtr("+30 210 1234567"),
+		Address:       strPtr("Some street 123"),
+		City:          strPtr("Athens"),
+		Country:       strPtr("Greece"),
+		Latitude:      floatPtr(37.9838),
+		Longitude:     floatPtr(23.7275),
+		VATNumber:     strPtr("VAT-123"),
+		Role:          domain.UserRoleOrganizer,
 		AccountStatus: domain.AccountStatusApproved,
-		CreatedAt:    createdAt,
-		UpdatedAt:    updatedAt,
+		CreatedAt:     createdAt,
+		UpdatedAt:     updatedAt,
 	}
 
 	m := userDomainToModel(u)
@@ -56,26 +56,26 @@ func TestEventMapping_RoundTrip(t *testing.T) {
 	updatedAt := time.Date(2026, 3, 18, 11, 10, 0, 0, time.UTC)
 
 	e := domain.Event{
-		ID:           eventID,
-		OrganizerID:  orgID,
-		Organizer:    nil,
-		Title:        "Event title",
-		Description:  "Event description",
-		Venue:        "Venue name",
-		Detail:       domain.EventDetail{},
-		Address:      strPtr("Address line"),
-		City:         "Thessaloniki",
-		Country:      strPtr("Greece"),
-		Latitude:     floatPtr(40.6401),
-		Longitude:    floatPtr(22.9444),
-		StartAt:      startAt,
-		EndAt:        endAt,
-		Capacity:     100,
-		Status:       domain.EventStatusPublished,
-		CreatedAt:    createdAt,
-		UpdatedAt:    updatedAt,
-		TicketTypes:  nil,
-		Bookings:     nil,
+		ID:          eventID,
+		OrganizerID: orgID,
+		Organizer:   nil,
+		Title:       "Event title",
+		Description: "Event description",
+		Venue:       "Venue name",
+		Detail:      domain.EventDetail{},
+		Address:     strPtr("Address line"),
+		City:        "Thessaloniki",
+		Country:     strPtr("Greece"),
+		Latitude:    floatPtr(40.6401),
+		Longitude:   floatPtr(22.9444),
+		StartAt:     startAt,
+		EndAt:       endAt,
+		Capacity:    100,
+		Status:      domain.EventStatusPublished,
+		CreatedAt:   createdAt,
+		UpdatedAt:   updatedAt,
+		TicketTypes: nil,
+		Bookings:    nil,
 	}
 
 	m := eventDomainToModel(e)
@@ -99,15 +99,15 @@ func TestTicketTypeMapping_RoundTrip(t *testing.T) {
 	updatedAt := time.Date(2026, 3, 18, 12, 30, 0, 0, time.UTC)
 
 	tt := domain.TicketType{
-		ID:         id,
-		EventID:    eventID,
-		Event:      nil,
-		Name:       "VIP",
-		Price:      49.99,
-		Quantity:   50,
-		Available:  10,
-		CreatedAt:  createdAt,
-		UpdatedAt:  updatedAt,
+		ID:        id,
+		EventID:   eventID,
+		Event:     nil,
+		Name:      "VIP",
+		Price:     49.99,
+		Quantity:  50,
+		Available: 10,
+		CreatedAt: createdAt,
+		UpdatedAt: updatedAt,
 	}
 
 	m := ticketTypeDomainToModel(tt)
@@ -159,15 +159,15 @@ func TestMessageMapping_RoundTrip(t *testing.T) {
 	createdAt := time.Date(2026, 3, 18, 13, 55, 0, 0, time.UTC)
 
 	msg := domain.Message{
-		ID:                   id,
-		SenderID:            senderID,
-		RecipientID:         recipientID,
-		Subject:             "Hello",
-		Body:                "Message body",
-		ReadAt:              &readAt,
-		DeletedBySender:     false,
-		DeletedByRecipient:  true,
-		CreatedAt:           createdAt,
+		ID:                 id,
+		SenderID:           senderID,
+		RecipientID:        recipientID,
+		Subject:            "Hello",
+		Body:               "Message body",
+		ReadAt:             &readAt,
+		DeletedBySender:    false,
+		DeletedByRecipient: true,
+		CreatedAt:          createdAt,
 	}
 
 	m := messageDomainToModel(msg)
@@ -202,12 +202,12 @@ func TestEventPhotoMapping_RoundTrip(t *testing.T) {
 	createdAt := time.Date(2026, 3, 18, 16, 0, 0, 0, time.UTC)
 
 	p := domain.EventPhoto{
-		ID:           id,
-		EventID:      eventID,
-		Event:        nil,
-		StoragePath:  "/tmp/photo.jpg",
-		Position:     3,
-		CreatedAt:    createdAt,
+		ID:          id,
+		EventID:     eventID,
+		Event:       nil,
+		StoragePath: "/tmp/photo.jpg",
+		Position:    3,
+		CreatedAt:   createdAt,
 	}
 
 	m := eventPhotoDomainToModel(p)
@@ -217,4 +217,3 @@ func TestEventPhotoMapping_RoundTrip(t *testing.T) {
 		t.Fatalf("round-trip mismatch:\nexpected: %#v\ngot:      %#v", p, got)
 	}
 }
-

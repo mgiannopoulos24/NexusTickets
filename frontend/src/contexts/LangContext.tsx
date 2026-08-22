@@ -1,27 +1,6 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import enTranslations from '@/locales/en.yaml';
-import grTranslations from '@/locales/gr.yaml';
+import { useState, useCallback, type ReactNode } from 'react';
 
-type TranslationTree =
-  | string
-  | {
-      readonly [key: string]: TranslationTree;
-    };
-
-const translations: Record<'en' | 'el', TranslationTree> = {
-  en: enTranslations as TranslationTree,
-  el: grTranslations as TranslationTree,
-};
-
-type Locale = keyof typeof translations;
-
-interface LangContextType {
-  t: (key: string) => string;
-  locale: Locale;
-  setLocale: (locale: Locale) => void;
-}
-
-const LangContext = createContext<LangContextType | undefined>(undefined);
+import { LangContext, translations, type Locale, type TranslationTree } from '@/contexts/langContext';
 
 export function LangProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>('el');
@@ -53,12 +32,4 @@ export function LangProvider({ children }: { children: ReactNode }) {
   );
 
   return <LangContext.Provider value={{ t, locale, setLocale }}>{children}</LangContext.Provider>;
-}
-
-export function useLang() {
-  const context = useContext(LangContext);
-  if (!context) {
-    throw new Error('useLang must be used within a LangProvider');
-  }
-  return context;
 }

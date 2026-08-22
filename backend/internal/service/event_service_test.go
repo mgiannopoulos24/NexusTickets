@@ -109,6 +109,18 @@ func (m *mockEventRepo) SetStatus(_ context.Context, id uuid.UUID, status domain
 	return nil
 }
 
+func (m *mockEventRepo) MarkCompleted(_ context.Context, before time.Time) (int64, error) {
+	var n int64
+	for id, ev := range m.events {
+		if ev.Status == domain.EventStatusPublished && ev.EndAt.Before(before) {
+			ev.Status = domain.EventStatusCompleted
+			m.events[id] = ev
+			n++
+		}
+	}
+	return n, nil
+}
+
 func (m *mockEventRepo) SetCategories(_ context.Context, eid uuid.UUID, cids []uuid.UUID) error {
 	var cats []domain.Category
 	for _, cid := range cids {
@@ -123,8 +135,17 @@ func (m *mockEventRepo) GetCategories(_ context.Context, eid uuid.UUID) ([]domai
 }
 
 func (m *mockEventRepo) SetTicketTypes(_ context.Context, eid uuid.UUID, tts []domain.TicketType) error {
+	// Mirror the real repository: rows arriving without an ID get one, and rows
+	// that name an existing ID keep it. Without this every ticket type shared
+	// uuid.Nil and any lookup by ID matched all of them.
 	cp := make([]domain.TicketType, len(tts))
 	copy(cp, tts)
+	for i := range cp {
+		if cp[i].ID == uuid.Nil {
+			cp[i].ID = uuid.New()
+		}
+		cp[i].EventID = eid
+	}
 	m.ticketTypes[eid] = cp
 	return nil
 }
@@ -303,6 +324,8 @@ func TestEventService_Create(t *testing.T) {
 			StartAt:     startAt,
 			EndAt:       endAt,
 			Capacity:    100,
+			Categories:  []string{"General"},
+			TicketTypes: []TicketTypeInput{{Name: "General", Price: 10, Quantity: 100}},
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -316,8 +339,8 @@ func TestEventService_Create(t *testing.T) {
 		if ev.OrganizerID != orgID {
 			t.Fatalf("expected organizer %s, got %s", orgID, ev.OrganizerID)
 		}
-		if len(cats) != 0 {
-			t.Fatalf("expected 0 categories, got %d", len(cats))
+		if len(cats) != 1 {
+			t.Fatalf("expected 1 category, got %d", len(cats))
 		}
 	})
 
@@ -346,6 +369,7 @@ func TestEventService_Create(t *testing.T) {
 			TicketTypes: []TicketTypeInput{
 				{Name: "VIP", Price: 50, Quantity: 20},
 			},
+			Categories: []string{"General"},
 		})
 		if !errors.Is(err, domain.ErrCapacityExceeded) {
 			t.Fatalf("expected ErrCapacityExceeded, got %v", err)
@@ -391,7 +415,9 @@ func TestEventService_PublishAndCancel(t *testing.T) {
 	ev, _, _ := svc.Create(context.Background(), orgID, CreateEventInput{
 		Title: "Test", Description: "Desc", Venue: "V", City: "C",
 		StartAt: time.Now().Add(time.Hour), EndAt: time.Now().Add(2 * time.Hour),
-		Capacity: 100,
+		Capacity:    100,
+		Categories:  []string{"General"},
+		TicketTypes: []TicketTypeInput{{Name: "General", Price: 10, Quantity: 100}},
 	})
 
 	t.Run("publish", func(t *testing.T) {
@@ -425,7 +451,9 @@ func TestEventService_PublishAndCancel(t *testing.T) {
 		draft, _, _ := svc.Create(context.Background(), orgID, CreateEventInput{
 			Title: "Draft", Description: "D", Venue: "V", City: "C",
 			StartAt: time.Now().Add(time.Hour), EndAt: time.Now().Add(2 * time.Hour),
-			Capacity: 100,
+			Capacity:    100,
+			Categories:  []string{"General"},
+			TicketTypes: []TicketTypeInput{{Name: "General", Price: 10, Quantity: 100}},
 		})
 		_, _, err := svc.Cancel(context.Background(), orgID, draft.ID)
 		if !errors.Is(err, domain.ErrEventNotCancellable) {
@@ -449,14 +477,18 @@ func TestEventService_Delete(t *testing.T) {
 	ev, _, _ := svc.Create(context.Background(), orgID, CreateEventInput{
 		Title: "Test", Description: "Desc", Venue: "V", City: "C",
 		StartAt: time.Now().Add(time.Hour), EndAt: time.Now().Add(2 * time.Hour),
-		Capacity: 100,
+		Capacity:    100,
+		Categories:  []string{"General"},
+		TicketTypes: []TicketTypeInput{{Name: "General", Price: 10, Quantity: 100}},
 	})
 
 	t.Run("delete draft", func(t *testing.T) {
 		draft, _, _ := svc.Create(context.Background(), orgID, CreateEventInput{
 			Title: "DraftDel", Description: "D", Venue: "V", City: "C",
 			StartAt: time.Now().Add(time.Hour), EndAt: time.Now().Add(2 * time.Hour),
-			Capacity: 100,
+			Capacity:    100,
+			Categories:  []string{"General"},
+			TicketTypes: []TicketTypeInput{{Name: "General", Price: 10, Quantity: 100}},
 		})
 		err := svc.Delete(context.Background(), orgID, draft.ID)
 		if err != nil {
@@ -476,7 +508,9 @@ func TestEventService_Delete(t *testing.T) {
 		draft, _, _ := svc.Create(context.Background(), orgID, CreateEventInput{
 			Title: "F", Description: "D", Venue: "V", City: "C",
 			StartAt: time.Now().Add(time.Hour), EndAt: time.Now().Add(2 * time.Hour),
-			Capacity: 100,
+			Capacity:    100,
+			Categories:  []string{"General"},
+			TicketTypes: []TicketTypeInput{{Name: "General", Price: 10, Quantity: 100}},
 		})
 		err := svc.Delete(context.Background(), uuid.New(), draft.ID)
 		if !errors.Is(err, domain.ErrForbidden) {
@@ -494,14 +528,18 @@ func TestEventService_ListAndSearch(t *testing.T) {
 	ev1, _, _ := svc.Create(context.Background(), orgID, CreateEventInput{
 		Title: "Event 1", Description: "D", Venue: "V", City: "Athens",
 		StartAt: time.Now().Add(time.Hour), EndAt: time.Now().Add(2 * time.Hour),
-		Capacity: 100,
+		Capacity:    100,
+		Categories:  []string{"General"},
+		TicketTypes: []TicketTypeInput{{Name: "General", Price: 10, Quantity: 100}},
 	})
 	svc.Publish(context.Background(), orgID, ev1.ID)
 
 	ev2, _, _ := svc.Create(context.Background(), orgID, CreateEventInput{
 		Title: "Event 2", Description: "D", Venue: "V", City: "Thessaloniki",
 		StartAt: time.Now().Add(time.Hour), EndAt: time.Now().Add(2 * time.Hour),
-		Capacity: 100,
+		Capacity:    100,
+		Categories:  []string{"General"},
+		TicketTypes: []TicketTypeInput{{Name: "General", Price: 10, Quantity: 100}},
 	})
 	svc.Publish(context.Background(), orgID, ev2.ID)
 
@@ -544,7 +582,9 @@ func TestEventService_AddTicketType(t *testing.T) {
 	ev, _, _ := svc.Create(context.Background(), orgID, CreateEventInput{
 		Title: "Event", Description: "D", Venue: "V", City: "C",
 		StartAt: time.Now().Add(time.Hour), EndAt: time.Now().Add(2 * time.Hour),
-		Capacity: 100,
+		Capacity:    100,
+		Categories:  []string{"General"},
+		TicketTypes: []TicketTypeInput{{Name: "Standard", Price: 10, Quantity: 20}},
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -554,8 +594,9 @@ func TestEventService_AddTicketType(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(result.TicketTypes) != 1 {
-			t.Fatalf("expected 1 ticket type, got %d", len(result.TicketTypes))
+		// The seeded type survives: adding must not replace what is already there.
+		if len(result.TicketTypes) != 2 {
+			t.Fatalf("expected 2 ticket types, got %d", len(result.TicketTypes))
 		}
 	})
 
@@ -586,12 +627,17 @@ func TestEventService_UpdateAndDeleteTicketType(t *testing.T) {
 	ev, _, _ := svc.Create(context.Background(), orgID, CreateEventInput{
 		Title: "Event", Description: "D", Venue: "V", City: "C",
 		StartAt: time.Now().Add(time.Hour), EndAt: time.Now().Add(2 * time.Hour),
-		Capacity:    100,
-		TicketTypes: []TicketTypeInput{{Name: "General", Price: 10, Quantity: 50}},
+		Capacity: 100,
+		TicketTypes: []TicketTypeInput{
+			{Name: "General", Price: 10, Quantity: 50},
+			{Name: "Student", Price: 5, Quantity: 20},
+		},
+		Categories: []string{"General"},
 	})
 
-	// Get the auto-generated ticket type ID
+	// Get the auto-generated ticket type IDs
 	ttID := events.ticketTypes[ev.ID][0].ID
+	otherTTID := events.ticketTypes[ev.ID][1].ID
 
 	t.Run("update", func(t *testing.T) {
 		result, _, err := svc.UpdateTicketType(context.Background(), orgID, ev.ID, ttID, TicketTypeInput{
@@ -600,11 +646,20 @@ func TestEventService_UpdateAndDeleteTicketType(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(result.TicketTypes) != 1 {
-			t.Fatalf("expected 1 ticket type, got %d", len(result.TicketTypes))
+		if len(result.TicketTypes) != 2 {
+			t.Fatalf("expected 2 ticket types, got %d", len(result.TicketTypes))
 		}
-		if result.TicketTypes[0].Name != "Updated" {
-			t.Fatalf("expected 'Updated', got %s", result.TicketTypes[0].Name)
+		var updated *domain.TicketType
+		for i := range result.TicketTypes {
+			if result.TicketTypes[i].ID == ttID {
+				updated = &result.TicketTypes[i]
+			}
+		}
+		if updated == nil {
+			t.Fatal("updated ticket type kept its identity? it disappeared")
+		}
+		if updated.Name != "Updated" {
+			t.Fatalf("expected 'Updated', got %s", updated.Name)
 		}
 	})
 
@@ -613,8 +668,8 @@ func TestEventService_UpdateAndDeleteTicketType(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if len(result.TicketTypes) != 0 {
-			t.Fatalf("expected 0 ticket types, got %d", len(result.TicketTypes))
+		if len(result.TicketTypes) != 1 {
+			t.Fatalf("expected 1 ticket type, got %d", len(result.TicketTypes))
 		}
 	})
 
@@ -622,6 +677,14 @@ func TestEventService_UpdateAndDeleteTicketType(t *testing.T) {
 		_, _, err := svc.DeleteTicketType(context.Background(), orgID, ev.ID, ttID)
 		if !errors.Is(err, domain.ErrNotFound) {
 			t.Fatalf("expected ErrNotFound, got %v", err)
+		}
+	})
+
+	t.Run("cannot delete the last ticket type", func(t *testing.T) {
+		// The DTD requires TicketType+, so an event must always keep one.
+		_, _, err := svc.DeleteTicketType(context.Background(), orgID, ev.ID, otherTTID)
+		if !errors.Is(err, domain.ErrEventNeedsTicketType) {
+			t.Fatalf("expected ErrEventNeedsTicketType, got %v", err)
 		}
 	})
 }
@@ -634,7 +697,9 @@ func TestEventService_Get(t *testing.T) {
 	ev, _, _ := svc.Create(context.Background(), orgID, CreateEventInput{
 		Title: "GetTest", Description: "D", Venue: "V", City: "C",
 		StartAt: time.Now().Add(time.Hour), EndAt: time.Now().Add(2 * time.Hour),
-		Capacity: 100,
+		Capacity:    100,
+		Categories:  []string{"General"},
+		TicketTypes: []TicketTypeInput{{Name: "General", Price: 10, Quantity: 100}},
 	})
 
 	t.Run("found", func(t *testing.T) {

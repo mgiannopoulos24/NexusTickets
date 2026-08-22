@@ -21,11 +21,24 @@ export interface User {
 }
 
 export interface TicketType {
+  /** Omitted when creating a new ticket type in an update payload. */
   id: string;
   name: string;
   price: number;
   quantity: number;
   available: number;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  created_at?: string;
+}
+
+export interface EventPhoto {
+  id: string;
+  url: string;
+  position: number;
 }
 
 export interface Event {
@@ -34,6 +47,8 @@ export interface Event {
   title: string;
   description: string;
   venue: string;
+  /** The DTD's <EventType> (e.g. "concert"); distinct from `categories`. */
+  event_type: string;
   featured_image_url?: string | null;
   address?: string | null;
   city: string;
@@ -46,24 +61,53 @@ export interface Event {
   status: EventStatus;
   categories: string[];
   ticket_types: TicketType[];
-  total_bookings?: number;
+  photos: EventPhoto[];
+  /** Seats sold across all ticket types. */
+  tickets_sold: number;
+  /** Seats still available across all ticket types. */
+  tickets_remaining: number;
   event_detail?: EventDetail;
   created_at: string;
   updated_at: string;
 }
 
+/** Enough of the event to render a booking row. */
+export interface BookingEventSummary {
+  id: string;
+  title: string;
+  venue: string;
+  city: string;
+  start_at: string;
+  end_at: string;
+  status: EventStatus;
+}
+
+/** Who made the booking — shown to the organizer. */
+export interface BookingAttendee {
+  id: string;
+  username: string;
+  full_name: string;
+  email: string;
+}
+
+export interface BookingTicketType {
+  id: string;
+  name: string;
+  price: number;
+}
+
 export interface Booking {
   id: string;
   user_id: string;
-  attendee_id?: string;
   event_id: string;
-  event?: Event;
   ticket_type_id: string;
   quantity: number;
-  number_of_tickets?: number;
   total_cost: number;
   status: BookingStatus;
   created_at: string;
   updated_at: string;
-  attendee?: { id: string; username: string; first_name: string; last_name: string };
+
+  event?: BookingEventSummary;
+  attendee?: BookingAttendee;
+  ticket_type?: BookingTicketType;
 }

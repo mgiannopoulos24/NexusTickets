@@ -38,9 +38,9 @@ func (h *MessageHandler) Inbox(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	out := make([]dto.MessageResponse, 0, len(msgs))
-	for _, m := range msgs {
-		out = append(out, toMessageResponse(m))
+	out, err := h.hydrateMessages(c, msgs)
+	if err != nil {
+		return err
 	}
 	return response.OK(c, out)
 }
@@ -58,9 +58,33 @@ func (h *MessageHandler) Sent(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	out := make([]dto.MessageResponse, 0, len(msgs))
-	for _, m := range msgs {
-		out = append(out, toMessageResponse(m))
+	out, err := h.hydrateMessages(c, msgs)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, out)
+}
+
+// Recipients lists the users the caller may currently message: everyone they
+// share a booking with, plus support (assignment §10).
+func (h *MessageHandler) Recipients(c *fiber.Ctx) error {
+	userID, err := authUserID(c)
+	if err != nil {
+		return err
+	}
+	people, err := h.service.ListRecipients(c.Context(), userID)
+	if err != nil {
+		return err
+	}
+	out := make([]dto.RecipientResponse, 0, len(people))
+	for _, p := range people {
+		out = append(out, dto.RecipientResponse{
+			ID:       p.User.ID.String(),
+			Username: p.User.Username,
+			FullName: strings.TrimSpace(p.User.FirstName + " " + p.User.LastName),
+			Role:     string(p.User.Role),
+			Support:  p.Support,
+		})
 	}
 	return response.OK(c, out)
 }
@@ -105,7 +129,11 @@ func (h *MessageHandler) Send(c *fiber.Ctx) error {
 		}
 		return err
 	}
-	return response.Created(c, toMessageResponse(created))
+	out, err := h.hydrateMessages(c, []domain.Message{created})
+	if err != nil {
+		return err
+	}
+	return response.Created(c, out[0])
 }
 
 func (h *MessageHandler) Delete(c *fiber.Ctx) error {
@@ -140,6 +168,45 @@ func (h *MessageHandler) ServeWebSocket(c *fiberws.Conn) {
 	h.hub.Register(client)
 	go client.WritePump()
 	client.ReadPump()
+}
+
+// hydrateMessages attaches sender/recipient display identities in one batch
+// lookup rather than one query per message.
+func (h *MessageHandler) hydrateMessages(c *fiber.Ctx, msgs []domain.Message) ([]dto.MessageResponse, error) {
+	out := make([]dto.MessageResponse, 0, len(msgs))
+	if len(msgs) == 0 {
+		return out, nil
+	}
+
+	ids := make([]uuid.UUID, 0, len(msgs)*2)
+	for _, m := range msgs {
+		ids = append(ids, m.SenderID, m.RecipientID)
+	}
+	people, err := h.service.LookupUsers(c.Context(), ids)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, m := range msgs {
+		resp := toMessageResponse(m)
+		if u, ok := people[m.SenderID]; ok {
+			resp.Sender = toMessageParticipant(u)
+		}
+		if u, ok := people[m.RecipientID]; ok {
+			resp.Recipient = toMessageParticipant(u)
+		}
+		out = append(out, resp)
+	}
+	return out, nil
+}
+
+func toMessageParticipant(u domain.User) *dto.MessageParticipant {
+	return &dto.MessageParticipant{
+		ID:       u.ID.String(),
+		Username: u.Username,
+		FullName: strings.TrimSpace(u.FirstName + " " + u.LastName),
+		Role:     string(u.Role),
+	}
 }
 
 func toMessageResponse(m domain.Message) dto.MessageResponse {

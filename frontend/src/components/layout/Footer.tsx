@@ -5,20 +5,83 @@ import instagramIcon from '@/assets/icons/instagram.svg';
 import tiktokIcon from '@/assets/icons/tiktok.svg';
 import youtubeIcon from '@/assets/icons/youtube.svg';
 import linkedinIcon from '@/assets/icons/linkedin.svg';
+import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
+import type { UserRole } from '@/types/enums';
 
 type FooterLink = { label: string; to: string };
 
-const INFO_LINKS: FooterLink[] = [
-  { label: 'Αρχική', to: '/' },
-  { label: 'Σύνδεση', to: '/login' },
-  { label: 'Εγγραφή', to: '/register' },
-] as const;
+/**
+ * "Πληροφορίες" is the same for everyone and stays deliberately small — the
+ * only thing that is genuinely informational for every visitor is the home
+ * page. Sign-in links live under Υποστήριξη for guests, where they are
+ * actionable.
+ */
+const INFO_LINKS: FooterLink[] = [{ label: 'Αρχική', to: '/' }] as const;
 
-const SUPPORT_LINKS: FooterLink[] = [
-  { label: 'Κατάσταση εγγραφής', to: '/register/pending' },
-  { label: 'Πίνακας διαχείρισης', to: '/admin' },
-] as const;
+/** Support links, by role. A guest cannot file a request, so they get the
+ * routes that let them become someone who can. */
+function supportLinks(role: UserRole | null): FooterLink[] {
+  switch (role) {
+    case 'admin':
+      return [
+        { label: 'Αιτήματα χρηστών', to: '/messages' },
+        { label: 'Νέο μήνυμα', to: '/messages?compose=1' },
+      ];
+    case 'organizer':
+    case 'attendee':
+      return [
+        { label: 'Νέο αίτημα', to: '/messages?compose=1&support=1' },
+        { label: 'Τα αιτήματά μου', to: '/messages' },
+      ];
+    default:
+      return [
+        { label: 'Σύνδεση', to: '/login' },
+        { label: 'Εγγραφή', to: '/register' },
+      ];
+  }
+}
+
+/** The third column is what this particular account actually does here. */
+function workspaceColumn(role: UserRole | null): { title: string; links: FooterLink[] } | null {
+  switch (role) {
+    case 'admin':
+      return {
+        title: 'Διαχείριση',
+        links: [
+          { label: 'Χρήστες', to: '/admin/users' },
+          { label: 'Εκδηλώσεις', to: '/admin/events' },
+          { label: 'Πίνακας ελέγχου', to: '/admin' },
+        ],
+      };
+    case 'organizer':
+      return {
+        title: 'Οι εκδηλώσεις μου',
+        links: [
+          { label: 'Επισκόπηση', to: '/organizer' },
+          { label: 'Οι εκδηλώσεις μου', to: '/organizer/events' },
+          { label: 'Νέα εκδήλωση', to: '/organizer/events/new' },
+        ],
+      };
+    case 'attendee':
+      return {
+        title: 'Ο λογαριασμός μου',
+        links: [
+          { label: 'Οι κρατήσεις μου', to: '/bookings/me' },
+          { label: 'Τα στοιχεία μου', to: '/account' },
+          { label: 'Ρυθμίσεις', to: '/settings' },
+        ],
+      };
+    default:
+      return {
+        title: 'Εξερεύνηση',
+        links: [
+          { label: 'Όλες οι εκδηλώσεις', to: '/events' },
+          { label: 'Αναζήτηση', to: '/events' },
+        ],
+      };
+  }
+}
 
 const SOCIALS = [
   { label: 'Facebook', href: 'https://www.facebook.com', icon: facebookIcon },
@@ -31,14 +94,14 @@ const SOCIALS = [
 function FooterColumn({ title, links }: { title: string; links: FooterLink[] }) {
   return (
     <div>
-      <h3 className="text-sm font-semibold text-neutral-800 comfortaa-bold">{title}</h3>
+      <h3 className="comfortaa-bold text-sm font-semibold text-neutral-800">{title}</h3>
       <ul className="mt-3 space-y-2">
         {links.map((l) => (
-          <li key={l.to}>
+          <li key={`${title}-${l.label}`}>
             <Link
               to={l.to}
               className={cn(
-                'text-sm text-neutral-500 transition-colors comfortaa-regular',
+                'comfortaa-regular text-sm text-neutral-500 transition-colors',
                 'hover:text-neutral-900 hover:underline underline-offset-4',
               )}
             >
@@ -52,20 +115,26 @@ function FooterColumn({ title, links }: { title: string; links: FooterLink[] }) 
 }
 
 export function Footer() {
+  const { user, isAuthenticated } = useAuth();
+  const role = isAuthenticated && user ? user.role : null;
+
+  const support = supportLinks(role);
+  const workspace = workspaceColumn(role);
+
   return (
     <footer className="border-t border-neutral-200 bg-white">
       <div className="mx-auto max-w-[1400px] px-4 py-12 sm:px-6 lg:px-8">
-        <div className="grid gap-10 md:grid-cols-[1fr_1fr_1.2fr] md:gap-12">
-          <div className="order-1 md:order-3">
+        <div className="grid gap-10 md:grid-cols-[1fr_1fr_1fr_1.2fr] md:gap-12">
+          <div className="order-1 md:order-4">
             <Link to="/" className="inline-flex items-baseline">
-              <span className="text-xl comfortaa-bold tracking-tight text-[var(--nexus-purple)]">
+              <span className="comfortaa-bold text-xl tracking-tight text-[var(--nexus-purple)]">
                 Nexus
               </span>
-              <span className="text-xl comfortaa-semibold tracking-tight text-[var(--nexus-purple)]/90">
+              <span className="comfortaa-semibold text-xl tracking-tight text-[var(--nexus-purple)]/90">
                 Tickets
               </span>
             </Link>
-            <p className="mt-4 max-w-sm text-sm text-neutral-500 comfortaa-regular">
+            <p className="comfortaa-regular mt-4 max-w-sm text-sm text-neutral-500">
               Ανακάλυψε εκδηλώσεις και κράτησε εισιτήρια εύκολα, γρήγορα και με ασφάλεια.
             </p>
           </div>
@@ -75,12 +144,18 @@ export function Footer() {
           </div>
 
           <div className="order-3 md:order-2">
-            <FooterColumn title="Υποστήριξη" links={SUPPORT_LINKS} />
+            <FooterColumn title="Υποστήριξη" links={support} />
           </div>
+
+          {workspace && (
+            <div className="order-4 md:order-3">
+              <FooterColumn title={workspace.title} links={workspace.links} />
+            </div>
+          )}
         </div>
 
         <div className="mt-10">
-          <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">Stay Connected</p>
+          <p className="comfortaa-bold text-sm font-semibold text-neutral-800">Stay Connected</p>
           <div className="mt-3 flex items-center gap-3">
             {SOCIALS.map((s) => (
               <a
@@ -102,7 +177,7 @@ export function Footer() {
         </div>
 
         <div className="mt-10 border-t border-neutral-200 pt-6">
-          <p className="text-center text-xs text-neutral-500 comfortaa-regular">
+          <p className="comfortaa-regular text-center text-xs text-neutral-500">
             © {new Date().getFullYear()} NexusTickets
           </p>
         </div>

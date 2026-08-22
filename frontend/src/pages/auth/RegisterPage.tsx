@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { EventMapEmbed } from '@/components/events/EventMapEmbed';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 
@@ -20,19 +21,47 @@ function stringToNull(v: string): string | null {
   return t === '' ? null : t;
 }
 
+function coordToNull(v: string): number | null {
+  const t = v.trim().replace(',', '.');
+  if (t === '') return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
 const registerSchema = z
   .object({
     username: z.string().trim().min(3, 'Το όνομα χρήστη πρέπει να έχει τουλάχιστον 3 χαρακτήρες'),
-    password: z.string().min(8, 'Ο κωδικός πρέπει να έχει τουλάχιστον 8 χαρακτήρες'),
+    password: z
+      .string()
+      .min(8, 'Ο κωδικός πρέπει να έχει τουλάχιστον 8 χαρακτήρες')
+      .max(72, 'Ο κωδικός δεν μπορεί να ξεπερνά τους 72 χαρακτήρες')
+      .refine((v) => /\p{L}/u.test(v) && /\d/.test(v), {
+        message: 'Ο κωδικός πρέπει να περιέχει τουλάχιστον ένα γράμμα και έναν αριθμό',
+      }),
     confirm_password: z.string().min(1, 'Επιβεβαιώστε τον κωδικό'),
     first_name: z.string().trim().min(1, 'Εισάγετε όνομα'),
     last_name: z.string().trim().min(1, 'Εισάγετε επώνυμο'),
     email: z.string().trim().email('Εισάγετε έγκυρο email'),
-    phone: z.string(),
+    phone: z.string().refine(
+      (v) => {
+        const t = v.trim();
+        if (t === '') return true;
+        const digits = (t.match(/\d/g) ?? []).length;
+        return /^\+?[\d(][\d\s().-]*$/.test(t) && digits >= 8 && digits <= 15;
+      },
+      { message: 'Εισάγετε έγκυρο τηλέφωνο (8–15 ψηφία)' },
+    ),
     address: z.string(),
     city: z.string(),
     country: z.string(),
-    vat_number: z.string(),
+    latitude: z.string(),
+    longitude: z.string(),
+    vat_number: z
+      .string()
+      .refine((v) => v.trim() === '' || /^\d{9}$/.test(v.trim()), {
+        message: 'Το ΑΦΜ πρέπει να αποτελείται από 9 ψηφία',
+      }),
+    role: z.enum(['attendee', 'organizer']),
   })
   .refine((v) => v.password === v.confirm_password, {
     message: 'Οι κωδικοί δεν ταιριάζουν',
@@ -49,6 +78,11 @@ function mapRegisterError(err: unknown): string {
   if (msg.includes('email already taken')) return 'Το email χρησιμοποιείται ήδη.';
   if (msg.includes('missing required registration fields'))
     return 'Συμπληρώστε όλα τα υποχρεωτικά πεδία.';
+  if (msg.includes('email address is not valid')) return 'Το email δεν είναι έγκυρο.';
+  if (msg.includes('phone number is not valid')) return 'Το τηλέφωνο δεν είναι έγκυρο.';
+  if (msg.includes('VAT number')) return 'Το ΑΦΜ πρέπει να αποτελείται από 9 ψηφία.';
+  if (msg.includes('password must')) return 'Ο κωδικός δεν πληροί τις προϋποθέσεις ασφαλείας.';
+  if (msg.includes('role must be')) return 'Επιλέξτε έγκυρο ρόλο λογαριασμού.';
   return 'Προέκυψε σφάλμα. Δοκιμάστε ξανά.';
 }
 
@@ -90,11 +124,28 @@ export default function RegisterPage() {
       address: '',
       city: '',
       country: '',
+      latitude: '',
+      longitude: '',
       vat_number: '',
+      role: 'attendee',
     },
   });
 
   const usernameValue = watch('username');
+  const roleValue = watch('role');
+  const latitudeValue = watch('latitude');
+  const longitudeValue = watch('longitude');
+
+  const mapPreviewCoords = useMemo(() => {
+    const latRaw = latitudeValue.trim().replace(',', '.');
+    const lonRaw = longitudeValue.trim().replace(',', '.');
+    if (latRaw === '' || lonRaw === '') return null;
+    const lat = Number.parseFloat(latRaw);
+    const lon = Number.parseFloat(lonRaw);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+    return { lat, lon };
+  }, [latitudeValue, longitudeValue]);
 
   useEffect(() => {
     if (user) {
@@ -172,7 +223,10 @@ export default function RegisterPage() {
         address: stringToNull(data.address),
         city: stringToNull(data.city),
         country: stringToNull(data.country),
+        latitude: coordToNull(data.latitude),
+        longitude: coordToNull(data.longitude),
         vat_number: stringToNull(data.vat_number),
+        role: data.role,
       });
     } catch (err: unknown) {
       setSubmitError(mapRegisterError(err));
@@ -202,6 +256,59 @@ export default function RegisterPage() {
           noValidate
         >
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <fieldset className="md:col-span-2">
+              <legend className="mb-1.5 block text-sm font-medium text-neutral-800">
+                Τύπος λογαριασμού <span className="text-[var(--nexus-red)]">*</span>
+              </legend>
+              <p className="mb-2.5 text-sm text-neutral-600">
+                Επιλέξτε πώς θα χρησιμοποιείτε την εφαρμογή. Ο διαχειριστής μπορεί να αλλάξει τον
+                ρόλο σας αργότερα.
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {(
+                  [
+                    {
+                      value: 'attendee',
+                      title: 'Συμμετέχων',
+                      hint: 'Αναζήτηση εκδηλώσεων και κρατήσεις εισιτηρίων.',
+                    },
+                    {
+                      value: 'organizer',
+                      title: 'Διοργανωτής',
+                      hint: 'Δημιουργία και διαχείριση δικών σας εκδηλώσεων.',
+                    },
+                  ] as const
+                ).map((option) => (
+                  <label
+                    key={option.value}
+                    className={cn(
+                      'flex cursor-pointer gap-3 rounded-xl border p-4 transition-colors',
+                      'hover:border-neutral-400',
+                      roleValue === option.value
+                        ? 'border-[var(--nexus-red)] bg-[var(--nexus-red)]/5'
+                        : 'border-neutral-200 bg-white',
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      value={option.value}
+                      className="mt-1 size-4 shrink-0 accent-[var(--nexus-red)]"
+                      {...register('role')}
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-neutral-900">
+                        {option.title}
+                      </span>
+                      <span className="mt-0.5 block text-sm text-neutral-600">{option.hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {errors.role && (
+                <p className="mt-1 text-sm text-[var(--nexus-red)]">{errors.role.message}</p>
+              )}
+            </fieldset>
+
             <div className="md:col-span-2">
               <label
                 htmlFor="reg-username"
@@ -389,6 +496,48 @@ export default function RegisterPage() {
                 {...register('country')}
               />
             </div>
+
+            <div>
+              <label
+                htmlFor="reg-latitude"
+                className="mb-1.5 block text-sm font-medium text-neutral-800"
+              >
+                Γεωγρ. πλάτος
+              </label>
+              <Input
+                id="reg-latitude"
+                type="text"
+                inputMode="decimal"
+                placeholder="π.χ. 37.9838"
+                {...register('latitude')}
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="reg-longitude"
+                className="mb-1.5 block text-sm font-medium text-neutral-800"
+              >
+                Γεωγρ. μήκος
+              </label>
+              <Input
+                id="reg-longitude"
+                type="text"
+                inputMode="decimal"
+                placeholder="π.χ. 23.7275"
+                {...register('longitude')}
+              />
+            </div>
+
+            {mapPreviewCoords && (
+              <div className="md:col-span-2 overflow-hidden rounded-lg border border-neutral-200">
+                <EventMapEmbed
+                  latitude={mapPreviewCoords.lat}
+                  longitude={mapPreviewCoords.lon}
+                  className="min-h-[220px] rounded-none"
+                />
+              </div>
+            )}
           </div>
 
           {submitError && (

@@ -39,6 +39,8 @@ type UserRepository interface {
 
 	Approve(ctx context.Context, id uuid.UUID) (domain.User, error)
 	Reject(ctx context.Context, id uuid.UUID) (domain.User, error)
+	SetRole(ctx context.Context, id uuid.UUID, role domain.UserRole) (domain.User, error)
+	ListByRole(ctx context.Context, role domain.UserRole) ([]domain.User, error)
 
 	List(ctx context.Context, limit, offset int) ([]domain.User, error)
 	ListByIDs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]domain.User, error)
@@ -57,6 +59,9 @@ type EventRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 
 	SetStatus(ctx context.Context, id uuid.UUID, status domain.EventStatus) error
+	// MarkCompleted transitions published events that ended before `before`
+	// into the COMPLETED state. Returns the number of rows updated.
+	MarkCompleted(ctx context.Context, before time.Time) (int64, error)
 
 	SetCategories(ctx context.Context, eventID uuid.UUID, categoryIDs []uuid.UUID) error
 	GetCategories(ctx context.Context, eventID uuid.UUID) ([]domain.Category, error)
@@ -98,6 +103,12 @@ type BookingRepository interface {
 	// recommendation training matrix (a strong implicit-feedback signal).
 	ListAllConfirmed(ctx context.Context) ([]domain.Booking, error)
 	CountByTicketType(ctx context.Context, ticketTypeID uuid.UUID) (int, error)
+	// ExistsBetweenAttendeeAndOrganizer reports whether the attendee has booked
+	// any event run by the organizer. Gates direct messaging.
+	ExistsBetweenAttendeeAndOrganizer(ctx context.Context, attendeeID, organizerID uuid.UUID) (bool, error)
+	// ListCorrespondentIDs returns every user the given user shares a booking
+	// with, in either direction.
+	ListCorrespondentIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
 
 	SetStatus(ctx context.Context, bookingID uuid.UUID, status domain.BookingStatus) error
 }
@@ -112,6 +123,7 @@ type MessageRepository interface {
 	DeleteForUser(ctx context.Context, messageID uuid.UUID, userID uuid.UUID) error
 
 	MarkAsRead(ctx context.Context, userID uuid.UUID) error
+	MarkAsReadByIDs(ctx context.Context, userID uuid.UUID, ids []uuid.UUID) error
 	GetUnreadCount(ctx context.Context, userID uuid.UUID) (int, error)
 }
 

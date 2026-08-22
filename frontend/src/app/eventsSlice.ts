@@ -14,13 +14,27 @@ const initialState: EventsState = {
   pageSize: 12,
 };
 
+type FilterKey = keyof EventsQueryParams;
+
+/** A key paired with a value valid for that key (or undefined, to clear it). */
+type FilterPayload = {
+  key: FilterKey;
+  value: EventsQueryParams[FilterKey];
+};
+
 const eventsSlice = createSlice({
   name: 'events',
   initialState,
   reducers: {
-    setFilter: (state, action: PayloadAction<{ key: keyof EventsQueryParams; value: any }>) => {
+    setFilter: (state, action: PayloadAction<FilterPayload>) => {
       const { key, value } = action.payload;
-      state.filters[key] = value;
+      if (value === undefined || value === '') {
+        delete state.filters[key];
+      } else {
+        // The mapped payload type guarantees key and value line up; TypeScript
+        // cannot narrow both sides of the assignment at once.
+        (state.filters as Record<string, unknown>)[key] = value;
+      }
       state.currentPage = 1; // Reset to first page on filter change
     },
     clearFilters: (state) => {

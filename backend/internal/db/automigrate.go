@@ -30,6 +30,11 @@ func AutoMigrate(db *gorm.DB) error {
 	// Safe to call on first run (no events table yet) — error is ignored.
 	_ = db.Exec(`ALTER TABLE events DROP COLUMN IF EXISTS search_vector`).Error
 
+	// The status CHECK was widened to admit 'completed' (assignment §7: DRAFT,
+	// PUBLISHED, COMPLETED, CANCELLED). Drop the narrower v1 constraint so the
+	// v2 one below can take its place on existing databases.
+	_ = db.Exec(`ALTER TABLE events DROP CONSTRAINT IF EXISTS events_status_chk`).Error
+
 	models := []interface{}{
 		&postgres.UserModel{},
 		&postgres.CategoryModel{},
@@ -56,7 +61,7 @@ func AutoMigrate(db *gorm.DB) error {
 		{"users_account_status_chk", "users", "CHECK (account_status IN ('pending', 'approved', 'rejected'))"},
 		{"events_capacity_chk", "events", "CHECK (capacity >= 0)"},
 		{"events_time_chk", "events", "CHECK (end_time >= start_time)"},
-		{"events_status_chk", "events", "CHECK (status IN ('draft', 'published', 'cancelled', 'deleted'))"},
+		{"events_status_chk_v2", "events", "CHECK (status IN ('draft', 'published', 'completed', 'cancelled', 'deleted'))"},
 		{"ticket_types_price_chk", "ticket_types", "CHECK (price >= 0)"},
 		{"ticket_types_quantity_chk", "ticket_types", "CHECK (quantity >= 0)"},
 		{"ticket_types_available_chk", "ticket_types", "CHECK (available >= 0 AND available <= quantity)"},

@@ -2,11 +2,11 @@ package domain
 
 // EventDetail holds optional rich content for the public event template (tabs, sidebar, etc.).
 type EventDetail struct {
-	Contributors []ContributorCredit `json:"contributors"`
-	Artists      []ArtistCredit      `json:"artists"`
-	Useful       *EventUsefulInfo    `json:"useful"`
+	Contributors []ContributorCredit  `json:"contributors"`
+	Artists      []ArtistCredit       `json:"artists"`
+	Useful       *EventUsefulInfo     `json:"useful"`
 	Organizer    *OrganizerPublicInfo `json:"organizer_display"`
-	Occurrences  []EventOccurrence   `json:"occurrences"`
+	Occurrences  []EventOccurrence    `json:"occurrences"`
 }
 
 type ContributorCredit struct {

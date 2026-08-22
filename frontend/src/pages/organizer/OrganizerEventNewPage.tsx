@@ -9,7 +9,14 @@ import 'react-clock/dist/Clock.css';
 import { EventDetailTemplateForm } from '@/components/admin/EventDetailTemplateForm';
 import { EventMapEmbed } from '@/components/events/EventMapEmbed';
 import { OrganizerLayout } from '@/components/layout/OrganizerLayout';
-import { useAuth } from '@/hooks/useAuth';
+import { apiErrorMessage } from '@/app/apiEnvelope';
+import {
+  useCreateEventMutation,
+  useListCategoriesQuery,
+  useUploadFeaturedImageMutation,
+  type EventWritePayload,
+} from '@/app/eventsApi';
+import { DEFAULT_EVENT_TYPE, EVENT_TYPES } from '@/constants/eventTypes';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -25,25 +32,12 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import type { EventDetail } from '@/types/eventDetail';
 import { emptyEventDetail } from '@/types/eventDetail';
-import type { Event } from '@/types/models';
-
-type ApiEnvelope<T> = {
-  data: T | null;
-  error?: { code: string; message: string } | null;
-  meta?: unknown;
-};
-
-type CategoryDto = { id: string; name: string };
 
 type TicketDraft = {
   clientId: string;
   name: string;
   price: string;
   quantity: string;
-};
-
-type EventCreateResponse = {
-  id: string;
 };
 
 function pad2(n: number): string {
@@ -106,9 +100,9 @@ function NewEventTimePicker({
 }) {
   const [clockOpen, setClockOpen] = useState(true);
 
-  useEffect(() => {
-    if (disabled) setClockOpen(false);
-  }, [disabled]);
+  // A disabled picker is always closed; derived rather than pushed into state
+  // by an effect.
+  const isOpen = clockOpen && !disabled;
 
   const parsed = parseTimeHHMM(value);
   const pickerValue = parsed ? `${pad2(parsed.hour)}:${pad2(parsed.minute)}:00` : null;
@@ -124,7 +118,7 @@ function NewEventTimePicker({
     >
       <TimePicker
         className="w-full max-w-none"
-        isOpen={clockOpen}
+        isOpen={isOpen}
         onClockOpen={() => setClockOpen(true)}
         onClockClose={() => setClockOpen(false)}
         value={pickerValue}
@@ -275,9 +269,10 @@ function DateTimeDialogField({
 
 export default function OrganizerEventNewPage() {
   const navigate = useNavigate();
-  const { accessToken } = useAuth();
+  const [createEvent] = useCreateEventMutation();
+  const [uploadFeaturedImage] = useUploadFeaturedImageMutation();
 
-  const [categories, setCategories] = useState<CategoryDto[]>([]);
+  const { data: categories, isLoading: loadingCats } = useListCategoriesQuery();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [venue, setVenue] = useState('');
@@ -287,6 +282,7 @@ export default function OrganizerEventNewPage() {
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   const [capacity, setCapacity] = useState('100');
+  const [eventType, setEventType] = useState<string>(DEFAULT_EVENT_TYPE);
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [ticketRows, setTicketRows] = useState<TicketDraft[]>([
     { clientId: '1', name: 'Γενική είσοδος', price: '0', quantity: '100' },
@@ -304,7 +300,6 @@ export default function OrganizerEventNewPage() {
   const [startTime, setStartTime] = useState('18:00');
   const [endTime, setEndTime] = useState('22:00');
 
-  const [loadingCats, setLoadingCats] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -317,25 +312,7 @@ export default function OrganizerEventNewPage() {
     };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    void fetch('/api/v1/categories')
-      .then(async (res) => {
-        const json = (await res.json()) as ApiEnvelope<CategoryDto[]>;
-        if (!res.ok || json.error)
-          throw new Error(json.error?.message ?? 'Σφάλμα φόρτωσης κατηγοριών');
-        if (!cancelled) setCategories(json.data ?? []);
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Σφάλμα');
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingCats(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+
 
   const syncStart = (nextDate: Date | undefined, nextTime: string) => {
     setStartDate(nextDate);
@@ -358,7 +335,7 @@ export default function OrganizerEventNewPage() {
     return { lat, lon };
   }, [latitude, longitude]);
 
-  const categoryNames = useMemo(() => categories.map((c) => c.name), [categories]);
+  const categoryNames = useMemo(() => (categories ?? []).map((c) => c.name), [categories]);
 
   const toggleCategory = (name: string) => {
     setSelectedCategories((prev) => {
@@ -412,10 +389,6 @@ export default function OrganizerEventNewPage() {
 
   const onSubmit = async () => {
     setError(null);
-    if (!accessToken) {
-      setError('missing bearer token');
-      return;
-    }
     if (!startDate || !endDate) {
       setError('Ορίστε ημερομηνίες έναρξης και λήξης.');
       return;
@@ -456,6 +429,15 @@ export default function OrganizerEventNewPage() {
       }
     }
 
+    if (selectedCategories.size === 0) {
+      setError('Επιλέξτε τουλάχιστον μία κατηγορία.');
+      return;
+    }
+    if (parsedTickets.length === 0) {
+      setError('Προσθέστε τουλάχιστον έναν τύπο εισιτηρίου.');
+      return;
+    }
+
     const sumQty = parsedTickets.reduce((acc, t) => acc + t.quantity, 0);
     if (sumQty > cap) {
       setError(
@@ -479,6 +461,7 @@ export default function OrganizerEventNewPage() {
       start_at: startAt,
       end_at: endAt,
       capacity: cap,
+      event_type: eventType,
       categories: Array.from(selectedCategories),
       ticket_types: parsedTickets,
       event_detail: detail,
@@ -488,32 +471,15 @@ export default function OrganizerEventNewPage() {
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/v1/events/organizer', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify(payload),
-      });
-      const json = (await res.json()) as ApiEnvelope<EventCreateResponse>;
-      if (!res.ok || json.error) throw new Error(json.error?.message ?? 'Αποτυχία δημιουργίας');
-      const id = json.data?.id;
-      if (!id) throw new Error('Άκυρη απάντηση');
+      const created = await createEvent(payload as EventWritePayload).unwrap();
+      const id = created.id;
 
       if (pendingFeaturedFile) {
-        const fd = new FormData();
-        fd.append('file', pendingFeaturedFile);
-        const upRes = await fetch(
-          `/api/v1/events/organizer/${encodeURIComponent(id)}/featured-image`,
-          {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${accessToken}` },
-            body: fd,
-          },
-        );
-        const upJson = (await upRes.json()) as ApiEnvelope<Event>;
-        if (!upRes.ok || upJson.error) {
+        try {
+          await uploadFeaturedImage({ id, file: pendingFeaturedFile }).unwrap();
+        } catch {
+          // The event exists; only the image failed, so say so and carry on to
+          // the edit screen where it can be retried.
           toast.error(
             'Η εκδήλωση δημιουργήθηκε, αλλά η μεταφόρτωση της εικόνας απέτυχε. Μπορείτε να προσθέσετε εικόνα από την επεξεργασία.',
           );
@@ -522,7 +488,7 @@ export default function OrganizerEventNewPage() {
 
       void navigate(`/organizer/events/${encodeURIComponent(id)}/edit`);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Σφάλμα');
+      setError(apiErrorMessage(e, 'Αποτυχία δημιουργίας'));
     } finally {
       setSubmitting(false);
     }
@@ -655,10 +621,34 @@ export default function OrganizerEventNewPage() {
               <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">Λεπτομέρειες</p>
               <div className="mt-4 space-y-3">
                 <div>
-                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                  <label
+                    htmlFor="event-type"
+                    className="mb-1 block text-xs text-neutral-600 comfortaa-regular"
+                  >
+                    Τύπος εκδήλωσης
+                  </label>
+                  <select
+                    id="event-type"
+                    value={eventType}
+                    onChange={(e) => setEventType(e.target.value)}
+                    className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    {EVENT_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor="event-capacity"
+                    className="mb-1 block text-xs text-neutral-600 comfortaa-regular"
+                  >
                     Χωρητικότητα
                   </label>
                   <Input
+                    id="event-capacity"
                     inputMode="numeric"
                     value={capacity}
                     onChange={(e) => setCapacity(e.target.value)}

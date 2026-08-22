@@ -4,7 +4,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { ButtonAlt } from '@/components/ui/button-alt';
 import { SelectAltPanelContainer, SelectAltScrollRegion } from '@/components/ui/select-alt';
 import globeIcon from '@/assets/icons/globe.svg';
-import { useLang } from '@/contexts/LangContext';
+import { useLang } from '@/contexts/langContext';
 
 /** Locales with `src/locales/*.yaml` bundles (parsed at build time). */
 const LANGUAGE_OPTIONS = [

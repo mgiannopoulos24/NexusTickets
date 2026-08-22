@@ -38,7 +38,7 @@ func InitializeApp(db *gorm.DB, redisClient *redis.Client, cfg config.Config) (*
 	eventHandler := handler.NewEventHandler(eventService)
 	categoryHandler := handler.NewCategoryHandler(categoryRepository)
 	ticketTypeRepository := postgres.NewTicketTypeRepositoryPostgres(db)
-	bookingService := service.NewBookingService(eventRepository, ticketTypeRepository, bookingRepository)
+	bookingService := service.NewBookingService(eventRepository, ticketTypeRepository, bookingRepository, userRepository)
 	bookingHandler := handler.NewBookingHandler(bookingService)
 	messageHandler := handler.NewMessageHandler(messagingService, hub)
 	chatRoomRepository := postgres.NewChatRoomRepository(db)
@@ -57,6 +57,7 @@ func InitializeApp(db *gorm.DB, redisClient *redis.Client, cfg config.Config) (*
 		ChatHandler:           chatHandler,
 		AdminExportHandler:    adminExportHandler,
 		RecommendationService: recommendationService,
+		EventService:          eventService,
 	}
 	return appDependencies, nil
 }
@@ -74,6 +75,8 @@ type AppDependencies struct {
 	ChatHandler           *handler.ChatHandler
 	AdminExportHandler    *handler.AdminExportHandler
 	RecommendationService *service.RecommendationService
+	// EventService is exposed so main can run the COMPLETED sweeper.
+	EventService *service.EventService
 }
 
 var RepositorySet = wire.NewSet(postgres.NewUserRepositoryPostgres, postgres.NewEventRepositoryPostgres, postgres.NewTicketTypeRepositoryPostgres, postgres.NewBookingRepositoryPostgres, postgres.NewMessageRepositoryPostgres, postgres.NewCategoryRepositoryPostgres, postgres.NewEventPhotoRepositoryPostgres, postgres.NewUserEventViewRepositoryPostgres, postgres.NewChatRoomRepository)

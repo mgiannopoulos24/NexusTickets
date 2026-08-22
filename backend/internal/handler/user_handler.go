@@ -2,6 +2,7 @@ package handler
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -67,6 +68,26 @@ func (h *UserHandler) AdminRejectUser(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid user id")
 	}
 	user, err := h.service.RejectUser(c.Context(), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, toUserResponse(user))
+}
+
+// AdminChangeUserRole switches an account between attendee and organizer.
+func (h *UserHandler) AdminChangeUserRole(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid user id")
+	}
+
+	var req dto.ChangeRoleRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+	}
+
+	role := domain.UserRole(strings.ToLower(strings.TrimSpace(req.Role)))
+	user, err := h.service.ChangeRole(c.Context(), id, role)
 	if err != nil {
 		return err
 	}

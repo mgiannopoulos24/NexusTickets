@@ -18,11 +18,18 @@ export type AccountStatus = (typeof AccountStatuses)[keyof typeof AccountStatuse
 export const EventStatuses = {
   draft: 'draft',
   published: 'published',
+  completed: 'completed',
   cancelled: 'cancelled',
+  /** Legacy value from rows written before hard deletion; never produced now. */
   deleted: 'deleted',
 } as const;
 
 export type EventStatus = (typeof EventStatuses)[keyof typeof EventStatuses];
+
+/** The roles a person may choose at registration or be switched to by an admin. */
+export const AssignableRoles = ['attendee', 'organizer'] as const;
+
+export type AssignableRole = (typeof AssignableRoles)[number];
 
 export const BookingStatuses = {
   pending: 'pending',

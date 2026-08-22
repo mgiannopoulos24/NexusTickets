@@ -53,6 +53,8 @@ services:
     build:
       context: ./backend
       target: builder
+    networks:
+      - app
     depends_on:
       postgres:
         condition: service_healthy

@@ -75,7 +75,7 @@ func (m *mockUserRepo) Approve(_ context.Context, id uuid.UUID) (domain.User, er
 		return domain.User{}, domain.ErrNotFound
 	}
 	u.AccountStatus = domain.AccountStatusApproved
-	m.byID[id] = u
+	m.add(u)
 	return u, nil
 }
 
@@ -85,8 +85,28 @@ func (m *mockUserRepo) Reject(_ context.Context, id uuid.UUID) (domain.User, err
 		return domain.User{}, domain.ErrNotFound
 	}
 	u.AccountStatus = domain.AccountStatusRejected
-	m.byID[id] = u
+	m.add(u)
 	return u, nil
+}
+
+func (m *mockUserRepo) SetRole(_ context.Context, id uuid.UUID, role domain.UserRole) (domain.User, error) {
+	u, ok := m.byID[id]
+	if !ok {
+		return domain.User{}, domain.ErrNotFound
+	}
+	u.Role = role
+	m.add(u)
+	return u, nil
+}
+
+func (m *mockUserRepo) ListByRole(_ context.Context, role domain.UserRole) ([]domain.User, error) {
+	var out []domain.User
+	for _, u := range m.byID {
+		if u.Role == role && u.AccountStatus == domain.AccountStatusApproved {
+			out = append(out, u)
+		}
+	}
+	return out, nil
 }
 
 func (m *mockUserRepo) List(_ context.Context, limit, offset int) ([]domain.User, error) {

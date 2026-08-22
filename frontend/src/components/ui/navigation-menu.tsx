@@ -5,7 +5,6 @@ import { NavigationMenu as NavigationMenuPrimitive } from 'radix-ui';
 import { cn } from '@/lib/utils';
 import { ChevronDownIcon } from 'lucide-react';
 
-/* eslint-disable react-refresh/only-export-components */
 function NavigationMenu({
   className,
   children,

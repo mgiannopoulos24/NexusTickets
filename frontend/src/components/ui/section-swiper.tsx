@@ -109,7 +109,7 @@ export function SectionSwiper({
           }}
         >
           {slides.map((node, idx) => (
-            <SwiperSlide key={idx} className="!h-auto flex">
+            <SwiperSlide key={idx} className="flex">
               {node}
             </SwiperSlide>
           ))}

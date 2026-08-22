@@ -1,96 +1,122 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
+
+import { apiErrorMessage } from '@/app/apiEnvelope';
+import { useGetMeQuery, useUpdateMeMutation } from '@/app/usersApi';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
+import { EventMapEmbed } from '@/components/events/EventMapEmbed';
+import { ErrorMessage } from '@/components/shared/ErrorMessage';
+import { SkeletonList } from '@/components/shared/SkeletonList';
 import type { User } from '@/types/models';
 
-type ApiEnvelope<T> = { data: T | null; error?: { code: string; message: string } | null };
+function coordToNull(v: string): number | null {
+  const t = v.trim().replace(',', '.');
+  if (t === '') return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+type ProfileForm = {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  country: string;
+  latitude: string;
+  longitude: string;
+  vat_number: string;
+};
+
+/** The saved profile, rendered as form strings. */
+function formFromUser(u: User | undefined): ProfileForm {
+  return {
+    first_name: u?.first_name ?? '',
+    last_name: u?.last_name ?? '',
+    email: u?.email ?? '',
+    phone: u?.phone ?? '',
+    address: u?.address ?? '',
+    city: u?.city ?? '',
+    country: u?.country ?? '',
+    latitude: u?.latitude != null ? String(u.latitude) : '',
+    longitude: u?.longitude != null ? String(u.longitude) : '',
+    vat_number: u?.vat_number ?? '',
+  };
+}
 
 export default function AccountPage() {
-  const { accessToken, setUser } = useAuth();
-  const navigate = useNavigate();
-  const [user, setUserData] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const { setUser } = useAuth();
+  const { data: user, isLoading, error, refetch } = useGetMeQuery();
+  const [updateMe, { isLoading: saving }] = useUpdateMeMutation();
 
-  const [form, setForm] = useState({
-    first_name: '',
-    last_name: '',
-    email: '',
-    phone: '',
-    address: '',
-    city: '',
-    country: '',
-    vat_number: '',
-  });
+  // Only the fields the user has actually touched live in state; everything
+  // else reads through from the query. That keeps the form in step with the
+  // server without copying the response into state in an effect.
+  const [edits, setEdits] = useState<Partial<ProfileForm>>({});
 
-  useEffect(() => {
-    if (!accessToken) {
-      navigate('/login');
-      return;
-    }
-    setLoading(true);
-
-    fetch('/api/v1/users/me', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-      .then(async (res) => {
-        const json = (await res.json()) as ApiEnvelope<User>;
-        if (!res.ok || json.error) throw new Error(json.error?.message ?? 'Σφάλμα φόρτωσης');
-        setUserData(json.data!);
-        setForm({
-          first_name: json.data!.first_name ?? '',
-          last_name: json.data!.last_name ?? '',
-          email: json.data!.email ?? '',
-          phone: json.data!.phone ?? '',
-          address: json.data!.address ?? '',
-          city: json.data!.city ?? '',
-          country: json.data!.country ?? '',
-          vat_number: json.data!.vat_number ?? '',
-        });
-      })
-      .catch((e: unknown) => {
-        toast.error(e instanceof Error ? e.message : 'Σφάλμα');
-      })
-      .finally(() => setLoading(false));
-
-    return () => {};
-  }, [accessToken, navigate]);
+  const saved = useMemo(() => formFromUser(user), [user]);
+  const form: ProfileForm = { ...saved, ...edits };
+  const setField = (key: keyof ProfileForm, value: string) =>
+    setEdits((prev) => ({ ...prev, [key]: value }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accessToken) return;
-
-    setSaving(true);
     try {
-      const res = await fetch('/api/v1/users/me', {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(form),
-      });
-      const json = (await res.json()) as ApiEnvelope<User>;
-      if (!res.ok || json.error) throw new Error(json.error?.message ?? 'Σφάλμα αποθήκευσης');
+      const updated = await updateMe({
+        first_name: form.first_name,
+        last_name: form.last_name,
+        email: form.email,
+        phone: form.phone || null,
+        address: form.address || null,
+        city: form.city || null,
+        country: form.country || null,
+        latitude: coordToNull(form.latitude),
+        longitude: coordToNull(form.longitude),
+        vat_number: form.vat_number || null,
+      }).unwrap();
 
-      setUser(json.data!);
+      setUser(updated);
+      setEdits({}); // the query result is now the source of truth again
       toast.success('Τα στοιχεία ενημερώθηκαν');
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Σφάλμα');
-    } finally {
-      setSaving(false);
+    } catch (err: unknown) {
+      toast.error(apiErrorMessage(err, 'Η αποθήκευση απέτυχε'));
     }
   };
 
-  if (loading) {
+  const mapPreviewCoords = useMemo(() => {
+    const latRaw = form.latitude.trim().replace(',', '.');
+    const lonRaw = form.longitude.trim().replace(',', '.');
+    if (latRaw === '' || lonRaw === '') return null;
+    const lat = Number.parseFloat(latRaw);
+    const lon = Number.parseFloat(lonRaw);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+    return { lat, lon };
+  }, [form.latitude, form.longitude]);
+
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-neutral-50 py-8">
         <div className="mx-auto max-w-2xl px-4">
-          <p className="text-neutral-500 comfortaa-regular">Φόρτωση...</p>
+          <SkeletonList rows={6} />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-neutral-50 py-8">
+        <div className="mx-auto max-w-2xl px-4">
+          <ErrorMessage
+            message={apiErrorMessage(error, 'Δεν ήταν δυνατή η φόρτωση του λογαριασμού.')}
+            onRetry={() => void refetch()}
+          />
         </div>
       </div>
     );
@@ -137,7 +163,7 @@ export default function AccountPage() {
                 <Input
                   id="first_name"
                   value={form.first_name}
-                  onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+                  onChange={(e) => setField('first_name', e.target.value)}
                   className="comfortaa-regular"
                 />
               </div>
@@ -146,7 +172,7 @@ export default function AccountPage() {
                 <Input
                   id="last_name"
                   value={form.last_name}
-                  onChange={(e) => setForm({ ...form, last_name: e.target.value })}
+                  onChange={(e) => setField('last_name', e.target.value)}
                   className="comfortaa-regular"
                 />
               </div>
@@ -158,7 +184,7 @@ export default function AccountPage() {
                 id="email"
                 type="email"
                 value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                onChange={(e) => setField('email', e.target.value)}
                 className="comfortaa-regular"
               />
             </div>
@@ -168,7 +194,7 @@ export default function AccountPage() {
               <Input
                 id="phone"
                 value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                onChange={(e) => setField('phone', e.target.value)}
                 className="comfortaa-regular"
               />
             </div>
@@ -178,7 +204,7 @@ export default function AccountPage() {
               <Input
                 id="address"
                 value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
+                onChange={(e) => setField('address', e.target.value)}
                 className="comfortaa-regular"
               />
             </div>
@@ -189,7 +215,7 @@ export default function AccountPage() {
                 <Input
                   id="city"
                   value={form.city}
-                  onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  onChange={(e) => setField('city', e.target.value)}
                   className="comfortaa-regular"
                 />
               </div>
@@ -198,18 +224,53 @@ export default function AccountPage() {
                 <Input
                   id="country"
                   value={form.country}
-                  onChange={(e) => setForm({ ...form, country: e.target.value })}
+                  onChange={(e) => setField('country', e.target.value)}
                   className="comfortaa-regular"
                 />
               </div>
             </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="latitude" className="comfortaa-regular">Γεωγρ. πλάτος</Label>
+                <Input
+                  id="latitude"
+                  inputMode="decimal"
+                  placeholder="π.χ. 37.9838"
+                  value={form.latitude}
+                  onChange={(e) => setField('latitude', e.target.value)}
+                  className="comfortaa-regular"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="longitude" className="comfortaa-regular">Γεωγρ. μήκος</Label>
+                <Input
+                  id="longitude"
+                  inputMode="decimal"
+                  placeholder="π.χ. 23.7275"
+                  value={form.longitude}
+                  onChange={(e) => setField('longitude', e.target.value)}
+                  className="comfortaa-regular"
+                />
+              </div>
+            </div>
+
+            {mapPreviewCoords && (
+              <div className="overflow-hidden rounded-lg border border-neutral-200">
+                <EventMapEmbed
+                  latitude={mapPreviewCoords.lat}
+                  longitude={mapPreviewCoords.lon}
+                  className="min-h-[220px] rounded-none"
+                />
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="vat_number" className="comfortaa-regular">ΑΦΜ</Label>
               <Input
                 id="vat_number"
                 value={form.vat_number}
-                onChange={(e) => setForm({ ...form, vat_number: e.target.value })}
+                onChange={(e) => setField('vat_number', e.target.value)}
                 className="comfortaa-regular"
               />
             </div>

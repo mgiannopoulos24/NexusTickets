@@ -16,6 +16,7 @@ func RegisterMessageRoutes(v1 fiber.Router, messageHandler *MessageHandler, jwtS
 	messages.Get("/inbox", messageHandler.Inbox)
 	messages.Get("/sent", messageHandler.Sent)
 	messages.Get("/unread-count", messageHandler.UnreadCount)
+	messages.Get("/recipients", messageHandler.Recipients)
 	messages.Post("/", messageHandler.Send)
 	messages.Delete("/:id", messageHandler.Delete)
 

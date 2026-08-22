@@ -60,7 +60,10 @@ export function BookingForm({ event }: BookingFormProps) {
   const selectedTicket = event.ticket_types.find((t) => t.id === selectedTicketId);
   const totalCost = selectedTicket ? selectedTicket.price * quantity : 0;
 
-  const onSubmit = (_data: BookingFormValues) => {
+  // Submitting the form only opens the confirmation step — the booking itself
+  // is sent by handleConfirm, because §9 requires an explicit confirmation that
+  // cannot be undone afterwards.
+  const onSubmit = () => {
     setIsConfirmOpen(true);
   };
 

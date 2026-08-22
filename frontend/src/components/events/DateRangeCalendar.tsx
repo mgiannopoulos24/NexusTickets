@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -10,13 +10,11 @@ interface DateRangeCalendarProps {
 }
 
 export function DateRangeCalendar({ from, to, onSelect, className }: DateRangeCalendarProps) {
-  const [currentMonth, setCurrentMonth] = useState(from || new Date());
-  const [selection, setSelection] = useState<{ from?: Date; to?: Date }>({ from, to });
+  const [currentMonth, setCurrentMonth] = useState(from ?? new Date());
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
 
-  useEffect(() => {
-    setSelection({ from, to });
-  }, [from, to]);
+  // Fully controlled: the caller holds the range and passes it back down.
+  const selection = { from, to };
 
   const daysInMonth = new Date(
     currentMonth.getFullYear(),
@@ -91,7 +89,6 @@ export function DateRangeCalendar({ from, to, onSelect, className }: DateRangeCa
       newSelection = { from: selection.from, to: clickedDate };
     }
 
-    setSelection(newSelection);
     onSelect?.(newSelection);
   };
 

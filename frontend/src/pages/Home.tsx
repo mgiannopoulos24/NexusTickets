@@ -15,19 +15,18 @@ import {
   HOME_SLIDER_ORDER,
   homeViewAllHref,
   homeViewAllLabel,
+  type CategoryBrowseSlug,
   type HomeSliderKey,
 } from '@/constants/homeEventSections';
+import { apiErrorMessage } from '@/app/apiEnvelope';
+import {
+  useGetRecommendedQuery,
+  useListCategoriesQuery,
+  useSearchEventsQuery,
+} from '@/app/eventsApi';
 import { categoryIdForSlug } from '@/lib/categorySlug';
 import { cn } from '@/lib/utils';
-import { getAccessToken } from '@/utils/api';
 import type { Event as EventModel } from '@/types/models';
-
-type ApiEnvelope<T> = {
-  data: T | null;
-  error?: { code: string; message: string } | null;
-};
-
-type CategoryDto = { id: string; name: string };
 
 function sectionDomId(key: HomeSliderKey): string {
   return `home-section-${key}`;
@@ -53,10 +52,6 @@ export default function Home() {
   const abortRef = useRef<AbortController | null>(null);
   const suggestTimerRef = useRef<number | null>(null);
 
-  const [eventsBySection, setEventsBySection] =
-    useState<Record<HomeSliderKey, EventModel[]>>(EMPTY_SECTIONS);
-  const [eventsLoading, setEventsLoading] = useState(true);
-  const [eventsError, setEventsError] = useState<string | null>(null);
 
   const sectionTabs = useMemo<HomeSectionTab[]>(
     () =>
@@ -87,91 +82,68 @@ export default function Home() {
     return () => window.removeEventListener('scroll', onScroll);
   }, [active, sectionTabs]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setEventsLoading(true);
-    setEventsError(null);
+  // Each home rail is its own query. The category rails wait for the taxonomy
+  // so they can turn a slug into the id the API filters on.
+  const LIST = { limit: 24, offset: 0 } as const;
 
-    const searchEvents = async (searchParams: string): Promise<EventModel[]> => {
-      const res = await fetch(`/api/v1/events/search?${searchParams}`);
-      const json = (await res.json()) as ApiEnvelope<EventModel[]>;
-      if (!res.ok || json.error) {
-        throw new Error(json.error?.message ?? 'Σφάλμα φόρτωσης εκδηλώσεων');
-      }
-      return json.data ?? [];
+  const { data: categories } = useListCategoriesQuery();
+
+  const popularQ = useSearchEventsQuery(LIST);
+  const recommendedQ = useGetRecommendedQuery(24);
+  const newestQ = useSearchEventsQuery({ limit: 48, offset: 0 });
+
+  const catId = useCallback(
+    (slug: CategoryBrowseSlug) => (categories ? categoryIdForSlug(slug, categories) : null),
+    [categories],
+  );
+
+  const theaterId = catId('theater');
+  const musicId = catId('music');
+  const cinemaId = catId('cinema');
+
+  const theaterQ = useSearchEventsQuery(
+    { ...LIST, category_ids: theaterId ? [theaterId] : undefined },
+    { skip: !theaterId },
+  );
+  const musicQ = useSearchEventsQuery(
+    { ...LIST, category_ids: musicId ? [musicId] : undefined },
+    { skip: !musicId },
+  );
+  const cinemaQ = useSearchEventsQuery(
+    { ...LIST, category_ids: cinemaId ? [cinemaId] : undefined },
+    { skip: !cinemaId },
+  );
+
+  const eventsLoading =
+    popularQ.isLoading || recommendedQ.isLoading || newestQ.isLoading || !categories;
+
+  // Only a failure of the main rail is worth showing: the category rails simply
+  // render empty if their query fails.
+  const eventsError = popularQ.error
+    ? apiErrorMessage(popularQ.error, 'Δεν ήταν δυνατή η φόρτωση των εκδηλώσεων.')
+    : null;
+
+  const eventsBySection = useMemo<Record<HomeSliderKey, EventModel[]>>(() => {
+    const popular = popularQ.data?.events ?? [];
+
+    // Newest is the same catalogue re-sorted by creation time.
+    const newest = [...(newestQ.data?.events ?? [])]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 24);
+
+    return {
+      ...EMPTY_SECTIONS,
+      popular,
+      // Req 13: personalised when signed in, popular otherwise. If the
+      // recommender is unavailable the rail falls back to the popular list
+      // rather than disappearing.
+      recommended: recommendedQ.data?.length ? recommendedQ.data : popular,
+      new: newest,
+      theater: theaterQ.data?.events ?? [],
+      music: musicQ.data?.events ?? [],
+      cinema: cinemaQ.data?.events ?? [],
     };
-
-    // Recommended section (Req 13): calls the BMF recommendation endpoint.
-    // Personalized when the user is signed in (bearer token), popular otherwise.
-    // Falls back to popular events on any failure so the section never breaks.
-    const fetchRecommended = async (): Promise<EventModel[]> => {
-      const token = getAccessToken();
-      const headers: HeadersInit = token ? { authorization: `Bearer ${token}` } : {};
-      try {
-        const res = await fetch('/api/v1/events/recommended?limit=24', { headers });
-        const json = (await res.json()) as ApiEnvelope<EventModel[]>;
-        if (!res.ok || json.error) {
-          throw new Error(json.error?.message ?? 'Σφάλμα προτάσεων');
-        }
-        return json.data ?? [];
-      } catch {
-        return searchEvents('limit=24&offset=0');
-      }
-    };
-
-    const load = async () => {
-      try {
-        const catRes = await fetch('/api/v1/categories');
-        const catJson = (await catRes.json()) as ApiEnvelope<CategoryDto[]>;
-        if (!catRes.ok || catJson.error) {
-          throw new Error(catJson.error?.message ?? 'Σφάλμα κατηγοριών');
-        }
-        const categories = catJson.data ?? [];
-
-        const baseList = 'limit=24&offset=0';
-        const [popular, recommended, rawNew] = await Promise.all([
-          searchEvents(baseList),
-          fetchRecommended(),
-          searchEvents('limit=48&offset=0'),
-        ]);
-
-        const newest = [...rawNew]
-          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-          .slice(0, 24);
-
-        const loadCat = async (slug: 'theater' | 'music' | 'cinema') => {
-          const id = categoryIdForSlug(slug, categories);
-          if (!id) return [];
-          return searchEvents(`${baseList}&category_ids=${encodeURIComponent(id)}`);
-        };
-
-        const [theater, music, cinema] = await Promise.all([
-          loadCat('theater'),
-          loadCat('music'),
-          loadCat('cinema'),
-        ]);
-
-        if (cancelled) return;
-        setEventsBySection({
-          popular,
-          recommended,
-          new: newest,
-          theater,
-          music,
-          cinema,
-        });
-      } catch (e: unknown) {
-        if (!cancelled) setEventsError(e instanceof Error ? e.message : 'Σφάλμα');
-      } finally {
-        if (!cancelled) setEventsLoading(false);
-      }
-    };
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [popularQ.data, recommendedQ.data, newestQ.data, theaterQ.data, musicQ.data, cinemaQ.data]);
 
   useEffect(() => {
     const input = searchRef.current;

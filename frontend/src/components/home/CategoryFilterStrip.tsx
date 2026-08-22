@@ -21,7 +21,7 @@ export function CategoryFilterStrip({
   activeSection,
   onSectionTabClick,
 }: CategoryFilterStripProps) {
-  const tabsDrag = useDragScroll<HTMLDivElement>();
+  const { ref: tabsRef, handlers: tabsHandlers } = useDragScroll<HTMLDivElement>();
 
   return (
     <section
@@ -42,14 +42,14 @@ export function CategoryFilterStrip({
             className="-mx-4 border-t border-neutral-200/80 bg-white px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
           >
             <div
-              ref={tabsDrag.ref}
+              ref={tabsRef}
               className={cn(
                 'flex items-stretch gap-8 overflow-x-auto',
                 '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
                 'snap-x snap-mandatory',
                 'touch-pan-x overscroll-x-contain',
               )}
-              {...tabsDrag.handlers}
+              {...tabsHandlers}
             >
               {sectionTabs.map((s) => {
                 const isActive = s.key === activeSection;

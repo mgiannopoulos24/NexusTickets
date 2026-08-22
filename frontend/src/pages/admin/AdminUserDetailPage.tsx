@@ -7,9 +7,11 @@ import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Button } from '@/components/ui/button';
 import {
   useApproveUserMutation,
+  useChangeUserRoleMutation,
   useGetUserQuery,
   useRejectUserMutation,
 } from '@/app/usersApi';
+import { AssignableRoles, type AssignableRole } from '@/types/enums';
 import { ROLE_LABELS, AccountStatusBadge } from '@/pages/admin/userDisplay';
 
 function formatDateTime(value?: string | null): string {
@@ -38,10 +40,26 @@ export default function AdminUserDetailPage() {
   const { data: user, isLoading, isError, error } = useGetUserQuery(id, { skip: !id });
   const [approveUser, { isLoading: approving }] = useApproveUserMutation();
   const [rejectUser, { isLoading: rejecting }] = useRejectUserMutation();
+  const [changeRole, { isLoading: changingRole }] = useChangeUserRoleMutation();
 
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const busy = approving || rejecting;
+  const busy = approving || rejecting || changingRole;
+
+  const handleRoleChange = async (role: AssignableRole) => {
+    setActionError(null);
+    try {
+      const updated = await changeRole({ id, role }).unwrap();
+      toast.success(
+        `Ο ρόλος του @${updated.username} άλλαξε σε ${ROLE_LABELS[updated.role] ?? updated.role}`,
+      );
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Αποτυχία αλλαγής ρόλου';
+      setActionError(msg);
+      toast.error(msg);
+    }
+  };
+
 
   const handleApprove = async () => {
     setActionError(null);
@@ -167,6 +185,43 @@ export default function AdminUserDetailPage() {
                 >
                   {approving ? 'Έγκριση…' : 'Έγκριση τώρα'}
                 </Button>
+              </div>
+            )}
+
+            {/* Role: an account registers as attendee or organizer and an admin
+                can move it between the two (assignment §6). Admin accounts are
+                not switchable. */}
+            {user.role !== 'admin' && (
+              <div className="mt-4 rounded-xl border border-neutral-200 bg-white p-4">
+                <p className="text-sm font-medium text-neutral-900 comfortaa-bold">
+                  Ρόλος λογαριασμού
+                </p>
+                <p className="mt-1 text-sm text-neutral-600 comfortaa-regular">
+                  Ο διοργανωτής μπορεί να δημιουργεί εκδηλώσεις· ο συμμετέχων μόνο να κάνει
+                  κρατήσεις. Η αλλαγή ισχύει την επόμενη φορά που θα ανανεωθεί η συνεδρία του
+                  χρήστη.
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <label htmlFor="user-role" className="sr-only">
+                    Ρόλος
+                  </label>
+                  <select
+                    id="user-role"
+                    value={user.role}
+                    disabled={busy}
+                    onChange={(e) => void handleRoleChange(e.target.value as AssignableRole)}
+                    className="h-9 rounded-md border border-neutral-200 bg-white px-3 text-sm comfortaa-regular disabled:opacity-50"
+                  >
+                    {AssignableRoles.map((r) => (
+                      <option key={r} value={r}>
+                        {ROLE_LABELS[r] ?? r}
+                      </option>
+                    ))}
+                  </select>
+                  {changingRole && (
+                    <span className="text-sm text-neutral-500 comfortaa-regular">Αποθήκευση…</span>
+                  )}
+                </div>
               </div>
             )}
 

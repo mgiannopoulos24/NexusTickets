@@ -15,6 +15,9 @@ type mockBookingRepo struct {
 	byUser   map[uuid.UUID][]domain.Booking
 	byEvent  map[uuid.UUID][]domain.Booking
 	byTT     map[uuid.UUID]int
+	// correspondents[{attendee, organizer}] marks an existing booking link,
+	// which is what gates direct messaging.
+	correspondents map[[2]uuid.UUID]bool
 }
 
 func newMockBookingRepo() *mockBookingRepo {
@@ -23,6 +26,8 @@ func newMockBookingRepo() *mockBookingRepo {
 		byUser:   make(map[uuid.UUID][]domain.Booking),
 		byEvent:  make(map[uuid.UUID][]domain.Booking),
 		byTT:     make(map[uuid.UUID]int),
+
+		correspondents: make(map[[2]uuid.UUID]bool),
 	}
 }
 
@@ -95,6 +100,29 @@ func (m *mockBookingRepo) ListByEventIDs(_ context.Context, eventIDs []uuid.UUID
 			if b.EventID == eid {
 				out = append(out, b)
 			}
+		}
+	}
+	return out, nil
+}
+
+func (m *mockBookingRepo) ExistsBetweenAttendeeAndOrganizer(_ context.Context, attendeeID, organizerID uuid.UUID) (bool, error) {
+	if m.correspondents == nil {
+		return false, nil
+	}
+	return m.correspondents[[2]uuid.UUID{attendeeID, organizerID}], nil
+}
+
+func (m *mockBookingRepo) ListCorrespondentIDs(_ context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
+	var out []uuid.UUID
+	for pair, ok := range m.correspondents {
+		if !ok {
+			continue
+		}
+		switch userID {
+		case pair[0]:
+			out = append(out, pair[1])
+		case pair[1]:
+			out = append(out, pair[0])
 		}
 	}
 	return out, nil
@@ -187,7 +215,7 @@ func TestBookingService_CreateBooking(t *testing.T) {
 	events := newMockEventRepo()
 	ttRepo := newMockTicketTypeRepo()
 	bookings := newMockBookingRepo()
-	svc := NewBookingService(events, ttRepo, bookings)
+	svc := NewBookingService(events, ttRepo, bookings, newMockUserRepo())
 
 	orgID := uuid.New()
 	eventID := uuid.New()
@@ -287,7 +315,7 @@ func TestBookingService_GetBooking(t *testing.T) {
 	events := newMockEventRepo()
 	ttRepo := newMockTicketTypeRepo()
 	bookings := newMockBookingRepo()
-	svc := NewBookingService(events, ttRepo, bookings)
+	svc := NewBookingService(events, ttRepo, bookings, newMockUserRepo())
 
 	userID := uuid.New()
 	orgID := uuid.New()
@@ -341,7 +369,7 @@ func TestBookingService_GetMyBookings(t *testing.T) {
 	events := newMockEventRepo()
 	ttRepo := newMockTicketTypeRepo()
 	bookings := newMockBookingRepo()
-	svc := NewBookingService(events, ttRepo, bookings)
+	svc := NewBookingService(events, ttRepo, bookings, newMockUserRepo())
 
 	userID := uuid.New()
 	bookings.add(domain.Booking{UserID: userID, EventID: uuid.New(), TicketTypeID: uuid.New(), Quantity: 1})
@@ -360,7 +388,7 @@ func TestBookingService_GetEventBookings(t *testing.T) {
 	events := newMockEventRepo()
 	ttRepo := newMockTicketTypeRepo()
 	bookings := newMockBookingRepo()
-	svc := NewBookingService(events, ttRepo, bookings)
+	svc := NewBookingService(events, ttRepo, bookings, newMockUserRepo())
 
 	orgID := uuid.New()
 	eventID := uuid.New()

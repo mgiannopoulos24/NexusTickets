@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar, MapPin, Ticket } from 'lucide-react';
 import { formatShortDate } from '@/helpers/formatDate';
 import { formatCurrency } from '@/helpers/formatCurrency';
-import { useLang } from '@/contexts/LangContext';
+import { useLang } from '@/contexts/langContext';
 
 interface EventCardProps {
   event: Event;
@@ -80,14 +80,14 @@ const EventCard: React.FC<EventCardProps> = memo(({ event, className }) => {
 
       <CardFooter className="p-4 pt-0 flex items-center justify-between mt-auto">
         <div className="flex flex-col">
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+          <span className="text-[10px] text-muted-foreground tracking-wider font-semibold">
             {t('labels.price')}
           </span>
           <span className="font-bold text-primary comfortaa-bold">{formatCurrency(minPrice)}</span>
         </div>
 
         <div className="flex flex-col items-end">
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">
+          <span className="text-[10px] text-muted-foreground tracking-wider font-semibold">
             {t('labels.available')}
           </span>
           <div className="flex items-center gap-1 font-medium">

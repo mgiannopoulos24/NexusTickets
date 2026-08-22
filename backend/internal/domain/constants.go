@@ -27,14 +27,36 @@ const (
 	EventStatusPublished EventStatus = "published"
 	EventStatusCancelled EventStatus = "cancelled"
 
-	// EventStatusDeleted maps to the current database check constraint value.
-	EventStatusDeleted EventStatus = "deleted"
+	// EventStatusCompleted is the terminal state of a published event whose
+	// EndAt has passed. Set by the completion sweeper, never by a client.
+	EventStatusCompleted EventStatus = "completed"
 
-	// EventStatusCompleted matches the assignment wording ("Completed").
-	// Current migrations use "deleted" as the final state value, so this constant
-	// is mapped accordingly until the DB constraint is aligned.
-	EventStatusCompleted EventStatus = EventStatusDeleted
+	// EventStatusDeleted is retained for rows written before soft-deletion was
+	// replaced by hard deletion; nothing writes it any more.
+	EventStatusDeleted EventStatus = "deleted"
 )
+
+// ValidEventStatus reports whether s is one of the four lifecycle states from
+// the assignment (DRAFT, PUBLISHED, COMPLETED, CANCELLED).
+func ValidEventStatus(s EventStatus) bool {
+	switch s {
+	case EventStatusDraft, EventStatusPublished, EventStatusCompleted, EventStatusCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
+// ValidAssignableRole reports whether r is a role an account may hold or be
+// switched to at registration / by an admin. The guest role is never persisted.
+func ValidAssignableRole(r UserRole) bool {
+	switch r {
+	case UserRoleAttendee, UserRoleOrganizer:
+		return true
+	default:
+		return false
+	}
+}
 
 // BookingStatus represents the booking lifecycle stored in bookings.status.
 type BookingStatus string
@@ -44,4 +66,3 @@ const (
 	BookingStatusConfirmed BookingStatus = "confirmed"
 	BookingStatusCancelled BookingStatus = "cancelled"
 )
-

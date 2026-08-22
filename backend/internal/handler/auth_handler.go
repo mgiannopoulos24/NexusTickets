@@ -5,6 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"nexustickets/internal/domain"
 	"nexustickets/internal/dto"
 	"nexustickets/internal/service"
 	"nexustickets/pkg/response"
@@ -38,7 +39,10 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		Address:         req.Address,
 		City:            req.City,
 		Country:         req.Country,
+		Latitude:        req.Latitude,
+		Longitude:       req.Longitude,
 		VATNumber:       req.VATNumber,
+		Role:            registrationRole(req.Role),
 	})
 	if err != nil {
 		return err
@@ -48,6 +52,7 @@ func (h *AuthHandler) Register(c *fiber.Ctx) error {
 		"id":             user.ID,
 		"username":       user.Username,
 		"email":          user.Email,
+		"role":           user.Role,
 		"account_status": user.AccountStatus,
 	})
 }
@@ -120,6 +125,20 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 		return err
 	}
 	return response.OK(c, fiber.Map{"message": "logged out"})
+}
+
+// registrationRole maps the optional request field to a domain role. An empty
+// or absent value means attendee; anything invalid is passed through so the
+// service can reject it with ErrInvalidRole.
+func registrationRole(raw *string) domain.UserRole {
+	if raw == nil {
+		return domain.UserRoleAttendee
+	}
+	v := strings.ToLower(strings.TrimSpace(*raw))
+	if v == "" {
+		return domain.UserRoleAttendee
+	}
+	return domain.UserRole(v)
 }
 
 func validateRegisterRequest(req dto.RegisterRequest) error {

@@ -1,19 +1,18 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Building2, Calendar, Clock, ExternalLink, MapPin, Sofa, Ticket, Car } from 'lucide-react';
 
 import { EventMapEmbed } from '@/components/events/EventMapEmbed';
 import { BookingForm } from '@/components/bookings/BookingForm';
 import { Button } from '@/components/ui/button';
+import { ErrorMessage } from '@/components/shared/ErrorMessage';
+import { SkeletonList } from '@/components/shared/SkeletonList';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { eventTypeLabel } from '@/constants/eventTypes';
+import { apiErrorMessage } from '@/app/apiEnvelope';
+import { useGetEventQuery } from '@/app/eventsApi';
 import { useAuth } from '@/hooks/useAuth';
-import type { Event } from '@/types/models';
 import { emptyEventDetail, normalizeEventDetail } from '@/types/eventDetail';
-
-type ApiEnvelope<T> = {
-  data: T | null;
-  error?: { code: string; message: string } | null;
-};
 
 function isUUID(raw: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw);
@@ -54,56 +53,24 @@ function triLabel(v: boolean | null, yes: string, no: string): string {
 
 export default function EventDetailPage() {
   const { id } = useParams();
-  const { user, accessToken } = useAuth();
-  const [event, setEvent] = useState<Event | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
   const eventId = id ?? '';
+  const validId = !!eventId && isUUID(eventId);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!eventId || !isUUID(eventId)) {
-      setError('Μη έγκυρο αναγνωριστικό εκδήλωσης');
-      setLoading(false);
-      return;
-    }
+  const {
+    data: event,
+    isLoading,
+    error: queryError,
+    refetch,
+  } = useGetEventQuery(eventId, { skip: !validId });
 
-    setLoading(true);
-    setError(null);
-
-    const headers: HeadersInit = {};
-    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-
-    void fetch(`/api/v1/events/${encodeURIComponent(eventId)}`, { headers })
-      .then(async (res) => {
-        const json = (await res.json()) as ApiEnvelope<Event>;
-        if (!res.ok || json.error) throw new Error(json.error?.message ?? 'Σφάλμα φόρτωσης');
-        const ev = json.data;
-        if (!ev) throw new Error('Άκυρη απάντηση');
-        if (!cancelled) {
-          if (ev.status !== 'published') {
-            setError('Η εκδήλωση δεν είναι δημοσιευμένη.');
-            setEvent(null);
-          } else {
-            setEvent({
-              ...ev,
-              event_detail: normalizeEventDetail(ev.event_detail),
-            });
-          }
-        }
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Σφάλμα');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [eventId, accessToken]);
+  const loading = validId && isLoading;
+  const error = !validId
+    ? 'Μη έγκυρο αναγνωριστικό εκδήλωσης'
+    : queryError
+      ? apiErrorMessage(queryError, 'Δεν ήταν δυνατή η φόρτωση της εκδήλωσης.')
+      : null;
 
   const detail = useMemo(
     () => (event ? normalizeEventDetail(event.event_detail) : emptyEventDetail()),
@@ -115,10 +82,35 @@ export default function EventDetailPage() {
     return event.ticket_types.every((t) => t.available <= 0);
   }, [event]);
 
+  // An event that has already finished cannot be booked even if the completion
+  // sweeper has not run yet, which mirrors the server-side rule. The clock is
+  // read once per mount rather than during every render, so the component stays
+  // a pure function of its inputs.
+  const [now] = useState(() => Date.now());
+  const hasEnded = useMemo(() => {
+    if (!event?.end_at) return false;
+    const end = new Date(event.end_at);
+    return !Number.isNaN(end.getTime()) && end.getTime() < now;
+  }, [event, now]);
+
   const canBook =
-    user &&
+    !!user &&
     (user.role === 'attendee' || user.role === 'admin' || user.role === 'organizer') &&
-    event?.status === 'published';
+    event?.status === 'published' &&
+    !hasEnded;
+
+  // A single explanation for why the booking form is not shown, so a visitor is
+  // never left staring at a ticket list with no call to action.
+  const bookingBlockedReason = useMemo(() => {
+    if (!event) return '';
+    if (event.status === 'cancelled') return 'Η εκδήλωση έχει ακυρωθεί — δεν γίνονται κρατήσεις.';
+    if (event.status === 'completed' || hasEnded) return 'Η εκδήλωση έχει ολοκληρωθεί.';
+    if (event.status !== 'published') return 'Η εκδήλωση δεν είναι ακόμη δημοσιευμένη.';
+    if (event.ticket_types.length === 0) return 'Δεν υπάρχουν διαθέσιμοι τύποι εισιτηρίων.';
+    if (soldOut) return 'Τα εισιτήρια εξαντλήθηκαν.';
+    if (!user) return 'Συνδεθείτε για να κάνετε κράτηση.';
+    return 'Δεν είναι δυνατή η κράτηση αυτή τη στιγμή.';
+  }, [event, hasEnded, soldOut, user]);
 
   const locationLine = useMemo(() => {
     if (!event) return '';
@@ -135,7 +127,7 @@ export default function EventDetailPage() {
   if (loading) {
     return (
       <div className="mx-auto max-w-[1100px] px-4 py-12 sm:px-6">
-        <p className="text-sm text-neutral-600 comfortaa-regular">Φόρτωση…</p>
+        <SkeletonList rows={6} />
       </div>
     );
   }
@@ -143,12 +135,13 @@ export default function EventDetailPage() {
   if (error || !event) {
     return (
       <div className="mx-auto max-w-[1100px] px-4 py-12 sm:px-6">
-        <p className="text-sm text-[var(--nexus-red)] comfortaa-regular">
-          {error ?? 'Δεν βρέθηκε η εκδήλωση.'}
-        </p>
+        <ErrorMessage
+          message={error ?? 'Δεν βρέθηκε η εκδήλωση.'}
+          onRetry={validId ? () => void refetch() : undefined}
+        />
         <Link
           to="/events"
-          className="mt-4 inline-block text-sm text-[#6d28d9] hover:underline comfortaa-regular"
+          className="comfortaa-regular mt-4 inline-block text-sm text-[#6d28d9] hover:underline"
         >
           ← Επιστροφή στις εκδηλώσεις
         </Link>
@@ -166,10 +159,50 @@ export default function EventDetailPage() {
 
   return (
     <div className="min-h-screen bg-white">
+      {event.status === 'cancelled' && (
+        <div
+          role="status"
+          className="border-b border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-900 comfortaa-regular"
+        >
+          Η εκδήλωση έχει ακυρωθεί από τον διοργανωτή. Δεν γίνονται νέες κρατήσεις.
+        </div>
+      )}
+      {(event.status === 'completed' || (event.status === 'published' && hasEnded)) && (
+        <div
+          role="status"
+          className="border-b border-neutral-200 bg-neutral-100 px-4 py-3 text-center text-sm text-neutral-700 comfortaa-regular"
+        >
+          Η εκδήλωση έχει ολοκληρωθεί.
+        </div>
+      )}
+      {event.status === 'draft' && (
+        <div
+          role="status"
+          className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900 comfortaa-regular"
+        >
+          Πρόχειρη εκδήλωση — ορατή μόνο σε εσάς μέχρι τη δημοσίευση.
+        </div>
+      )}
+
       <div className="border-b border-neutral-200 bg-neutral-50/80">
         <div className="mx-auto flex max-w-[1100px] flex-col gap-6 px-4 py-8 sm:px-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-bold tracking-tight text-neutral-950 sm:text-3xl comfortaa-bold">
+            <div className="flex flex-wrap items-center gap-2">
+              {event.event_type && (
+                <span className="rounded-full bg-[#6d28d9]/10 px-3 py-1 text-xs font-medium text-[#6d28d9] comfortaa-regular">
+                  {eventTypeLabel(event.event_type)}
+                </span>
+              )}
+              {event.categories.map((c) => (
+                <span
+                  key={c}
+                  className="rounded-full bg-neutral-200/70 px-3 py-1 text-xs text-neutral-700 comfortaa-regular"
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
+            <h1 className="mt-3 text-2xl font-bold tracking-tight text-neutral-950 sm:text-3xl comfortaa-bold">
               {event.title}
             </h1>
             <div className="mt-3 flex flex-col gap-2 text-sm text-neutral-700 comfortaa-regular">
@@ -469,11 +502,37 @@ export default function EventDetailPage() {
           </TabsContent>
         </Tabs>
 
+        {event.photos.length > 0 && (
+          <section className="mt-12">
+            <h2 className="text-lg font-semibold text-neutral-950 comfortaa-bold">
+              Φωτογραφίες
+            </h2>
+            <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {event.photos.map((photo, i) => (
+                <li key={photo.id} className="overflow-hidden rounded-xl border border-neutral-200">
+                  <img
+                    src={photo.url}
+                    alt={`${event.title} — φωτογραφία ${i + 1}`}
+                    loading="lazy"
+                    className="aspect-4/3 w-full object-cover transition-transform duration-300 hover:scale-105"
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         <section
           id="tickets"
           className="mt-12 scroll-mt-24 rounded-2xl border border-neutral-200 bg-neutral-50/50 p-6"
         >
-          <h2 className="text-lg font-semibold text-neutral-950 comfortaa-bold">Εισιτήρια</h2>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-lg font-semibold text-neutral-950 comfortaa-bold">Εισιτήρια</h2>
+            <p className="text-xs text-neutral-600 comfortaa-regular">
+              Χωρητικότητα {event.capacity} · Κρατήσεις {event.tickets_sold} · Διαθέσιμα{' '}
+              {event.tickets_remaining}
+            </p>
+          </div>
           {event.ticket_types.length === 0 ? (
             <p className="mt-2 text-sm text-neutral-600 comfortaa-regular">
               Δεν υπάρχουν διαθέσιμοι τύποι εισιτηρίων.
@@ -498,10 +557,14 @@ export default function EventDetailPage() {
               ))}
             </ul>
           )}
-          {canBook && !soldOut && event.ticket_types.length > 0 && (
+          {canBook && !soldOut && event.ticket_types.length > 0 ? (
             <div className="mt-6">
               <BookingForm event={event} />
             </div>
+          ) : (
+            <p className="mt-6 rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 comfortaa-regular">
+              {bookingBlockedReason}
+            </p>
           )}
         </section>
 

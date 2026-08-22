@@ -43,6 +43,7 @@ type EventModel struct {
 	Title            string  `gorm:"not null;size:255"`
 	Description      string  `gorm:"not null"`
 	Venue            string  `gorm:"not null;size:255"`
+	EventType        string  `gorm:"not null;size:128;default:'';column:event_type;index"`
 	FeaturedImageURL *string `gorm:"column:featured_image_url"`
 	EventDetail      []byte  `gorm:"column:event_detail;type:jsonb"`
 

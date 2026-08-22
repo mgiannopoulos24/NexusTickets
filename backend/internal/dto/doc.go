@@ -2,4 +2,3 @@
 //
 // DTOs should not be domain entities and should be safe to serialize.
 package dto
-

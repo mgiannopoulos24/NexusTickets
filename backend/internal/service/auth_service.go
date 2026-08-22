@@ -41,7 +41,13 @@ type RegisterInput struct {
 	Address         *string
 	City            *string
 	Country         *string
+	Latitude        *float64
+	Longitude       *float64
 	VATNumber       *string
+	// Role is the role the account is created with. Only attendee and
+	// organizer are accepted (assignment §Introduction: whoever registers
+	// chooses to organize events or to attend them). Empty means attendee.
+	Role domain.UserRole
 }
 
 type LoginResult struct {
@@ -69,10 +75,30 @@ func NewAuthService(users repo.UserRepository, redis *redisv9.Client, jwtSecret 
 
 func (s *AuthService) Register(ctx context.Context, in RegisterInput) (domain.User, error) {
 	if strings.TrimSpace(in.Password) == "" || strings.TrimSpace(in.ConfirmPassword) == "" {
-		return domain.User{}, fmt.Errorf("password and confirm password are required")
+		return domain.User{}, domain.Invalid("password and confirm password are required")
 	}
 	if in.Password != in.ConfirmPassword {
-		return domain.User{}, fmt.Errorf("password and confirm password must match")
+		return domain.User{}, domain.Invalid("password and confirm password must match")
+	}
+	if err := ValidatePassword(in.Password); err != nil {
+		return domain.User{}, err
+	}
+	if !ValidEmail(in.Email) {
+		return domain.User{}, domain.Invalid("email address is not valid")
+	}
+	if in.Phone != nil && strings.TrimSpace(*in.Phone) != "" && !ValidPhone(*in.Phone) {
+		return domain.User{}, domain.Invalid("phone number is not valid")
+	}
+	if in.VATNumber != nil && strings.TrimSpace(*in.VATNumber) != "" && !ValidVATNumber(*in.VATNumber) {
+		return domain.User{}, domain.Invalid("VAT number must be 9 digits")
+	}
+
+	role := in.Role
+	if role == "" {
+		role = domain.UserRoleAttendee
+	}
+	if !domain.ValidAssignableRole(role) {
+		return domain.User{}, domain.ErrInvalidRole
 	}
 
 	if _, err := s.users.GetByUsername(ctx, in.Username); err == nil {
@@ -101,8 +127,10 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (domain.Us
 		Address:       in.Address,
 		City:          in.City,
 		Country:       in.Country,
+		Latitude:      in.Latitude,
+		Longitude:     in.Longitude,
 		VATNumber:     in.VATNumber,
-		Role:          domain.UserRoleAttendee,
+		Role:          role,
 		AccountStatus: domain.AccountStatusPending,
 	})
 	if err != nil {
@@ -115,7 +143,7 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (domain.Us
 func (s *AuthService) IsUsernameAvailable(ctx context.Context, username string) (bool, error) {
 	u := strings.TrimSpace(username)
 	if u == "" {
-		return false, fmt.Errorf("username is required")
+		return false, domain.Invalid("username is required")
 	}
 	if _, err := s.users.GetByUsername(ctx, u); err == nil {
 		return false, nil
@@ -162,11 +190,30 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (Lo
 		return LoginResult{}, domain.ErrUnauthorized
 	}
 
+	// Re-read the account rather than trusting the old claims: an admin may have
+	// rejected the user or changed their role since the token was minted.
+	userID, err := uuid.Parse(claims.Subject)
+	if err != nil {
+		return LoginResult{}, domain.ErrUnauthorized
+	}
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return LoginResult{}, domain.ErrUnauthorized
+		}
+		return LoginResult{}, err
+	}
+	if user.AccountStatus != domain.AccountStatusApproved {
+		// Burn the token so a rejected account cannot keep rotating it.
+		_ = s.redis.Del(ctx, refreshKey(claims.ID)).Err()
+		return LoginResult{}, domain.ErrForbidden
+	}
+
 	if err := s.redis.Del(ctx, refreshKey(claims.ID)).Err(); err != nil {
 		return LoginResult{}, fmt.Errorf("delete old refresh jti: %w", err)
 	}
 
-	return s.issueTokenPair(ctx, claims.Subject, claims.Role)
+	return s.issueTokenPair(ctx, user.ID.String(), string(user.Role))
 }
 
 func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {

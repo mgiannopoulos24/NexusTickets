@@ -29,4 +29,3 @@ func (h *CategoryHandler) ListAll(c *fiber.Ctx) error {
 	}
 	return response.OK(c, out)
 }
-

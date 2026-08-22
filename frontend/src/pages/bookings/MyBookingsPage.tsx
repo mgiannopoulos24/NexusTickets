@@ -1,119 +1,115 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
-import type { Booking } from '@/types/models';
-import { cn } from '@/lib/utils';
 
-type ApiEnvelope<T> = { data: T | null; error?: { code: string; message: string } | null; meta?: unknown };
+import { apiErrorMessage } from '@/app/apiEnvelope';
+import { useGetMyBookingsQuery } from '@/app/bookingsApi';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { ErrorMessage } from '@/components/shared/ErrorMessage';
+import { SkeletonList } from '@/components/shared/SkeletonList';
+import { cn } from '@/lib/utils';
+import type { BookingStatus } from '@/types/enums';
+
+const STATUS_LABEL: Record<BookingStatus, string> = {
+  confirmed: 'Επιβεβαιωμένη',
+  pending: 'Εκκρεμής',
+  cancelled: 'Ακυρωμένη',
+};
+
+const STATUS_COLOR: Record<BookingStatus, string> = {
+  confirmed: 'text-emerald-700',
+  pending: 'text-amber-700',
+  cancelled: 'text-red-700',
+};
+
+function formatDate(value: string | undefined): string {
+  if (!value) return '';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('el-GR');
+}
 
 export default function MyBookingsPage() {
-  const { accessToken } = useAuth();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!accessToken) {
-      setError('missing bearer token');
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-
-    fetch('/api/v1/bookings/me?limit=50&offset=0', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-      .then(async (res) => {
-        const json = (await res.json()) as ApiEnvelope<Booking[]>;
-        if (!res.ok || json.error) throw new Error(json.error?.message ?? 'Σφάλμα φόρτωσης');
-        if (!cancelled) setBookings(json.data ?? []);
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Σφάλμα');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accessToken]);
-
-  const statusLabel = (s: string | undefined): string => {
-    if (s === 'confirmed') return 'Επιβεβαιωμένη';
-    if (s === 'pending') return 'Εκκρεμής';
-    if (s === 'cancelled') return 'Ακυρωμένη';
-    return s ?? '—';
-  };
-
-  const statusColor = (s: string | undefined): string => {
-    if (s === 'confirmed') return 'text-emerald-700';
-    if (s === 'pending') return 'text-amber-700';
-    if (s === 'cancelled') return 'text-red-700';
-    return 'text-neutral-700';
-  };
+  const { data: bookings, isLoading, error, refetch } = useGetMyBookingsQuery();
 
   return (
     <div className="min-h-screen bg-neutral-50 py-8">
       <div className="mx-auto max-w-4xl px-4">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-neutral-900 comfortaa-bold">Οι κρατήσεις μου</h1>
-          <p className="mt-1 text-sm text-neutral-600 comfortaa-regular">
+          <h1 className="comfortaa-bold text-2xl font-bold text-neutral-900">Οι κρατήσεις μου</h1>
+          <p className="comfortaa-regular mt-1 text-sm text-neutral-600">
             Όλες οι κρατήσεις εισιτηρίων που έχετε πραγματοποιήσει.
           </p>
         </div>
 
-        {loading ? (
-          <p className="text-sm text-neutral-600 comfortaa-regular">Φόρτωση…</p>
+        {isLoading ? (
+          <SkeletonList rows={4} />
         ) : error ? (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--nexus-red)]">{error}</p>
+          <ErrorMessage
+            message={apiErrorMessage(error, 'Δεν ήταν δυνατή η φόρτωση των κρατήσεων.')}
+            onRetry={() => void refetch()}
+          />
+        ) : (bookings ?? []).length === 0 ? (
+          <EmptyState
+            title="Δεν έχετε κρατήσεις ακόμα"
+            description="Μόλις κάνετε την πρώτη σας κράτηση, θα εμφανιστεί εδώ."
+          >
+            <Link
+              to="/events"
+              className="comfortaa-regular inline-block rounded-lg bg-[#6d28d9] px-4 py-2 text-sm text-white hover:bg-violet-700"
+            >
+              Αναζητήστε εκδηλώσεις
+            </Link>
+          </EmptyState>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
-            <div className="grid grid-cols-[1fr_100px_100px_120px] gap-0 bg-neutral-50 px-4 py-3 text-xs font-semibold text-neutral-600 comfortaa-regular">
+          <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
+            <div className="comfortaa-regular grid min-w-[36rem] grid-cols-[1fr_110px_110px_120px] bg-neutral-50 px-4 py-3 text-xs font-semibold text-neutral-600">
               <div>Εκδήλωση</div>
               <div>Εισιτήρια</div>
               <div>Κατάσταση</div>
               <div>Σύνολο</div>
             </div>
-            <ul className="divide-y divide-neutral-200">
-              {bookings.map((b) => (
+            <ul className="min-w-[36rem] divide-y divide-neutral-200">
+              {(bookings ?? []).map((b) => (
                 <li key={b.id} className="px-4 py-3">
                   <Link
                     to={`/events/${encodeURIComponent(b.event_id)}`}
-                    className="grid grid-cols-[1fr_100px_100px_120px] items-center gap-0 hover:text-[#6d28d9]"
+                    className="grid grid-cols-[1fr_110px_110px_120px] items-center hover:text-[#6d28d9]"
                   >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-neutral-900 comfortaa-regular">
-                        {b.event?.title ?? b.event_id}
+                    <div className="min-w-0 pr-3">
+                      <p className="comfortaa-regular truncate text-sm font-medium text-neutral-900">
+                        {b.event?.title ?? 'Εκδήλωση'}
                       </p>
-                      <p className="truncate text-xs text-neutral-500 comfortaa-regular">
-                        {b.event?.venue}, {b.event?.city}
+                      <p className="comfortaa-regular truncate text-xs text-neutral-500">
+                        {[b.event?.venue, b.event?.city].filter(Boolean).join(', ')}
+                        {b.event?.start_at ? ` • ${formatDate(b.event.start_at)}` : ''}
                       </p>
+                      {b.event?.status === 'cancelled' && (
+                        <p className="comfortaa-regular mt-0.5 text-xs font-medium text-[var(--nexus-red)]">
+                          Η εκδήλωση ακυρώθηκε
+                        </p>
+                      )}
                     </div>
-                    <div className="text-xs text-neutral-700 comfortaa-regular">
-                      {b.number_of_tickets}
+                    <div className="comfortaa-regular text-xs text-neutral-700">
+                      {b.quantity}
+                      {b.ticket_type?.name ? (
+                        <span className="block text-[11px] text-neutral-500">
+                          {b.ticket_type.name}
+                        </span>
+                      ) : null}
                     </div>
-                    <div className={cn('text-xs font-medium comfortaa-regular', statusColor(b.status))}>
-                      {statusLabel(b.status)}
+                    <div
+                      className={cn(
+                        'comfortaa-regular text-xs font-medium',
+                        STATUS_COLOR[b.status] ?? 'text-neutral-700',
+                      )}
+                    >
+                      {STATUS_LABEL[b.status] ?? b.status}
                     </div>
-                    <div className="text-sm font-medium text-[#6d28d9] comfortaa-regular">
+                    <div className="comfortaa-regular text-sm font-medium text-[#6d28d9]">
                       {b.total_cost.toFixed(2)} €
                     </div>
                   </Link>
                 </li>
               ))}
             </ul>
-            {bookings.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-neutral-600 comfortaa-regular">
-                Δεν έχετε κρατήσεις ακόμα.{' '}
-                <Link to="/events" className="text-[#6d28d9] underline">
-                  Αναζητήστε εκδηλώσεις
-                </Link>
-              </p>
-            ) : null}
           </div>
         )}
       </div>

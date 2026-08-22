@@ -42,6 +42,10 @@ type Recommender interface {
 }
 
 type TicketTypeInput struct {
+	// ID identifies an existing ticket type to update in place. Nil means
+	// "create a new one". Matching by ID is what lets an organizer edit a
+	// published event without destroying the rows its bookings point at.
+	ID       *uuid.UUID
 	Name     string
 	Price    float64
 	Quantity int
@@ -51,6 +55,7 @@ type CreateEventInput struct {
 	Title            string
 	Description      string
 	Venue            string
+	EventType        string
 	FeaturedImageURL *string
 	Address          *string
 	City             string
@@ -69,6 +74,7 @@ type UpdateEventInput struct {
 	Title            *string
 	Description      *string
 	Venue            *string
+	EventType        *string
 	FeaturedImageURL *string
 	Address          *string
 	City             *string
@@ -101,6 +107,7 @@ type AdminUpdateEventInput struct {
 	Title            *string
 	Description      *string
 	Venue            *string
+	EventType        *string
 	Address          *string
 	City             *string
 	Country          *string
@@ -149,6 +156,19 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, in Cre
 		return domain.Event{}, nil, err
 	}
 
+	// The export DTD requires Category+ and TicketType+ (one or more of each),
+	// so an event that satisfies neither could never be exported validly.
+	cats, err := s.resolveCategories(ctx, in.Categories)
+	if err != nil {
+		return domain.Event{}, nil, err
+	}
+	if len(cats) == 0 {
+		return domain.Event{}, nil, domain.ErrEventNeedsCategory
+	}
+	if len(in.TicketTypes) == 0 {
+		return domain.Event{}, nil, domain.ErrEventNeedsTicketType
+	}
+
 	detail := domain.EventDetail{}
 	if in.EventDetail != nil {
 		detail = *in.EventDetail
@@ -159,6 +179,7 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, in Cre
 		Title:            strings.TrimSpace(in.Title),
 		Description:      strings.TrimSpace(in.Description),
 		Venue:            strings.TrimSpace(in.Venue),
+		EventType:        strings.TrimSpace(in.EventType),
 		FeaturedImageURL: in.FeaturedImageURL,
 		Detail:           detail,
 		Address:          in.Address,
@@ -176,11 +197,6 @@ func (s *EventService) Create(ctx context.Context, organizerID uuid.UUID, in Cre
 	}
 
 	if err := s.events.SetTicketTypes(ctx, created.ID, toTicketTypes(created.ID, in.TicketTypes)); err != nil {
-		return domain.Event{}, nil, err
-	}
-
-	cats, err := s.resolveCategories(ctx, in.Categories)
-	if err != nil {
 		return domain.Event{}, nil, err
 	}
 	if err := s.events.SetCategories(ctx, created.ID, categoryIDs(cats)); err != nil {
@@ -203,8 +219,40 @@ func (s *EventService) Get(ctx context.Context, eventID uuid.UUID) (domain.Event
 	if err != nil {
 		return domain.Event{}, nil, err
 	}
+	photos, err := s.events.GetPhotos(ctx, eventID)
+	if err != nil {
+		return domain.Event{}, nil, err
+	}
 	event.TicketTypes = ticketTypes
+	event.Photos = photos
 	return event, cats, nil
+}
+
+// GetForViewer is Get with visibility rules applied: an event that is not
+// published is only readable by its organizer or an administrator. Without
+// this, a DRAFT event leaked to anyone who knew (or guessed) its id.
+func (s *EventService) GetForViewer(
+	ctx context.Context,
+	eventID uuid.UUID,
+	viewerID uuid.UUID,
+	viewerRole domain.UserRole,
+) (domain.Event, []domain.Category, error) {
+	event, cats, err := s.Get(ctx, eventID)
+	if err != nil {
+		return domain.Event{}, nil, err
+	}
+
+	switch event.Status {
+	case domain.EventStatusPublished, domain.EventStatusCompleted, domain.EventStatusCancelled:
+		// Publicly visible: a cancelled or finished event still needs a detail
+		// page for the people who booked it.
+		return event, cats, nil
+	default:
+		if viewerRole == domain.UserRoleAdmin || (viewerID != uuid.Nil && event.OrganizerID == viewerID) {
+			return event, cats, nil
+		}
+		return domain.Event{}, nil, domain.ErrNotFound
+	}
 }
 
 func (s *EventService) List(ctx context.Context, limit, offset int) ([]domain.Event, [][]domain.Category, error) {
@@ -373,9 +421,17 @@ func (s *EventService) Update(ctx context.Context, organizerID, eventID uuid.UUI
 	if event.OrganizerID != organizerID {
 		return domain.Event{}, nil, domain.ErrForbidden
 	}
+	// A cancelled or finished event is a historical record: the people holding
+	// tickets for it must keep seeing what they actually booked.
+	if event.Status == domain.EventStatusCancelled || event.Status == domain.EventStatusCompleted {
+		return domain.Event{}, nil, domain.ErrEventLocked
+	}
 
 	if in.Title != nil {
 		event.Title = strings.TrimSpace(*in.Title)
+	}
+	if in.EventType != nil {
+		event.EventType = strings.TrimSpace(*in.EventType)
 	}
 	if in.Description != nil {
 		event.Description = strings.TrimSpace(*in.Description)
@@ -417,31 +473,28 @@ func (s *EventService) Update(ctx context.Context, organizerID, eventID uuid.UUI
 		return domain.Event{}, nil, domain.ErrInvalidEventState
 	}
 
-	var ticketTypes []domain.TicketType
+	existingTicketTypes, err := s.events.GetTicketTypes(ctx, eventID)
+	if err != nil {
+		return domain.Event{}, nil, err
+	}
+
 	if in.TicketTypes != nil {
-		if err := validateTicketCapacity(event.Capacity, *in.TicketTypes); err != nil {
+		merged, mergeErr := s.mergeTicketTypes(ctx, eventID, existingTicketTypes, *in.TicketTypes)
+		if mergeErr != nil {
+			return domain.Event{}, nil, mergeErr
+		}
+		if len(merged) == 0 {
+			return domain.Event{}, nil, domain.ErrEventNeedsTicketType
+		}
+		if err := validateTicketTypeCapacity(event.Capacity, merged); err != nil {
 			return domain.Event{}, nil, err
 		}
-		ticketTypes = toTicketTypes(eventID, *in.TicketTypes)
-		if err := s.events.SetTicketTypes(ctx, eventID, ticketTypes); err != nil {
+		if err := s.events.SetTicketTypes(ctx, eventID, merged); err != nil {
 			return domain.Event{}, nil, err
 		}
-	} else {
-		existingTicketTypes, getErr := s.events.GetTicketTypes(ctx, eventID)
-		if getErr != nil {
-			return domain.Event{}, nil, getErr
-		}
-		existingInput := make([]TicketTypeInput, 0, len(existingTicketTypes))
-		for _, tt := range existingTicketTypes {
-			existingInput = append(existingInput, TicketTypeInput{
-				Name:     tt.Name,
-				Price:    tt.Price,
-				Quantity: tt.Quantity,
-			})
-		}
-		if err := validateTicketCapacity(event.Capacity, existingInput); err != nil {
-			return domain.Event{}, nil, err
-		}
+	} else if err := validateTicketTypeCapacity(event.Capacity, existingTicketTypes); err != nil {
+		// Capacity may have been lowered; the existing allocation must still fit.
+		return domain.Event{}, nil, err
 	}
 
 	if _, err := s.events.Update(ctx, event); err != nil {
@@ -459,6 +512,87 @@ func (s *EventService) Update(ctx context.Context, organizerID, eventID uuid.UUI
 	}
 
 	return s.Get(ctx, eventID)
+}
+
+// mergeTicketTypes reconciles the caller's desired ticket types against what is
+// already stored, preserving seats that have been sold.
+//
+// Each stored row carries `sold = Quantity - Available`. An incoming entry that
+// names an existing row by ID keeps that row's identity (so bookings continue to
+// reference it) and gets `Available = Quantity - sold`; its Quantity may not drop
+// below what has already been sold. An entry with no ID is a new row. A stored
+// row the caller omitted is removed, but only if nothing has booked it — the FK
+// from bookings is ON DELETE RESTRICT, so removing a booked row would otherwise
+// fail as an opaque 500 at the database.
+func (s *EventService) mergeTicketTypes(
+	ctx context.Context,
+	eventID uuid.UUID,
+	existing []domain.TicketType,
+	desired []TicketTypeInput,
+) ([]domain.TicketType, error) {
+	byID := make(map[uuid.UUID]domain.TicketType, len(existing))
+	for _, tt := range existing {
+		byID[tt.ID] = tt
+	}
+
+	out := make([]domain.TicketType, 0, len(desired))
+	kept := make(map[uuid.UUID]struct{}, len(desired))
+
+	for _, in := range desired {
+		if strings.TrimSpace(in.Name) == "" || in.Price < 0 || in.Quantity < 0 {
+			return nil, domain.ErrInvalidEventState
+		}
+
+		if in.ID == nil {
+			out = append(out, domain.TicketType{
+				EventID:   eventID,
+				Name:      strings.TrimSpace(in.Name),
+				Price:     in.Price,
+				Quantity:  in.Quantity,
+				Available: in.Quantity,
+			})
+			continue
+		}
+
+		prev, ok := byID[*in.ID]
+		if !ok {
+			return nil, domain.ErrNotFound
+		}
+		sold := prev.Quantity - prev.Available
+		if sold < 0 {
+			sold = 0
+		}
+		if in.Quantity < sold {
+			// Would leave fewer seats than have already been sold.
+			return nil, domain.ErrCapacityExceeded
+		}
+
+		kept[prev.ID] = struct{}{}
+		out = append(out, domain.TicketType{
+			ID:        prev.ID,
+			EventID:   eventID,
+			Name:      strings.TrimSpace(in.Name),
+			Price:     in.Price,
+			Quantity:  in.Quantity,
+			Available: in.Quantity - sold,
+			CreatedAt: prev.CreatedAt,
+		})
+	}
+
+	for _, prev := range existing {
+		if _, ok := kept[prev.ID]; ok {
+			continue
+		}
+		count, err := s.bookings.CountByTicketType(ctx, prev.ID)
+		if err != nil {
+			return nil, err
+		}
+		if count > 0 {
+			return nil, domain.ErrTicketTypeLocked
+		}
+	}
+
+	return out, nil
 }
 
 func (s *EventService) AdminList(ctx context.Context, limit, offset int) ([]domain.Event, [][]domain.Category, error) {
@@ -488,6 +622,9 @@ func (s *EventService) AdminUpdate(ctx context.Context, eventID uuid.UUID, in Ad
 	if in.Venue != nil {
 		event.Venue = strings.TrimSpace(*in.Venue)
 	}
+	if in.EventType != nil {
+		event.EventType = strings.TrimSpace(*in.EventType)
+	}
 	if in.FeaturedImageURL != nil {
 		event.FeaturedImageURL = in.FeaturedImageURL
 	}
@@ -510,12 +647,10 @@ func (s *EventService) AdminUpdate(ctx context.Context, eventID uuid.UUID, in Ad
 		event.Detail = *in.EventDetail
 	}
 	if in.Status != nil {
-		switch *in.Status {
-		case domain.EventStatusDraft, domain.EventStatusPublished, domain.EventStatusCancelled:
-			event.Status = *in.Status
-		default:
+		if !domain.ValidEventStatus(*in.Status) {
 			return domain.Event{}, nil, domain.ErrInvalidEventState
 		}
+		event.Status = *in.Status
 	}
 	if in.StartAt != nil {
 		event.StartAt = in.StartAt.UTC()
@@ -590,6 +725,22 @@ func (s *EventService) Publish(ctx context.Context, organizerID, eventID uuid.UU
 	if event.Status != domain.EventStatusDraft {
 		return domain.Event{}, nil, domain.ErrInvalidEventState
 	}
+
+	ticketTypes, err := s.events.GetTicketTypes(ctx, eventID)
+	if err != nil {
+		return domain.Event{}, nil, err
+	}
+	if len(ticketTypes) == 0 {
+		return domain.Event{}, nil, domain.ErrEventNeedsTicketType
+	}
+	cats, err := s.events.GetCategories(ctx, eventID)
+	if err != nil {
+		return domain.Event{}, nil, err
+	}
+	if len(cats) == 0 {
+		return domain.Event{}, nil, domain.ErrEventNeedsCategory
+	}
+
 	if err := s.events.SetStatus(ctx, eventID, domain.EventStatusPublished); err != nil {
 		return domain.Event{}, nil, err
 	}
@@ -623,6 +774,9 @@ func (s *EventService) AddTicketType(ctx context.Context, organizerID, eventID u
 	}
 	if event.OrganizerID != organizerID {
 		return domain.Event{}, nil, domain.ErrForbidden
+	}
+	if event.Status == domain.EventStatusCancelled || event.Status == domain.EventStatusCompleted {
+		return domain.Event{}, nil, domain.ErrEventLocked
 	}
 	if strings.TrimSpace(in.Name) == "" || in.Price < 0 || in.Quantity < 0 {
 		return domain.Event{}, nil, domain.ErrInvalidEventState
@@ -662,6 +816,9 @@ func (s *EventService) UpdateTicketType(ctx context.Context, organizerID, eventI
 	}
 	if event.OrganizerID != organizerID {
 		return domain.Event{}, nil, domain.ErrForbidden
+	}
+	if event.Status == domain.EventStatusCancelled || event.Status == domain.EventStatusCompleted {
+		return domain.Event{}, nil, domain.ErrEventLocked
 	}
 	if strings.TrimSpace(in.Name) == "" || in.Price < 0 || in.Quantity < 0 {
 		return domain.Event{}, nil, domain.ErrInvalidEventState
@@ -721,6 +878,9 @@ func (s *EventService) DeleteTicketType(ctx context.Context, organizerID, eventI
 	if event.OrganizerID != organizerID {
 		return domain.Event{}, nil, domain.ErrForbidden
 	}
+	if event.Status == domain.EventStatusCancelled || event.Status == domain.EventStatusCompleted {
+		return domain.Event{}, nil, domain.ErrEventLocked
+	}
 
 	bookingCount, err := s.bookings.CountByTicketType(ctx, ticketTypeID)
 	if err != nil {
@@ -746,6 +906,9 @@ func (s *EventService) DeleteTicketType(ctx context.Context, organizerID, eventI
 	}
 	if !found {
 		return domain.Event{}, nil, domain.ErrNotFound
+	}
+	if len(updated) == 0 {
+		return domain.Event{}, nil, domain.ErrEventNeedsTicketType
 	}
 	if err := s.events.SetTicketTypes(ctx, eventID, updated); err != nil {
 		return domain.Event{}, nil, err
@@ -912,20 +1075,46 @@ func extForImageMIME(mime string) string {
 }
 
 func (s *EventService) hydrateMany(ctx context.Context, events []domain.Event) ([]domain.Event, [][]domain.Category, error) {
+	if len(events) == 0 {
+		return events, [][]domain.Category{}, nil
+	}
+
+	ids := make([]uuid.UUID, len(events))
+	for i := range events {
+		ids[i] = events[i].ID
+	}
+
+	// Batched lookups: the per-event loop this replaces issued 2N queries.
+	ttByEvent, err := s.events.ListTicketTypesByEventIDs(ctx, ids)
+	if err != nil {
+		return nil, nil, err
+	}
+	catByEvent, err := s.events.ListCategoriesByEventIDs(ctx, ids)
+	if err != nil {
+		return nil, nil, err
+	}
+	photoByEvent, err := s.events.ListPhotosByEventIDs(ctx, ids)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	cats := make([][]domain.Category, 0, len(events))
 	for i := range events {
-		tts, err := s.events.GetTicketTypes(ctx, events[i].ID)
-		if err != nil {
-			return nil, nil, err
+		events[i].TicketTypes = ttByEvent[events[i].ID]
+		events[i].Photos = photoByEvent[events[i].ID]
+		eventCats := catByEvent[events[i].ID]
+		if eventCats == nil {
+			eventCats = []domain.Category{}
 		}
-		eventCats, err := s.events.GetCategories(ctx, events[i].ID)
-		if err != nil {
-			return nil, nil, err
-		}
-		events[i].TicketTypes = tts
 		cats = append(cats, eventCats)
 	}
 	return events, cats, nil
+}
+
+// SweepCompleted moves published events whose end time has passed into the
+// COMPLETED state (assignment §7). main runs it on a ticker.
+func (s *EventService) SweepCompleted(ctx context.Context) (int64, error) {
+	return s.events.MarkCompleted(ctx, time.Now().UTC())
 }
 
 func (s *EventService) resolveCategories(ctx context.Context, names []string) ([]domain.Category, error) {
@@ -962,7 +1151,7 @@ func validateCreateEvent(in CreateEventInput) error {
 		strings.TrimSpace(in.Description) == "" ||
 		strings.TrimSpace(in.Venue) == "" ||
 		strings.TrimSpace(in.City) == "" {
-		return fmt.Errorf("missing required event fields")
+		return domain.Invalid("missing required event fields")
 	}
 	if in.Capacity < 0 || in.EndAt.Before(in.StartAt) {
 		return domain.ErrInvalidEventState
@@ -971,6 +1160,23 @@ func validateCreateEvent(in CreateEventInput) error {
 }
 
 func validateTicketCapacity(capacity int, ticketTypes []TicketTypeInput) error {
+	sum := 0
+	for _, tt := range ticketTypes {
+		if strings.TrimSpace(tt.Name) == "" || tt.Price < 0 || tt.Quantity < 0 {
+			return domain.ErrInvalidEventState
+		}
+		sum += tt.Quantity
+	}
+	if sum > capacity {
+		return domain.ErrCapacityExceeded
+	}
+	return nil
+}
+
+// validateTicketTypeCapacity enforces the assignment's capacity rule against
+// already-materialised ticket types: the sum of all quantities may not exceed
+// the event's total capacity.
+func validateTicketTypeCapacity(capacity int, ticketTypes []domain.TicketType) error {
 	sum := 0
 	for _, tt := range ticketTypes {
 		if strings.TrimSpace(tt.Name) == "" || tt.Price < 0 || tt.Quantity < 0 {

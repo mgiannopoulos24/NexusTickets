@@ -20,4 +20,5 @@ func RegisterUserRoutes(router fiber.Router, userHandler *UserHandler, jwtSecret
 	admin.Get("/:id", userHandler.AdminGetUser)
 	admin.Patch("/:id/approve", userHandler.AdminApproveUser)
 	admin.Patch("/:id/reject", userHandler.AdminRejectUser)
+	admin.Patch("/:id/role", userHandler.AdminChangeUserRole)
 }

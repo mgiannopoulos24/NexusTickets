@@ -6,4 +6,3 @@ func RegisterCategoryRoutes(router fiber.Router, categoryHandler *CategoryHandle
 	categories := router.Group("/categories")
 	categories.Get("/", categoryHandler.ListAll)
 }
-

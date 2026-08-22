@@ -17,10 +17,40 @@ import (
 	"nexustickets/internal/handler"
 	"nexustickets/internal/middleware"
 	"nexustickets/internal/redis"
+	"nexustickets/internal/service"
 	"nexustickets/internal/wire"
 	"nexustickets/pkg/logger"
 	"nexustickets/pkg/response"
 )
+
+// completionSweepInterval is how often published events that have already
+// ended are moved to the COMPLETED state (assignment §7).
+const completionSweepInterval = 15 * time.Minute
+
+// runCompletionSweeper advances finished events to COMPLETED on a ticker.
+// Booking also checks the clock directly, so a stale status between sweeps
+// cannot let anyone book an event that has already ended.
+func runCompletionSweeper(events *service.EventService, log *zap.Logger) {
+	sweep := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		n, err := events.SweepCompleted(ctx)
+		if err != nil {
+			log.Error("completion sweep failed", zap.Error(err))
+			return
+		}
+		if n > 0 {
+			log.Info("events marked completed", zap.Int64("count", n))
+		}
+	}
+
+	sweep()
+	ticker := time.NewTicker(completionSweepInterval)
+	defer ticker.Stop()
+	for range ticker.C {
+		sweep()
+	}
+}
 
 func main() {
 	cfg, err := config.Load()
@@ -70,6 +100,7 @@ func main() {
 
 	go deps.Hub.Run()
 	go deps.RecommendationService.StartPeriodicRetraining()
+	go runCompletionSweeper(deps.EventService, log)
 
 	v1 := app.Group("/api/v1")
 	handler.RegisterAuthRoutes(v1, deps.AuthHandler, redisClient.Raw)

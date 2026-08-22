@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { useGetEventsQuery, useGetRecommendedQuery } from '@/app/eventsApi';
+import { useGetRecommendedQuery, useSearchEventsQuery } from '@/app/eventsApi';
 import { setFilter, setPage } from '@/app/eventsSlice';
 import EventCard from '@/components/events/EventCard';
 import {
@@ -11,13 +11,13 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-  PaginationEllipsis,
 } from '@/components/ui/pagination';
 import { Badge } from '@/components/ui/badge';
 import { Sparkles, Filter } from 'lucide-react';
-import { useLang } from '@/contexts/LangContext';
+import { useLang } from '@/contexts/langContext';
 import { SkeletonList } from '@/components/shared/SkeletonList';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { ErrorMessage } from '@/components/shared/ErrorMessage';
 import { useAuth } from '@/hooks/useAuth';
 import {
   Dialog,
@@ -37,39 +37,61 @@ export default function EventsIndexPage() {
   const { t } = useLang();
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
-  // Sync Redux state with URL on mount
+  // Hydrate the filter state from the URL once, so a shared search link
+  // reproduces the same results.
+  const hydratedRef = useRef(false);
   useEffect(() => {
-    const params = Object.fromEntries(searchParams.entries());
-    if (Object.keys(params).length > 0) {
-      Object.entries(params).forEach(([key, value]) => {
-        dispatch(setFilter({ key: key as any, value }));
-      });
-      if (params.page) dispatch(setPage(Number(params.page)));
-    }
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+
+    const get = (k: string) => searchParams.get(k) ?? undefined;
+    const num = (k: string) => {
+      const raw = searchParams.get(k);
+      if (raw === null) return undefined;
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : undefined;
+    };
+
+    dispatch(setFilter({ key: 'q', value: get('q') }));
+    dispatch(setFilter({ key: 'title', value: get('title') }));
+    dispatch(setFilter({ key: 'city', value: get('city') }));
+    dispatch(setFilter({ key: 'start_at', value: get('start_at') }));
+    dispatch(setFilter({ key: 'end_at', value: get('end_at') }));
+    dispatch(setFilter({ key: 'min_price', value: num('min_price') }));
+    dispatch(setFilter({ key: 'max_price', value: num('max_price') }));
+
+    const cats = get('category_ids');
+    dispatch(setFilter({ key: 'category_ids', value: cats ? cats.split(',') : undefined }));
+
+    const page = num('page');
+    if (page && page > 0) dispatch(setPage(page));
   }, [searchParams, dispatch]);
 
-  // Sync URL with Redux state
+  // Mirror the filter state back into the URL.
   useEffect(() => {
-    const params = { ...filters, page: currentPage, size: pageSize };
-    const cleanParams = Object.fromEntries(
-      Object.entries(params)
-        .filter(([_, v]) => v !== undefined && v !== '')
-        .map(([k, v]) => [k, String(v)]),
-    );
-    setSearchParams(cleanParams);
-  }, [filters, currentPage, pageSize, setSearchParams]);
+    const next = new URLSearchParams();
+    if (filters.q) next.set('q', filters.q);
+    if (filters.title) next.set('title', filters.title);
+    if (filters.city) next.set('city', filters.city);
+    if (filters.start_at) next.set('start_at', filters.start_at);
+    if (filters.end_at) next.set('end_at', filters.end_at);
+    if (filters.min_price !== undefined) next.set('min_price', String(filters.min_price));
+    if (filters.max_price !== undefined) next.set('max_price', String(filters.max_price));
+    if (filters.category_ids?.length) next.set('category_ids', filters.category_ids.join(','));
+    if (currentPage > 1) next.set('page', String(currentPage));
+    setSearchParams(next, { replace: true });
+  }, [filters, currentPage, setSearchParams]);
 
-  const { data, isLoading, isFetching } = useGetEventsQuery({
+  const { data, isLoading, isFetching, error, refetch } = useSearchEventsQuery({
     ...filters,
-    page: currentPage,
-    size: pageSize,
+    limit: pageSize,
+    offset: (currentPage - 1) * pageSize,
   });
 
-  const { data: recData, isLoading: recLoading } = useGetRecommendedQuery();
+  const { data: recommendedEvents, isLoading: recLoading } = useGetRecommendedQuery();
 
-  const eventsResponse = data?.data;
-  const meta = data?.meta;
-  const recommendedEvents = recData?.data;
+  const events = data?.events ?? [];
+  const hasMore = data?.meta.has_more ?? false;
 
   return (
     <div className="container mx-auto px-4 py-8 flex gap-8">
@@ -109,56 +131,41 @@ export default function EventsIndexPage() {
             )}
           </div>
 
-          {isLoading ? (
+          {error ? (
+            <ErrorMessage
+              message="Δεν ήταν δυνατή η φόρτωση των εκδηλώσεων."
+              onRetry={() => void refetch()}
+            />
+          ) : isLoading ? (
             <SkeletonList rows={pageSize} />
-          ) : eventsResponse && eventsResponse.length > 0 ? (
+          ) : events.length > 0 ? (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
-                {eventsResponse.map((event) => (
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                {events.map((event) => (
                   <EventCard key={event.id} event={event} />
                 ))}
               </div>
 
-              {meta && meta.total_pages > 1 && (
+              {/* The API reports whether another page exists rather than a
+                  total count, so paging is previous/next. */}
+              {(currentPage > 1 || hasMore) && (
                 <Pagination>
                   <PaginationContent>
                     <PaginationItem>
                       <PaginationPrevious
+                        aria-disabled={currentPage === 1}
+                        className={currentPage === 1 ? 'pointer-events-none opacity-50' : undefined}
                         onClick={() => dispatch(setPage(Math.max(1, currentPage - 1)))}
                       />
                     </PaginationItem>
-
                     <PaginationItem>
-                      <PaginationLink
-                        isActive={currentPage === 1}
-                        onClick={() => dispatch(setPage(1))}
-                      >
-                        1
-                      </PaginationLink>
+                      <PaginationLink isActive>{currentPage}</PaginationLink>
                     </PaginationItem>
-
-                    {meta.total_pages > 3 && currentPage > 3 && (
-                      <PaginationItem>
-                        <PaginationEllipsis />
-                      </PaginationItem>
-                    )}
-
-                    {meta.total_pages > 1 && (
-                      <PaginationItem>
-                        <PaginationLink
-                          isActive={currentPage === meta.total_pages}
-                          onClick={() => dispatch(setPage(meta.total_pages))}
-                        >
-                          {meta.total_pages}
-                        </PaginationLink>
-                      </PaginationItem>
-                    )}
-
                     <PaginationItem>
                       <PaginationNext
-                        onClick={() =>
-                          dispatch(setPage(Math.min(meta.total_pages, currentPage + 1)))
-                        }
+                        aria-disabled={!hasMore}
+                        className={!hasMore ? 'pointer-events-none opacity-50' : undefined}
+                        onClick={() => hasMore && dispatch(setPage(currentPage + 1))}
                       />
                     </PaginationItem>
                   </PaginationContent>
@@ -167,8 +174,8 @@ export default function EventsIndexPage() {
             </>
           ) : (
             <EmptyState
-              title={t('labels.events') || 'Εκδηλώσεις'}
-              description={t('emptyStates.noEvents')}
+              title="Καμία εκδήλωση"
+              description="Δεν βρέθηκαν εκδηλώσεις με αυτά τα κριτήρια. Δοκιμάστε να χαλαρώσετε τα φίλτρα."
             />
           )}
         </div>

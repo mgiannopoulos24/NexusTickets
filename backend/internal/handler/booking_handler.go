@@ -52,7 +52,11 @@ func (h *BookingHandler) Create(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return response.Created(c, toBookingResponse(booking))
+	out, err := h.hydrate(c, []domain.Booking{booking})
+	if err != nil {
+		return err
+	}
+	return response.Created(c, out[0])
 }
 
 func (h *BookingHandler) Get(c *fiber.Ctx) error {
@@ -72,7 +76,11 @@ func (h *BookingHandler) Get(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return response.OK(c, toBookingResponse(booking))
+	out, err := h.hydrate(c, []domain.Booking{booking})
+	if err != nil {
+		return err
+	}
+	return response.OK(c, out[0])
 }
 
 func (h *BookingHandler) GetMyBookings(c *fiber.Ctx) error {
@@ -88,9 +96,9 @@ func (h *BookingHandler) GetMyBookings(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	out := make([]dto.BookingResponse, 0, len(bookings))
-	for _, b := range bookings {
-		out = append(out, toBookingResponse(b))
+	out, err := h.hydrate(c, bookings)
+	if err != nil {
+		return err
 	}
 	return response.OK(c, out)
 }
@@ -112,11 +120,58 @@ func (h *BookingHandler) GetEventBookings(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	out := make([]dto.BookingResponse, 0, len(bookings))
-	for _, b := range bookings {
-		out = append(out, toBookingResponse(b))
+	out, err := h.hydrate(c, bookings)
+	if err != nil {
+		return err
 	}
 	return response.OK(c, out)
+}
+
+// hydrate attaches the event, ticket type and attendee each booking refers to.
+// Both booking screens need those names; without them the UI could only show
+// raw UUIDs.
+func (h *BookingHandler) hydrate(c *fiber.Ctx, bookings []domain.Booking) ([]dto.BookingResponse, error) {
+	out := make([]dto.BookingResponse, 0, len(bookings))
+	if len(bookings) == 0 {
+		return out, nil
+	}
+
+	refs, err := h.service.HydrateBookings(c.Context(), bookings)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, b := range bookings {
+		resp := toBookingResponse(b)
+		if ev, ok := refs.Events[b.EventID]; ok {
+			resp.Event = &dto.BookingEventSummary{
+				ID:      ev.ID.String(),
+				Title:   ev.Title,
+				Venue:   ev.Venue,
+				City:    ev.City,
+				StartAt: ev.StartAt.UTC().Format(time.RFC3339),
+				EndAt:   ev.EndAt.UTC().Format(time.RFC3339),
+				Status:  string(ev.Status),
+			}
+		}
+		if tt, ok := refs.TicketTypes[b.TicketTypeID]; ok {
+			resp.TicketType = &dto.BookingTicketType{
+				ID:    tt.ID.String(),
+				Name:  tt.Name,
+				Price: tt.Price,
+			}
+		}
+		if u, ok := refs.Attendees[b.UserID]; ok {
+			resp.Attendee = &dto.BookingAttendee{
+				ID:       u.ID.String(),
+				Username: u.Username,
+				FullName: strings.TrimSpace(u.FirstName + " " + u.LastName),
+				Email:    u.Email,
+			}
+		}
+		out = append(out, resp)
+	}
+	return out, nil
 }
 
 func toBookingResponse(b domain.Booking) dto.BookingResponse {

@@ -42,9 +42,12 @@ type Event struct {
 	OrganizerID uuid.UUID
 	Organizer   *User
 
-	Title            string
-	Description      string
-	Venue            string
+	Title       string
+	Description string
+	Venue       string
+	// EventType is the DTD's <EventType> (e.g. "concert", "conference"). It is
+	// distinct from Categories, which is a many-valued taxonomy.
+	EventType        string
 	FeaturedImageURL *string
 	Detail           EventDetail
 
@@ -64,6 +67,7 @@ type Event struct {
 
 	TicketTypes []TicketType
 	Bookings    []Booking
+	Photos      []EventPhoto
 }
 
 // TicketType represents a ticket category belonging to an event.

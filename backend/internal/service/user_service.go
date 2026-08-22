@@ -48,6 +48,32 @@ func (s *UserService) RejectUser(ctx context.Context, id uuid.UUID) (domain.User
 	return s.users.Reject(ctx, id)
 }
 
+// ChangeRole switches an account between the attendee and organizer roles
+// (assignment §Introduction / §6). Admin accounts are refused so an admin
+// cannot accidentally demote the only administrator, and admin is not an
+// assignable target so the endpoint cannot be used for privilege escalation.
+//
+// The caller keeps their old JWT until it expires (15 min) or they refresh;
+// AuthService.RefreshToken re-reads the role from the database.
+func (s *UserService) ChangeRole(ctx context.Context, userID uuid.UUID, role domain.UserRole) (domain.User, error) {
+	if !domain.ValidAssignableRole(role) {
+		return domain.User{}, domain.ErrInvalidRole
+	}
+
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return domain.User{}, err
+	}
+	if user.Role == domain.UserRoleAdmin {
+		return domain.User{}, domain.ErrForbidden
+	}
+	if user.Role == role {
+		return user, nil
+	}
+
+	return s.users.SetRole(ctx, userID, role)
+}
+
 func (s *UserService) UpdateProfile(ctx context.Context, userID uuid.UUID, in UpdateProfileInput) (domain.User, error) {
 	user, err := s.users.GetByID(ctx, userID)
 	if err != nil {
@@ -56,6 +82,9 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID uuid.UUID, in Up
 
 	if in.Email != nil {
 		email := strings.TrimSpace(*in.Email)
+		if email != "" && !ValidEmail(email) {
+			return domain.User{}, domain.Invalid("email address is not valid")
+		}
 		if email != "" && !strings.EqualFold(email, user.Email) {
 			existing, getErr := s.users.GetByEmail(ctx, email)
 			if getErr == nil && existing.ID != user.ID {
@@ -74,6 +103,9 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID uuid.UUID, in Up
 		user.LastName = strings.TrimSpace(*in.LastName)
 	}
 	if in.Phone != nil {
+		if strings.TrimSpace(*in.Phone) != "" && !ValidPhone(*in.Phone) {
+			return domain.User{}, domain.Invalid("phone number is not valid")
+		}
 		user.Phone = in.Phone
 	}
 	if in.Address != nil {
@@ -92,6 +124,9 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID uuid.UUID, in Up
 		user.Longitude = in.Longitude
 	}
 	if in.VATNumber != nil {
+		if strings.TrimSpace(*in.VATNumber) != "" && !ValidVATNumber(*in.VATNumber) {
+			return domain.User{}, domain.Invalid("VAT number must be 9 digits")
+		}
 		user.VATNumber = in.VATNumber
 	}
 

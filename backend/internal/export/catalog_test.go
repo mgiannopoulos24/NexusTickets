@@ -107,7 +107,7 @@ func TestBuildEventExportXML_Full(t *testing.T) {
 	if b.TotalCost != "99.98" {
 		t.Fatalf("TotalCost = %q", b.TotalCost)
 	}
-	if b.BookingStatus != "confirmed" {
+	if b.BookingStatus != "CONFIRMED" {
 		t.Fatalf("BookingStatus = %q", b.BookingStatus)
 	}
 
@@ -122,23 +122,23 @@ func TestBuildEventExportXML_Full(t *testing.T) {
 // serialized element order matches the assignment DTD content model exactly.
 func TestBuildEventExportXML_DTDElementOrder(t *testing.T) {
 	ev := domain.Event{
-		ID:          uuid.New(),
-		OrganizerID: uuid.New(),
-		Title:       "T",
-		Description: "D",
-		Venue:       "V",
-		City:        "C",
-		Country:     strPtr("GR"),
-		Address:     strPtr("A"),
-		Latitude:    f64Ptr(1),
-		Longitude:   f64Ptr(2),
-		StartAt:     time.Now(),
-		EndAt:       time.Now().Add(time.Hour),
-		Capacity:    10,
-		Status:      domain.EventStatusPublished,
+		ID:               uuid.New(),
+		OrganizerID:      uuid.New(),
+		Title:            "T",
+		Description:      "D",
+		Venue:            "V",
+		City:             "C",
+		Country:          strPtr("GR"),
+		Address:          strPtr("A"),
+		Latitude:         f64Ptr(1),
+		Longitude:        f64Ptr(2),
+		StartAt:          time.Now(),
+		EndAt:            time.Now().Add(time.Hour),
+		Capacity:         10,
+		Status:           domain.EventStatusPublished,
 		FeaturedImageURL: strPtr("p.jpg"),
-		TicketTypes: []domain.TicketType{{ID: uuid.New(), Name: "N", Price: 1, Quantity: 1, Available: 1}},
-		Bookings:    []domain.Booking{{ID: uuid.New(), UserID: uuid.New(), TicketTypeID: uuid.New(), Quantity: 1, TotalCost: 1, Status: domain.BookingStatusConfirmed}},
+		TicketTypes:      []domain.TicketType{{ID: uuid.New(), Name: "N", Price: 1, Quantity: 1, Available: 1}},
+		Bookings:         []domain.Booking{{ID: uuid.New(), UserID: uuid.New(), TicketTypeID: uuid.New(), Quantity: 1, TotalCost: 1, Status: domain.BookingStatusConfirmed}},
 	}
 	got := BuildEventExportXML(ev, []domain.Category{{Name: "Cat"}}, nil)
 
@@ -180,11 +180,42 @@ func TestBuildEventExportXML_DTDElementOrder(t *testing.T) {
 	}
 }
 
+func TestBuildEventExportXML_EventTypeUsesOwnField(t *testing.T) {
+	ev := domain.Event{
+		ID: uuid.New(), OrganizerID: uuid.New(), Title: "E",
+		EventType: "concert",
+		StartAt:   time.Now(), EndAt: time.Now(),
+	}
+	// The event's own EventType wins over its categories.
+	got := BuildEventExportXML(ev, []domain.Category{{Name: "Music"}}, nil)
+	if got.EventType != "concert" {
+		t.Fatalf("EventType = %q, want %q", got.EventType, "concert")
+	}
+}
+
 func TestBuildEventExportXML_EventTypeFallback(t *testing.T) {
 	ev := domain.Event{ID: uuid.New(), OrganizerID: uuid.New(), Title: "E", StartAt: time.Now(), EndAt: time.Now()}
-	got := BuildEventExportXML(ev, nil, nil)
-	if got.EventType != "Event" {
-		t.Fatalf("EventType fallback = %q, want %q", got.EventType, "Event")
+
+	// No EventType and no categories: a generic value, never empty, because the
+	// DTD requires the element.
+	if got := BuildEventExportXML(ev, nil, nil); got.EventType != "event" {
+		t.Fatalf("EventType fallback = %q, want %q", got.EventType, "event")
+	}
+
+	// No EventType but a category: the first category name stands in.
+	got := BuildEventExportXML(ev, []domain.Category{{Name: "Theatre"}}, nil)
+	if got.EventType != "Theatre" {
+		t.Fatalf("EventType category fallback = %q, want %q", got.EventType, "Theatre")
+	}
+}
+
+func TestBuildEventExportXML_StatusIsUppercased(t *testing.T) {
+	ev := domain.Event{
+		ID: uuid.New(), OrganizerID: uuid.New(), Title: "E",
+		StartAt: time.Now(), EndAt: time.Now(), Status: domain.EventStatusCompleted,
+	}
+	if got := BuildEventExportXML(ev, nil, nil); got.Status != "COMPLETED" {
+		t.Fatalf("Status = %q, want %q", got.Status, "COMPLETED")
 	}
 }
 
@@ -211,11 +242,18 @@ func TestBuildEventExportXML_EmptySlices(t *testing.T) {
 		StartAt: time.Now(), EndAt: time.Now(), Status: domain.EventStatusDraft,
 	}
 	got := BuildEventExportXML(ev, []domain.Category{}, nil)
-	if len(got.Category) != 0 {
-		t.Fatalf("expected 0 categories, got %d", len(got.Category))
+
+	// The DTD demands Category+ and TicketType+, so an event with neither still
+	// exports one placeholder of each rather than an invalid document.
+	if len(got.Category) != 1 || got.Category[0] != "Uncategorized" {
+		t.Fatalf("Category = %v, want one placeholder", got.Category)
 	}
-	if len(got.TicketTypes.Items) != 0 || len(got.Bookings.Items) != 0 {
-		t.Fatalf("expected empty ticket/booking lists")
+	if len(got.TicketTypes.Items) != 1 || got.TicketTypes.Items[0].Name != "Unallocated" {
+		t.Fatalf("TicketTypes = %+v, want one placeholder", got.TicketTypes.Items)
+	}
+	// Bookings is Booking* — zero is valid there.
+	if len(got.Bookings.Items) != 0 {
+		t.Fatalf("expected no bookings, got %d", len(got.Bookings.Items))
 	}
 }
 

@@ -4,7 +4,6 @@ import { Link, useParams } from 'react-router-dom';
 import { EventDetailTemplateForm } from '@/components/admin/EventDetailTemplateForm';
 import { EventMapEmbed } from '@/components/events/EventMapEmbed';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -19,30 +18,36 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import type { EventDetail } from '@/types/eventDetail';
-import { emptyEventDetail, normalizeEventDetail } from '@/types/eventDetail';
-import type { Event } from '@/types/models';
+import { normalizeEventDetail } from '@/types/eventDetail';
+import type { Category, Event } from '@/types/models';
 import type { EventStatus } from '@/types/enums';
 
 /** Admin may set draft / published / cancelled (matches API). */
-const ADMIN_EVENT_STATUS_VALUES = ['draft', 'published', 'cancelled'] as const;
+const ADMIN_EVENT_STATUS_VALUES = ['draft', 'published', 'completed', 'cancelled'] as const;
 type AdminEventStatus = (typeof ADMIN_EVENT_STATUS_VALUES)[number];
 
 function normalizeAdminEventStatus(raw: string): AdminEventStatus {
-  if (raw === 'draft' || raw === 'published' || raw === 'cancelled') return raw;
-  return 'draft';
+  return (ADMIN_EVENT_STATUS_VALUES as readonly string[]).includes(raw)
+    ? (raw as AdminEventStatus)
+    : 'draft';
 }
 import { PencilIcon } from 'lucide-react';
+
+import { apiErrorMessage } from '@/app/apiEnvelope';
+import {
+  useAdminUpdateEventMutation,
+  useGetAdminEventQuery,
+  useListCategoriesQuery,
+  useUploadFeaturedImageMutation,
+  type EventWritePayload,
+} from '@/app/eventsApi';
+import { ErrorMessage } from '@/components/shared/ErrorMessage';
+import { SkeletonList } from '@/components/shared/SkeletonList';
+
+import { DEFAULT_EVENT_TYPE, EVENT_TYPES } from '@/constants/eventTypes';
 import TimePicker from 'react-time-picker';
 import 'react-time-picker/dist/TimePicker.css';
 import 'react-clock/dist/Clock.css';
-
-type ApiEnvelope<T> = {
-  data: T | null;
-  error?: { code: string; message: string } | null;
-  meta?: unknown;
-};
-
-type CategoryDto = { id: string; name: string };
 
 function isUUID(raw: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw);
@@ -64,6 +69,7 @@ type FormState = {
   /** draft | published | cancelled */
   status: AdminEventStatus;
   categories: Set<string>;
+  event_type: string;
 };
 
 function pad2(n: number): string {
@@ -120,9 +126,9 @@ function AdminTimePicker({
 }) {
   const [clockOpen, setClockOpen] = useState(true);
 
-  useEffect(() => {
-    if (disabled) setClockOpen(false);
-  }, [disabled]);
+  // A disabled picker is always closed; derived rather than pushed into state
+  // by an effect.
+  const isOpen = clockOpen && !disabled;
 
   const parsed = parseTimeHHMM(value);
   const pickerValue = parsed ? `${pad2(parsed.hour)}:${pad2(parsed.minute)}:00` : null;
@@ -139,7 +145,7 @@ function AdminTimePicker({
     >
       <TimePicker
         className="w-full max-w-none"
-        isOpen={clockOpen}
+        isOpen={isOpen}
         onClockOpen={() => setClockOpen(true)}
         onClockClose={() => setClockOpen(false)}
         value={pickerValue}
@@ -288,112 +294,108 @@ function DateTimeDialogField({
   );
 }
 
+/** Builds the editable form state from a freshly loaded event. */
+function formFromEvent(ev: Event): FormState {
+  return {
+    title: ev.title ?? '',
+    description: ev.description ?? '',
+    venue: ev.venue ?? '',
+    address: ev.address ?? '',
+    city: ev.city ?? '',
+    country: ev.country ?? '',
+    latitude: ev.latitude != null && Number.isFinite(ev.latitude) ? String(ev.latitude) : '',
+    longitude: ev.longitude != null && Number.isFinite(ev.longitude) ? String(ev.longitude) : '',
+    start_at: ev.start_at ?? '',
+    end_at: ev.end_at ?? '',
+    featured_image_url: ev.featured_image_url ?? '',
+    status: normalizeAdminEventStatus(ev.status as EventStatus),
+    categories: new Set(ev.categories ?? []),
+    event_type: ev.event_type || DEFAULT_EVENT_TYPE,
+  };
+}
+
+/**
+ * Loads the event and categories, then hands them to the form, which is keyed
+ * by event id so its state seeds from props on mount rather than being copied
+ * in from an effect.
+ */
 export default function AdminEventEditPage() {
-  const { id } = useParams();
-  const { accessToken } = useAuth();
-  const [event, setEvent] = useState<Event | null>(null);
-  const [categories, setCategories] = useState<CategoryDto[]>([]);
-  const [form, setForm] = useState<FormState | null>(null);
-  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
-  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
-  const [startTime, setStartTime] = useState<string>('12:00');
-  const [endTime, setEndTime] = useState<string>('12:00');
-  const [featuredPreview, setFeaturedPreview] = useState<string | null>(null);
+  const { id = '' } = useParams();
+
+  const validId = isUUID(id);
+  const eventQuery = useGetAdminEventQuery(id, { skip: !validId });
+  const { data: categories } = useListCategoriesQuery();
+  const event = eventQuery.data;
+
+  if (!validId) {
+    return (
+      <AdminLayout>
+        <div className="p-6">
+          <ErrorMessage message="Μη έγκυρο αναγνωριστικό εκδήλωσης." />
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (eventQuery.isLoading || !categories) {
+    return (
+      <AdminLayout>
+        <div className="p-6">
+          <SkeletonList rows={8} />
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (eventQuery.error || !event) {
+    return (
+      <AdminLayout>
+        <div className="p-6">
+          <ErrorMessage
+            message={apiErrorMessage(eventQuery.error, 'Δεν ήταν δυνατή η φόρτωση της εκδήλωσης.')}
+            onRetry={() => void eventQuery.refetch()}
+          />
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  return <AdminEventEditForm key={event.id} initialEvent={event} categories={categories} />;
+}
+
+function AdminEventEditForm({
+  initialEvent,
+  categories,
+}: {
+  initialEvent: Event;
+  categories: Category[];
+}) {
+  const eventId = initialEvent.id;
+
+  const [adminUpdateEvent] = useAdminUpdateEventMutation();
+  const [uploadFeaturedImage] = useUploadFeaturedImageMutation();
+
+  const [event, setEvent] = useState<Event>(initialEvent);
+  const [form, setForm] = useState<FormState>(() => formFromEvent(initialEvent));
+
+  const initialStart = initialEvent.start_at ? fromRfc3339ToDateAndTime(initialEvent.start_at) : null;
+  const initialEnd = initialEvent.end_at ? fromRfc3339ToDateAndTime(initialEvent.end_at) : null;
+
+  const [startDate, setStartDate] = useState<Date | undefined>(initialStart?.date);
+  const [endDate, setEndDate] = useState<Date | undefined>(initialEnd?.date);
+  const [startTime, setStartTime] = useState<string>(initialStart?.timeHHMM ?? '12:00');
+  const [endTime, setEndTime] = useState<string>(initialEnd?.timeHHMM ?? '12:00');
+  const [featuredPreview, setFeaturedPreview] = useState<string | null>(
+    initialEvent.featured_image_url ?? null,
+  );
   const featuredObjectUrlRef = useRef<string | null>(null);
   const [uploadingFeatured, setUploadingFeatured] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState<string | null>(null);
-  const [detail, setDetail] = useState<EventDetail>(emptyEventDetail());
-
-  const eventId = id ?? '';
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!eventId) return;
-    if (!isUUID(eventId)) {
-      setError('invalid event id');
-      setLoading(false);
-      return;
-    }
-    if (!accessToken) {
-      setError('missing bearer token');
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    setSaveError(null);
-    setSaveOk(null);
-
-    const load = async () => {
-      const [evRes, catRes] = await Promise.all([
-        fetch(`/api/v1/events/admin/${encodeURIComponent(eventId)}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }),
-        fetch('/api/v1/categories'),
-      ]);
-      const evJson = (await evRes.json()) as ApiEnvelope<Event>;
-      const catJson = (await catRes.json()) as ApiEnvelope<CategoryDto[]>;
-
-      if (!evRes.ok || evJson.error)
-        throw new Error(evJson.error?.message ?? 'Σφάλμα φόρτωσης εκδήλωσης');
-      if (!catRes.ok || catJson.error)
-        throw new Error(catJson.error?.message ?? 'Σφάλμα φόρτωσης κατηγοριών');
-
-      const ev = evJson.data;
-      if (!ev) throw new Error('Άκυρη απάντηση');
-
-      if (!cancelled) {
-        setEvent(ev);
-        setCategories(catJson.data ?? []);
-        setForm({
-          title: ev.title ?? '',
-          description: ev.description ?? '',
-          venue: ev.venue ?? '',
-          address: ev.address ?? '',
-          city: ev.city ?? '',
-          country: ev.country ?? '',
-          latitude: ev.latitude != null && Number.isFinite(ev.latitude) ? String(ev.latitude) : '',
-          longitude:
-            ev.longitude != null && Number.isFinite(ev.longitude) ? String(ev.longitude) : '',
-          start_at: ev.start_at ?? '',
-          end_at: ev.end_at ?? '',
-          featured_image_url: ev.featured_image_url ?? '',
-          status: normalizeAdminEventStatus(ev.status as EventStatus),
-          categories: new Set(ev.categories ?? []),
-        });
-
-        const startParsed = ev.start_at ? fromRfc3339ToDateAndTime(ev.start_at) : null;
-        const endParsed = ev.end_at ? fromRfc3339ToDateAndTime(ev.end_at) : null;
-        if (startParsed) {
-          setStartDate(startParsed.date);
-          setStartTime(startParsed.timeHHMM);
-        }
-        if (endParsed) {
-          setEndDate(endParsed.date);
-          setEndTime(endParsed.timeHHMM);
-        }
-
-        setFeaturedPreview(ev.featured_image_url ?? null);
-        setDetail(normalizeEventDetail(ev.event_detail));
-      }
-    };
-
-    void load()
-      .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Σφάλμα');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [eventId, accessToken]);
+  const [detail, setDetail] = useState<EventDetail>(() =>
+    normalizeEventDetail(initialEvent.event_detail),
+  );
 
   const categoryNames = useMemo(() => categories.map((c) => c.name), [categories]);
 
@@ -447,15 +449,11 @@ export default function AdminEventEditPage() {
   };
 
   const onUploadFeatured = async (file: File) => {
-    if (!eventId) return;
-    if (!accessToken) {
-      setSaveError('missing bearer token');
-      return;
-    }
     setSaveError(null);
     setSaveOk(null);
     setUploadingFeatured(true);
 
+    // Show the local file straight away; swap to the stored URL once saved.
     if (featuredObjectUrlRef.current) {
       URL.revokeObjectURL(featuredObjectUrlRef.current);
       featuredObjectUrlRef.current = null;
@@ -465,43 +463,25 @@ export default function AdminEventEditPage() {
     setFeaturedPreview(objectUrl);
 
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch(
-        `/api/v1/events/admin/${encodeURIComponent(eventId)}/featured-image`,
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${accessToken}` },
-          body: fd,
-        },
-      );
-      const json = (await res.json()) as ApiEnvelope<Event>;
-      if (!res.ok || json.error)
-        throw new Error(json.error?.message ?? 'Αποτυχία μεταφόρτωσης εικόνας');
-
-      const next = json.data?.featured_image_url ?? '';
-      setForm((prev) => (prev ? { ...prev, featured_image_url: next } : prev));
-      setEvent(json.data ?? null);
+      const saved = await uploadFeaturedImage({ id: eventId, file, admin: true }).unwrap();
+      const next = saved.featured_image_url ?? '';
+      setForm((prev) => ({ ...prev, featured_image_url: next }));
+      setEvent(saved);
       if (next) setFeaturedPreview(next);
       setSaveOk('Αποθηκεύτηκε');
     } catch (e: unknown) {
-      setSaveError(e instanceof Error ? e.message : 'Σφάλμα');
+      setSaveError(apiErrorMessage(e, 'Αποτυχία μεταφόρτωσης εικόνας'));
       if (featuredObjectUrlRef.current) {
         URL.revokeObjectURL(featuredObjectUrlRef.current);
         featuredObjectUrlRef.current = null;
       }
-      setFeaturedPreview(form?.featured_image_url?.trim() || null);
+      setFeaturedPreview(form.featured_image_url?.trim() || null);
     } finally {
       setUploadingFeatured(false);
     }
   };
 
   const onSave = async () => {
-    if (!form || !eventId) return;
-    if (!accessToken) {
-      setSaveError('missing bearer token');
-      return;
-    }
     setSaving(true);
     setSaveError(null);
     setSaveOk(null);
@@ -524,33 +504,27 @@ export default function AdminEventEditPage() {
         categories: Array.from(form.categories),
         event_detail: detail,
         status: form.status,
+        event_type: form.event_type,
       };
       if (latRaw !== '' && Number.isFinite(latNum)) payload.latitude = latNum;
       if (lonRaw !== '' && Number.isFinite(lonNum)) payload.longitude = lonNum;
 
-      const res = await fetch(`/api/v1/events/admin/${encodeURIComponent(eventId)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify(payload),
-      });
-      const json = (await res.json()) as ApiEnvelope<Event>;
-      if (!res.ok || json.error) throw new Error(json.error?.message ?? 'Αποτυχία αποθήκευσης');
-      setEvent(json.data ?? null);
-      if (json.data?.event_detail) setDetail(normalizeEventDetail(json.data.event_detail));
-      const saved = json.data;
-      if (saved) {
-        setForm((prev) =>
-          prev
-            ? {
-                ...prev,
-                status: normalizeAdminEventStatus(saved.status as EventStatus),
-              }
-            : prev,
-        );
-      }
+      const saved = await adminUpdateEvent({
+        id: eventId,
+        body: payload as Partial<EventWritePayload>,
+      }).unwrap();
+
+      setEvent(saved);
+      setDetail(normalizeEventDetail(saved.event_detail));
+      // The server may normalise the status (e.g. the completion sweeper), so
+      // read it back rather than trusting what was sent.
+      setForm((prev) => ({
+        ...prev,
+        status: normalizeAdminEventStatus(saved.status as EventStatus),
+      }));
       setSaveOk('Αποθηκεύτηκε');
     } catch (e: unknown) {
-      setSaveError(e instanceof Error ? e.message : 'Σφάλμα');
+      setSaveError(apiErrorMessage(e, 'Αποτυχία αποθήκευσης'));
     } finally {
       setSaving(false);
     }
@@ -574,18 +548,13 @@ export default function AdminEventEditPage() {
           <Button
             type="button"
             onClick={() => void onSave()}
-            disabled={loading || saving || !form}
+            disabled={saving}
             className="rounded-none border-2 border-[#6d28d9] bg-transparent px-4 py-1.5 text-sm text-[#6d28d9] hover:bg-[#6d28d9] hover:text-white comfortaa-regular"
           >
             {saving ? 'Αποθήκευση…' : 'Αποθήκευση'}
           </Button>
         </div>
 
-        {error && (
-          <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--nexus-red)]">
-            {error}
-          </p>
-        )}
         {saveError && (
           <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--nexus-red)]">
             {saveError}
@@ -597,10 +566,7 @@ export default function AdminEventEditPage() {
           </p>
         )}
 
-        {loading || !form ? (
-          <p className="mt-6 text-sm text-neutral-600 comfortaa-regular">Φόρτωση…</p>
-        ) : (
-          <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="space-y-5">
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-neutral-800 comfortaa-regular">
@@ -664,11 +630,37 @@ export default function AdminEventEditPage() {
                     >
                       <option value="draft">Πρόχειρο (draft)</option>
                       <option value="published">Δημοσιευμένο</option>
+                      <option value="completed">Ολοκληρωμένο</option>
                       <option value="cancelled">Ακυρωμένο</option>
                     </select>
                     <p className="mt-1 text-[10px] text-neutral-500 comfortaa-regular">
                       Πρόχειρο: δεν φαίνεται στη δημόσια λίστα. Δημοσιευμένο: ορατό σε όλους.
+                      Ολοκληρωμένο ορίζεται αυτόματα όταν περάσει η ώρα λήξης.
                     </p>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="admin-event-type"
+                      className="mb-1 block text-xs text-neutral-600 comfortaa-regular"
+                    >
+                      Τύπος εκδήλωσης
+                    </label>
+                    <select
+                      id="admin-event-type"
+                      value={form.event_type}
+                      disabled={saving}
+                      onChange={(e) => setForm({ ...form, event_type: e.target.value })}
+                      className={cn(
+                        'flex h-9 w-full rounded-md border border-neutral-200 bg-white px-3 text-sm comfortaa-regular',
+                        saving && 'opacity-50',
+                      )}
+                    >
+                      {EVENT_TYPES.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
@@ -815,8 +807,7 @@ export default function AdminEventEditPage() {
                 </div>
               </div>
             </aside>
-          </div>
-        )}
+        </div>
       </div>
     </AdminLayout>
   );

@@ -1,7 +1,7 @@
 export interface ApiResponse<T> {
   data: T;
   error: string | null;
-  meta?: any;
+  meta?: unknown;
 }
 
 export interface PaginatedResponse<T> {

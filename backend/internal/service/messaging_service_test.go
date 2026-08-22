@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	wshub "nexustickets/internal/handler/ws"
-	"github.com/redis/go-redis/v9"
 
 	"nexustickets/internal/domain"
 )
@@ -76,6 +75,38 @@ func (m *mockMessageRepo) MarkAsRead(_ context.Context, uid uuid.UUID) error {
 	return nil
 }
 
+func (m *mockMessageRepo) MarkAsReadByIDs(_ context.Context, uid uuid.UUID, ids []uuid.UUID) error {
+	want := make(map[uuid.UUID]struct{}, len(ids))
+	for _, id := range ids {
+		want[id] = struct{}{}
+	}
+	now := time.Now().UTC()
+	for id, msg := range m.messages {
+		if msg.RecipientID != uid || msg.ReadAt != nil {
+			continue
+		}
+		if _, ok := want[id]; !ok {
+			continue
+		}
+		readAt := now
+		msg.ReadAt = &readAt
+		m.messages[id] = msg
+		if m.unreadCnt[uid] > 0 {
+			m.unreadCnt[uid]--
+		}
+	}
+	for uidKey, list := range m.inbox {
+		for i := range list {
+			if _, ok := want[list[i].ID]; ok && list[i].ReadAt == nil {
+				readAt := now
+				list[i].ReadAt = &readAt
+			}
+		}
+		m.inbox[uidKey] = list
+	}
+	return nil
+}
+
 func (m *mockMessageRepo) GetUnreadCount(_ context.Context, uid uuid.UUID) (int, error) {
 	return m.unreadCnt[uid], nil
 }
@@ -87,7 +118,7 @@ func msgSvc(t *testing.T) *MessagingService {
 		newMockUserRepo(),
 		newMockBookingRepo(),
 		newMockEventRepo(),
-		redis.NewClient(&redis.Options{Addr: "localhost:6379"}),
+		newTestRedis(),
 		wshub.NewHub(),
 	)
 }
@@ -95,7 +126,7 @@ func msgSvc(t *testing.T) *MessagingService {
 func TestMessagingService_SendMessageValidation(t *testing.T) {
 	msgs := newMockMessageRepo()
 	users := newMockUserRepo()
-	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), redis.NewClient(&redis.Options{Addr: "localhost:6379"}), wshub.NewHub())
+	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), newTestRedis(), wshub.NewHub())
 
 	senderID := uuid.New()
 	recipientID := uuid.New()
@@ -146,7 +177,7 @@ func TestMessagingService_SendMessageValidation(t *testing.T) {
 func TestMessagingService_GetSent(t *testing.T) {
 	msgs := newMockMessageRepo()
 	users := newMockUserRepo()
-	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), redis.NewClient(&redis.Options{Addr: "localhost:6379"}), wshub.NewHub())
+	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), newTestRedis(), wshub.NewHub())
 
 	userID := uuid.New()
 	users.add(domain.User{ID: userID, Username: "u", Email: "u@u.com"})
@@ -167,7 +198,7 @@ func TestMessagingService_GetSent(t *testing.T) {
 func TestMessagingService_GetInbox(t *testing.T) {
 	msgs := newMockMessageRepo()
 	users := newMockUserRepo()
-	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), redis.NewClient(&redis.Options{Addr: "localhost:6379"}), wshub.NewHub())
+	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), newTestRedis(), wshub.NewHub())
 
 	recipientID := uuid.New()
 	users.add(domain.User{ID: recipientID, Username: "r", Email: "r@r.com"})
@@ -196,7 +227,7 @@ func TestMessagingService_GetInbox(t *testing.T) {
 func TestMessagingService_GetUnreadCount(t *testing.T) {
 	msgs := newMockMessageRepo()
 	users := newMockUserRepo()
-	rdb := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+	rdb := newTestRedis()
 	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), rdb, wshub.NewHub())
 
 	recipientID := uuid.New()
@@ -217,7 +248,7 @@ func TestMessagingService_GetUnreadCount(t *testing.T) {
 func TestMessagingService_DeleteForUser(t *testing.T) {
 	msgs := newMockMessageRepo()
 	users := newMockUserRepo()
-	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), redis.NewClient(&redis.Options{Addr: "localhost:6379"}), wshub.NewHub())
+	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), newTestRedis(), wshub.NewHub())
 
 	senderID := uuid.New()
 	recipientID := uuid.New()
@@ -249,7 +280,7 @@ func TestMessagingService_NotifyEventCancellation(t *testing.T) {
 	events := newMockEventRepo()
 	bookings := newMockBookingRepo()
 
-	svc := NewMessagingService(msgs, users, bookings, events, redis.NewClient(&redis.Options{Addr: "localhost:6379"}), wshub.NewHub())
+	svc := NewMessagingService(msgs, users, bookings, events, newTestRedis(), wshub.NewHub())
 
 	orgID := uuid.New()
 	attendee1 := uuid.New()

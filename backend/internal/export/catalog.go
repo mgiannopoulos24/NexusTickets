@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"strings"
 
 	"nexustickets/internal/domain"
 )
@@ -15,6 +16,20 @@ const catalogRootElement = "Events"
 // exportTimeLayout matches the DTD example format (e.g. 2025-07-12T20:30:00),
 // with no timezone suffix.
 const exportTimeLayout = "2006-01-02T15:04:05"
+
+// catalogDoctype declares the external DTD the exported catalogue conforms to.
+// docs/events-catalog.dtd is the copy shipped with the source.
+const catalogDoctype = `<!DOCTYPE Events SYSTEM "events-catalog.dtd">`
+
+// fallbackCategory keeps the document valid against `<!ELEMENT Event (Title,
+// Category+, ...)>` for legacy rows created before a category was mandatory.
+const fallbackCategory = "Uncategorized"
+
+// fallbackEventType is used when an event predates the EventType column.
+const fallbackEventType = "event"
+
+// CatalogDoctype returns the DOCTYPE line for the exported catalogue.
+func CatalogDoctype() string { return catalogDoctype }
 
 // EventExportXML mirrors the assignment event export DTD exactly. Field order is
 // significant: encoding/xml emits elements in declaration order, and the DTD
@@ -154,15 +169,44 @@ type AttendeeJSON struct {
 // CatalogRootElement returns the XML root element name for the export catalogue.
 func CatalogRootElement() string { return catalogRootElement }
 
-// eventTypeFor derives the DTD's required single EventType from the event's
-// categories (first category name). EventType is not stored separately in the
-// schema; the first category is the closest semantic source. Falls back to
-// "Event" when the event has no categories.
-func eventTypeFor(categories []domain.Category) string {
+// eventTypeFor returns the event's own EventType. Events created before the
+// column existed fall back to their first category, then to a generic value,
+// so the required <EventType> element is never empty.
+func eventTypeFor(ev domain.Event, categories []domain.Category) string {
+	if t := strings.TrimSpace(ev.EventType); t != "" {
+		return t
+	}
 	if len(categories) > 0 {
 		return categories[0].Name
 	}
-	return "Event"
+	return fallbackEventType
+}
+
+// categoryNames returns the export names for an event's categories, guaranteeing
+// the DTD's `Category+` (one or more).
+func categoryNames(categories []domain.Category) []string {
+	out := make([]string, 0, len(categories))
+	for _, c := range categories {
+		if name := strings.TrimSpace(c.Name); name != "" {
+			out = append(out, name)
+		}
+	}
+	if len(out) == 0 {
+		out = append(out, fallbackCategory)
+	}
+	return out
+}
+
+// fallbackTicketTypeName labels the placeholder emitted for legacy events with
+// no ticket types, so the document still satisfies `<!ELEMENT TicketTypes
+// (TicketType+)>`. New events cannot reach this state: EventService.Create and
+// Publish both require at least one ticket type.
+const fallbackTicketTypeName = "Unallocated"
+
+// exportStatus renders a lifecycle value the way the DTD sample does: uppercase
+// (DRAFT / PUBLISHED / COMPLETED / CANCELLED, CONFIRMED / PENDING / CANCELLED).
+func exportStatus(v string) string {
+	return strings.ToUpper(strings.TrimSpace(v))
 }
 
 func derefOr(s *string, fallback string) string {
@@ -187,10 +231,7 @@ func mediaPhotos(ev domain.Event, photos []domain.EventPhoto) []string {
 
 // BuildEventExportXML maps a hydrated domain event to the DTD-aligned XML struct.
 func BuildEventExportXML(ev domain.Event, categories []domain.Category, photos []domain.EventPhoto) EventExportXML {
-	catNames := make([]string, 0, len(categories))
-	for _, c := range categories {
-		catNames = append(catNames, c.Name)
-	}
+	catNames := categoryNames(categories)
 
 	var geo *GeoLocationExportXML
 	if ev.Latitude != nil && ev.Longitude != nil {
@@ -217,7 +258,17 @@ func BuildEventExportXML(ev domain.Event, categories []domain.Category, photos [
 			TicketTypeRef:   b.TicketTypeID.String(),
 			NumberOfTickets: b.Quantity,
 			TotalCost:       formatMoney(b.TotalCost),
-			BookingStatus:   string(b.Status),
+			BookingStatus:   exportStatus(string(b.Status)),
+		})
+	}
+
+	if len(tts) == 0 {
+		tts = append(tts, TicketTypeExportXML{
+			TicketTypeID: ev.ID.String() + "-none",
+			Name:         fallbackTicketTypeName,
+			Price:        formatMoney(0),
+			Quantity:     0,
+			Available:    0,
 		})
 	}
 
@@ -231,7 +282,7 @@ func BuildEventExportXML(ev domain.Event, categories []domain.Category, photos [
 		EventID:       ev.ID.String(),
 		Title:         ev.Title,
 		Category:      catNames,
-		EventType:     eventTypeFor(categories),
+		EventType:     eventTypeFor(ev, categories),
 		Venue:         ev.Venue,
 		Address:       derefOr(ev.Address, ""),
 		City:          ev.City,
@@ -243,7 +294,7 @@ func BuildEventExportXML(ev domain.Event, categories []domain.Category, photos [
 		TicketTypes:   TicketTypesExportXML{Items: tts},
 		Bookings:      BookingsExportXML{Items: bks},
 		Organizer:     OrganizerExportXML{UserID: ev.OrganizerID.String()},
-		Status:        string(ev.Status),
+		Status:        exportStatus(string(ev.Status)),
 		Description:   ev.Description,
 		Media:         media,
 	}
@@ -251,10 +302,7 @@ func BuildEventExportXML(ev domain.Event, categories []domain.Category, photos [
 
 // BuildEventJSON maps a hydrated domain event to the JSON export struct.
 func BuildEventJSON(ev domain.Event, categories []domain.Category, photos []domain.EventPhoto) EventJSON {
-	catNames := make([]string, 0, len(categories))
-	for _, c := range categories {
-		catNames = append(catNames, c.Name)
-	}
+	catNames := categoryNames(categories)
 
 	var geo *GeoLocationJSON
 	if ev.Latitude != nil && ev.Longitude != nil {
@@ -281,7 +329,7 @@ func BuildEventJSON(ev domain.Event, categories []domain.Category, photos []doma
 			TicketTypeRef:   b.TicketTypeID.String(),
 			NumberOfTickets: b.Quantity,
 			TotalCost:       b.TotalCost,
-			BookingStatus:   string(b.Status),
+			BookingStatus:   exportStatus(string(b.Status)),
 		})
 	}
 
@@ -289,7 +337,7 @@ func BuildEventJSON(ev domain.Event, categories []domain.Category, photos []doma
 		EventID:       ev.ID.String(),
 		Title:         ev.Title,
 		Categories:    catNames,
-		EventType:     eventTypeFor(categories),
+		EventType:     eventTypeFor(ev, categories),
 		Venue:         ev.Venue,
 		Address:       ev.Address,
 		City:          ev.City,
@@ -301,7 +349,7 @@ func BuildEventJSON(ev domain.Event, categories []domain.Category, photos []doma
 		TicketTypes:   tts,
 		Bookings:      bks,
 		Organizer:     OrganizerJSON{UserID: ev.OrganizerID.String()},
-		Status:        string(ev.Status),
+		Status:        exportStatus(string(ev.Status)),
 		Description:   ev.Description,
 		Media:         mediaPhotos(ev, photos),
 	}
