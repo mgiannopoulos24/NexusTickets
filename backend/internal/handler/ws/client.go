@@ -14,12 +14,23 @@ const (
 	pingPeriod = (pongWait * 9) / 10
 )
 
+// InboundHandler receives an application frame sent by a client. It runs on the
+// connection's read goroutine, so it must not block.
+type InboundHandler func(senderID uuid.UUID, frame []byte)
+
 // Client wraps one WebSocket connection for a single authenticated user.
 type Client struct {
-	hub    *Hub
-	conn   *fiberws.Conn
-	userID uuid.UUID
-	send   chan []byte
+	hub     *Hub
+	conn    *fiberws.Conn
+	userID  uuid.UUID
+	send    chan []byte
+	inbound InboundHandler
+}
+
+// OnInbound registers the handler for frames this client sends. Without one the
+// connection stays receive-only, as it was before typing notifications.
+func (c *Client) OnInbound(h InboundHandler) {
+	c.inbound = h
 }
 
 // NewClient builds a client for the hub; the caller must register it with the hub before starting pumps.
@@ -33,7 +44,7 @@ func NewClient(hub *Hub, conn *fiberws.Conn, userID uuid.UUID) *Client {
 }
 
 // ReadPump reads from the client until the connection closes or errors.
-// Incoming application messages are ignored; the connection is receive-only for server pushes.
+// Application frames go to the inbound handler when one is registered.
 func (c *Client) ReadPump() {
 	defer func() {
 		c.hub.unregister <- c
@@ -49,8 +60,17 @@ func (c *Client) ReadPump() {
 	})
 
 	for {
-		if _, _, err := c.conn.ReadMessage(); err != nil {
+		_, frame, err := c.conn.ReadMessage()
+		if err != nil {
 			break
+		}
+		// Any traffic proves the peer is alive, so extend the read deadline
+		// rather than relying on pongs alone.
+		if err := c.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+			break
+		}
+		if c.inbound != nil && len(frame) > 0 {
+			c.inbound(c.userID, frame)
 		}
 	}
 }

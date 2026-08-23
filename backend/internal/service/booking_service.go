@@ -41,10 +41,11 @@ func NewBookingService(
 // CreateBooking validates the event is published, computes total_cost from ticket price, and
 // creates the booking with atomic availability decrement.
 func (s *BookingService) CreateBooking(ctx context.Context, userID uuid.UUID, role domain.UserRole, in CreateBookingInput) (domain.Booking, error) {
-	if role == domain.UserRoleGuest {
-		return domain.Booking{}, domain.ErrForbidden
-	}
-	if role != domain.UserRoleAttendee && role != domain.UserRoleOrganizer {
+	// Guests browse only (§Εισαγωγή); every signed-in role may book. The route
+	// and the event page allow the same set, so keep the three in step.
+	switch role {
+	case domain.UserRoleAttendee, domain.UserRoleOrganizer, domain.UserRoleAdmin:
+	default:
 		return domain.Booking{}, domain.ErrForbidden
 	}
 

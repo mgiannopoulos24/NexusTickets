@@ -17,7 +17,11 @@ func RegisterMessageRoutes(v1 fiber.Router, messageHandler *MessageHandler, jwtS
 	messages.Get("/sent", messageHandler.Sent)
 	messages.Get("/unread-count", messageHandler.UnreadCount)
 	messages.Get("/recipients", messageHandler.Recipients)
+	messages.Get("/conversations", messageHandler.Conversations)
+	messages.Get("/thread/:userId", messageHandler.Thread)
 	messages.Post("/", messageHandler.Send)
+	messages.Post("/attachments", messageHandler.UploadAttachment)
+	messages.Post("/:id/reactions", messageHandler.React)
 	messages.Delete("/:id", messageHandler.Delete)
 
 	v1.Get("/ws/messages", middleware.WebSocketJWTAuth(jwtSecret), middleware.RequireRole(domain.UserRoleOrganizer, domain.UserRoleAttendee, domain.UserRoleAdmin), fiberws.New(messageHandler.ServeWebSocket))

@@ -220,7 +220,7 @@ export default function EventDetailPage() {
             {canBook && !soldOut ? (
               <Button
                 asChild
-                className="rounded-full bg-[#6d28d9] px-6 text-white hover:bg-violet-700 comfortaa-regular"
+                className="bg-[#6d28d9] px-6 text-white hover:bg-violet-700 comfortaa-regular"
               >
                 <a href="#tickets">
                   <Ticket className="mr-2 size-4" />
@@ -235,7 +235,7 @@ export default function EventDetailPage() {
               <Button
                 asChild
                 variant="outline"
-                className="rounded-full border-[#6d28d9] text-[#6d28d9]"
+                className="border-[#6d28d9] text-[#6d28d9]"
               >
                 <Link to="/login">Σύνδεση για κράτηση</Link>
               </Button>

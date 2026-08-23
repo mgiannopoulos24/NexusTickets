@@ -33,7 +33,7 @@ export function CategoryFilterStrip({
           <div>
             <h2 className="text-lg font-bold text-neutral-950 comfortaa-bold">Κατηγορίες</h2>
             <p className="mt-0.5 text-sm text-neutral-500 comfortaa-regular">
-              Φίλτρα για πλήρη λίστα ανά είδος εκδήλωσης
+              Πατήστε μια ενότητα για να μεταβείτε στις εκδηλώσεις της.
             </p>
           </div>
 
@@ -44,6 +44,8 @@ export function CategoryFilterStrip({
             <div
               ref={tabsRef}
               className={cn(
+                // overflow-x-auto also clips vertically, so the active-tab
+                // underline has to sit inside the box rather than 1px below it.
                 'flex items-stretch gap-8 overflow-x-auto',
                 '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
                 'snap-x snap-mandatory',
@@ -69,7 +71,7 @@ export function CategoryFilterStrip({
                     {s.label}
                     <span
                       className={cn(
-                        'absolute -bottom-px left-0 right-0 h-[3px] rounded-full transition-opacity',
+                        'absolute bottom-0 left-0 right-0 h-[3px] rounded-full transition-opacity',
                         isActive ? 'bg-neutral-900 opacity-100' : 'bg-neutral-900 opacity-0',
                       )}
                       aria-hidden
@@ -80,25 +82,32 @@ export function CategoryFilterStrip({
             </div>
           </nav>
 
-          <div className="flex flex-wrap gap-2 pt-1">
-            {CATEGORY_BROWSE_CHIPS.map(({ slug, label }) => (
+          {/* Distinct from the tabs above: these leave the page for the full
+              category listing, so they are labelled as such. */}
+          <div className="pt-1">
+            <p className="comfortaa-regular mb-2 text-xs font-semibold tracking-wide text-neutral-500 uppercase">
+              Πλήρης λίστα ανά κατηγορία
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {CATEGORY_BROWSE_CHIPS.map(({ slug, label }) => (
+                <Link
+                  key={slug}
+                  to={`/events/category/${slug}`}
+                  className={cn(
+                    'rounded-lg border border-[#6d28d9]/30 bg-white px-4 py-2 text-sm font-medium text-[#6d28d9]',
+                    'transition hover:border-[#6d28d9] hover:bg-[#6d28d9]/5 comfortaa-regular',
+                  )}
+                >
+                  {label}
+                </Link>
+              ))}
               <Link
-                key={slug}
-                to={`/events/category/${slug}`}
-                className={cn(
-                  'rounded-full border border-[#6d28d9]/30 bg-white px-4 py-2 text-sm font-medium text-[#6d28d9]',
-                  'transition hover:border-[#6d28d9] hover:bg-[#6d28d9]/5 comfortaa-regular',
-                )}
+                to="/events"
+                className="rounded-lg border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100 comfortaa-regular"
               >
-                {label}
+                Όλες οι εκδηλώσεις
               </Link>
-            ))}
-            <Link
-              to="/events"
-              className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-100 comfortaa-regular"
-            >
-              Όλες οι εκδηλώσεις
-            </Link>
+            </div>
           </div>
         </div>
       </div>

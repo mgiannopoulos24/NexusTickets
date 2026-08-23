@@ -19,14 +19,14 @@ export default function UnauthorizedPage() {
           <div className="mt-8 flex w-full flex-col gap-2 sm:flex-row sm:justify-center">
             <Button
               asChild
-              className="w-full rounded-full bg-[#6d28d9] text-white hover:bg-[#5b21b6] sm:w-auto comfortaa-regular"
+              className="w-full bg-[#6d28d9] text-white hover:bg-[#5b21b6] sm:w-auto comfortaa-regular"
             >
               <Link to="/login">Σύνδεση</Link>
             </Button>
             <Button
               asChild
               variant="outline"
-              className="w-full rounded-full sm:w-auto comfortaa-regular"
+              className="w-full sm:w-auto comfortaa-regular"
             >
               <Link to="/">Αρχική</Link>
             </Button>

@@ -120,7 +120,34 @@ type MessageRepository interface {
 	ListInbox(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Message, error)
 	ListSent(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Message, error)
 
+	// ListThread returns the whole exchange between two users, oldest first,
+	// skipping whatever each side deleted from their own view.
+	ListThread(ctx context.Context, userID, otherID uuid.UUID, limit, offset int) ([]domain.Message, error)
+	// ListCounterpartIDs returns everyone the user has exchanged a message
+	// with, most recently active first.
+	ListCounterpartIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
+	// LastInThread returns the newest message exchanged with `otherID`, or
+	// ErrNotFound when the two have never written to each other.
+	LastInThread(ctx context.Context, userID, otherID uuid.UUID) (domain.Message, error)
+	// UnreadCountsBySender groups the user's unread messages by who sent them.
+	UnreadCountsBySender(ctx context.Context, userID uuid.UUID) (map[uuid.UUID]int, error)
+	// MarkThreadAsRead marks everything `otherID` sent to `userID` as read and
+	// reports how many rows changed.
+	MarkThreadAsRead(ctx context.Context, userID, otherID uuid.UUID) (int, error)
+
 	DeleteForUser(ctx context.Context, messageID uuid.UUID, userID uuid.UUID) error
+	// DeleteForEveryone leaves a tombstone both sides can see and clears the
+	// content. Only the sender may do this.
+	DeleteForEveryone(ctx context.Context, messageID uuid.UUID) error
+	GetByID(ctx context.Context, messageID uuid.UUID) (domain.Message, error)
+
+	// ListPreviews resolves the messages quoted by replies, in one query.
+	ListPreviews(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]domain.MessagePreview, error)
+
+	AddReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
+	RemoveReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
+	// ListReactions groups reactions by the message they belong to.
+	ListReactions(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID][]domain.MailboxReaction, error)
 
 	MarkAsRead(ctx context.Context, userID uuid.UUID) error
 	MarkAsReadByIDs(ctx context.Context, userID uuid.UUID, ids []uuid.UUID) error

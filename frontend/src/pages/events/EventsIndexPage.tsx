@@ -88,10 +88,21 @@ export default function EventsIndexPage() {
     offset: (currentPage - 1) * pageSize,
   });
 
-  const { data: recommendedEvents, isLoading: recLoading } = useGetRecommendedQuery();
+  // Recommendations are only rendered for a signed-in user, so don't ask for
+  // them at all while browsing anonymously.
+  const { data: recommendedEvents, isLoading: recLoading } = useGetRecommendedQuery(undefined, {
+    skip: !isAuthenticated,
+  });
 
   const events = data?.events ?? [];
   const hasMore = data?.meta.has_more ?? false;
+
+  // While the user is filtering, the recommendation strip sits above the
+  // results showing events that ignore the criteria — which reads as "the
+  // filters did nothing". Hide it until the criteria are cleared.
+  const hasActiveFilters = Object.values(filters).some(
+    (v) => v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0),
+  );
 
   return (
     <div className="container mx-auto px-4 py-8 flex gap-8">
@@ -103,7 +114,7 @@ export default function EventsIndexPage() {
       {/* Main Content */}
       <main className="flex-1 space-y-10">
         {/* Recommended Section */}
-        {isAuthenticated && (
+        {isAuthenticated && !hasActiveFilters && (
           <section className="space-y-4">
             <div className="flex items-center gap-2">
               <Sparkles className="w-6 h-6 text-yellow-500" />
@@ -122,8 +133,25 @@ export default function EventsIndexPage() {
         )}
 
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold comfortaa-bold">{t('nav.events')}</h1>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h1 className="text-3xl font-bold comfortaa-bold">{t('nav.events')}</h1>
+              {/* Without a count, a filter that still fills the page looks like
+                  it did nothing. */}
+              {!error && !isLoading && (
+                <p
+                  data-testid="results-summary"
+                  className="comfortaa-regular text-sm text-muted-foreground"
+                >
+                  {events.length === 0
+                    ? 'Καμία εκδήλωση'
+                    : `${events.length} ${events.length === 1 ? 'εκδήλωση' : 'εκδηλώσεις'}${
+                        hasMore ? '+' : ''
+                      } σε αυτή τη σελίδα`}
+                  {hasActiveFilters ? ' — με φίλτρα' : ''}
+                </p>
+              )}
+            </div>
             {isFetching && (
               <Badge variant="outline" className="animate-pulse">
                 Φόρτωση...
@@ -186,7 +214,7 @@ export default function EventsIndexPage() {
         <Dialog open={isMobileFiltersOpen} onOpenChange={setIsMobileFiltersOpen}>
           <DialogTrigger asChild>
             <Button
-              className="rounded-full px-6 py-6 shadow-lg bg-primary text-primary-foreground flex items-center gap-2"
+              className="rounded-xl px-6 shadow-lg bg-primary text-primary-foreground flex items-center gap-2"
               size="lg"
             >
               <Filter className="size-5" />

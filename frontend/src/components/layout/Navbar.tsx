@@ -212,14 +212,14 @@ export function Navbar() {
                 <Button
                   asChild
                   variant="ghost"
-                  className="cursor-pointer rounded-full comfortaa-regular"
+                  className="cursor-pointer comfortaa-regular"
                 >
                   <Link to="/register">Εγγραφή</Link>
                 </Button>
                 <Button
                   asChild
                   className={cn(
-                    'cursor-pointer rounded-full bg-[#6d28d9] px-5 text-white hover:bg-[#5b21b6] comfortaa-regular',
+                    'cursor-pointer bg-[#6d28d9] px-5 text-white hover:bg-[#5b21b6] comfortaa-regular',
                   )}
                 >
                   <Link to="/login">Σύνδεση</Link>

@@ -37,6 +37,12 @@ services:
     environment:
       VITE_API_PROXY_TARGET: https://backend:8080
       VITE_HMR_CLIENT_PORT: ${FRONTEND_PORT:-5173}
+      # The dev server negotiates HTTP/2, over which the classic
+      # Connection: Upgrade handshake cannot run, so a proxied WebSocket never
+      # completes. Point the browser straight at the backend instead; its CORS
+      # allowlist already covers the dev origins. In production nginx proxies
+      # the upgrade properly and this stays empty (see docker-compose.yml).
+      VITE_WS_URL: wss://localhost:${APP_PORT:-8080}/api/v1/ws/messages
     volumes:
       - ./frontend:/app
       - frontend_bun_cache:/root/.bun

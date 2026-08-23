@@ -50,6 +50,10 @@ export function BookingForm({ event }: BookingFormProps) {
   } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingSchema),
     defaultValues: {
+      // The Select shows the first ticket type from the start, so the form has
+      // to hold it too — seeding only the Select left the form value empty and
+      // the total stuck at 0 until the user reopened the dropdown.
+      ticket_type_id: event.ticket_types[0]?.id ?? '',
       quantity: 1,
     },
   });
@@ -58,7 +62,8 @@ export function BookingForm({ event }: BookingFormProps) {
   const quantity = watch('quantity');
 
   const selectedTicket = event.ticket_types.find((t) => t.id === selectedTicketId);
-  const totalCost = selectedTicket ? selectedTicket.price * quantity : 0;
+  const quantityForTotal = Number.isFinite(quantity) && quantity > 0 ? quantity : 0;
+  const totalCost = selectedTicket ? selectedTicket.price * quantityForTotal : 0;
 
   // Submitting the form only opens the confirmation step — the booking itself
   // is sent by handleConfirm, because §9 requires an explicit confirmation that
@@ -68,13 +73,11 @@ export function BookingForm({ event }: BookingFormProps) {
   };
 
   const handleConfirm = async () => {
-    const selectedTicketId = watch('ticket_type_id');
-    const qty = watch('quantity');
     try {
       await createBooking({
         event_id: event.id,
         ticket_type_id: selectedTicketId,
-        quantity: qty,
+        quantity,
       }).unwrap();
       toast.success('Η κράτηση ολοκληρώθηκε με επιτυχία!');
       setIsConfirmOpen(false);
@@ -90,8 +93,10 @@ export function BookingForm({ event }: BookingFormProps) {
         <div className="space-y-2">
           <Label className="comfortaa-regular">Τύπος Εισιτηρίου</Label>
           <Select
-            onValueChange={(value) => setValue('ticket_type_id', value)}
-            defaultValue={event.ticket_types[0]?.id}
+            value={selectedTicketId ?? ''}
+            onValueChange={(value) =>
+              setValue('ticket_type_id', value, { shouldValidate: true, shouldDirty: true })
+            }
           >
             <SelectTrigger className="comfortaa-regular">
               <SelectValue placeholder="Επιλογή εισιτηρίου" />
@@ -138,7 +143,7 @@ export function BookingForm({ event }: BookingFormProps) {
       <Button
         type="submit"
         disabled={isLoading}
-        className="w-full rounded-full bg-[#6d28d9] text-white hover:bg-violet-700 comfortaa-regular"
+        className="w-full bg-[#6d28d9] text-white hover:bg-violet-700 comfortaa-regular"
       >
         {isLoading ? 'Επεξεργασία...' : 'Κράτηση Εισιτηρίων'}
       </Button>

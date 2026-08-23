@@ -32,6 +32,7 @@ export function useDragScroll<T extends HTMLElement>(
     startY: number;
     startScrollLeft: number;
     hasDragged: boolean;
+    captured: boolean;
   }>({
     active: false,
     pointerId: null,
@@ -39,6 +40,7 @@ export function useDragScroll<T extends HTMLElement>(
     startY: 0,
     startScrollLeft: 0,
     hasDragged: false,
+    captured: false,
   });
 
   const handlers = useMemo<DragScrollHandlers>(
@@ -55,17 +57,13 @@ export function useDragScroll<T extends HTMLElement>(
         state.current.startY = e.clientY;
         state.current.startScrollLeft = el.scrollLeft;
         state.current.hasDragged = false;
+        state.current.captured = false;
 
-        try {
-          el.setPointerCapture(e.pointerId);
-        } catch {
-          // ignore
-        }
-
-        // UX: show “grab” interaction on desktop.
-        if (e.pointerType === 'mouse') {
-          el.style.cursor = 'grabbing';
-        }
+        // Pointer capture is deliberately NOT taken here. While a container
+        // holds the capture, the browser retargets the following `click` to
+        // that container, so a click on a child button never reaches it. The
+        // capture is taken in onPointerMove instead, once the movement is a
+        // real drag.
       },
       onPointerMove: (e) => {
         const el = ref.current;
@@ -78,6 +76,15 @@ export function useDragScroll<T extends HTMLElement>(
         if (!state.current.hasDragged) {
           if (Math.hypot(dx, dy) >= dragThresholdPx) {
             state.current.hasDragged = true;
+            try {
+              el.setPointerCapture(e.pointerId);
+              state.current.captured = true;
+            } catch {
+              // ignore
+            }
+            if (e.pointerType === 'mouse') {
+              el.style.cursor = 'grabbing';
+            }
           } else {
             return;
           }
@@ -95,10 +102,13 @@ export function useDragScroll<T extends HTMLElement>(
         state.current.active = false;
         state.current.pointerId = null;
 
-        try {
-          el.releasePointerCapture(e.pointerId);
-        } catch {
-          // ignore
+        if (state.current.captured) {
+          try {
+            el.releasePointerCapture(e.pointerId);
+          } catch {
+            // ignore
+          }
+          state.current.captured = false;
         }
 
         if (e.pointerType === 'mouse') {
@@ -112,6 +122,14 @@ export function useDragScroll<T extends HTMLElement>(
 
         state.current.active = false;
         state.current.pointerId = null;
+        if (state.current.captured) {
+          try {
+            el.releasePointerCapture(e.pointerId);
+          } catch {
+            // ignore
+          }
+          state.current.captured = false;
+        }
         if (e.pointerType === 'mouse') {
           el.style.cursor = '';
         }

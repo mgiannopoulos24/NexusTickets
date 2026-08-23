@@ -32,7 +32,8 @@ This document serves as the single source of truth for all agents working on the
     │   ├── hooks/       # Global custom hooks (useAuth, useWebSocket)
     │   ├── lib/         # API client, WS client, i18n strings, utils
     │   ├── types/       # TypeScript models, enums, WS envelopes
-    │   └── routes/      # Router config & ProtectedRoute
+    │   ├── routes/      # Router config & ProtectedRoute
+    │   └── tests/       # Vitest suite (unit/, components/, pages/, helpers/)
 ```
 
 ## 3. Core Conventions

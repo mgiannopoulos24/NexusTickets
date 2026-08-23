@@ -261,6 +261,20 @@ func TestBookingService_CreateBooking(t *testing.T) {
 		}
 	})
 
+	t.Run("admin may book", func(t *testing.T) {
+		b, err := svc.CreateBooking(context.Background(), uuid.New(), domain.UserRoleAdmin, CreateBookingInput{
+			EventID:      eventID,
+			TicketTypeID: ttID,
+			Quantity:     1,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if b.TotalCost != 10.0 {
+			t.Fatalf("expected total 10.0, got %f", b.TotalCost)
+		}
+	})
+
 	t.Run("guest forbidden", func(t *testing.T) {
 		_, err := svc.CreateBooking(context.Background(), uuid.New(), domain.UserRoleGuest, CreateBookingInput{
 			EventID:      eventID,

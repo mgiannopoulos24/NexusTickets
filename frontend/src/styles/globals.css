@@ -203,6 +203,32 @@ body {
   html {
     @apply font-sans;
   }
+
+  /* Every control the user can click reads as clickable. Radix primitives
+     (select/tab/menu/checkbox triggers) and the raw <button>s scattered
+     through the pages do not carry a cursor of their own, so set it once
+     here instead of on each call site. */
+  button,
+  summary,
+  [role='button'],
+  [role='tab'],
+  [role='option'],
+  [role='menuitem'],
+  [role='menuitemcheckbox'],
+  [role='menuitemradio'],
+  [role='checkbox'],
+  [role='radio'],
+  [role='switch'],
+  label:has(> input[type='checkbox']),
+  label:has(> input[type='radio']) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled='true'],
+  [data-disabled] {
+    cursor: not-allowed;
+  }
 }
 
 @layer components {

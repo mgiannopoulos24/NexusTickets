@@ -173,7 +173,9 @@ func TestMessageMapping_RoundTrip(t *testing.T) {
 	m := messageDomainToModel(msg)
 	got := messageModelToDomain(m)
 
-	if got != msg {
+	// Reactions and the quoted preview are attached separately when a thread is
+	// rendered, so they are not part of the row round-trip.
+	if !reflect.DeepEqual(got, msg) {
 		t.Fatalf("round-trip mismatch:\nexpected: %#v\ngot:      %#v", msg, got)
 	}
 }

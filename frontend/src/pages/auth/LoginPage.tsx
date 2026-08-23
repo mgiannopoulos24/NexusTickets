@@ -119,7 +119,7 @@ export default function LoginPage() {
 
           <Button
             type="submit"
-            className="mt-6 w-full rounded-full bg-[#6d28d9] text-white hover:bg-[#5b21b6]"
+            className="mt-6 w-full bg-[#6d28d9] text-white hover:bg-[#5b21b6]"
           >
             Σύνδεση
           </Button>

@@ -266,7 +266,7 @@ export default function Home() {
                     ref={searchRef}
                     onChange={(e) => fetchSuggestions(e.target.value)}
                     className={cn(
-                      'h-14 w-full rounded-full border-0 bg-white pl-14 pr-6 text-[16px] max-[600px]:text-[14px]',
+                      'h-14 w-full rounded-xl border-0 bg-white pl-14 pr-6 text-[16px] max-[600px]:text-[14px]',
                       'comfortaa-regular text-neutral-900 ring-0 placeholder:text-neutral-500',
                       'max-[600px]:placeholder:text-[14px]',
                       'transition-shadow duration-300 ease-out motion-reduce:transition-none',
@@ -299,7 +299,7 @@ export default function Home() {
                 </p>
                 <Link
                   to="/events/category/theater"
-                  className="mt-5 inline-flex w-fit rounded-full bg-[#6d28d9] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 comfortaa-regular"
+                  className="mt-5 inline-flex w-fit rounded-lg bg-[#6d28d9] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 comfortaa-regular"
                 >
                   Δες εκδηλώσεις θεάτρου
                 </Link>

@@ -43,12 +43,13 @@ func AutoMigrate(db *gorm.DB) error {
 		&postgres.TicketTypeModel{},
 		&postgres.BookingModel{},
 		&postgres.MessageModel{},
+		&postgres.MailboxReactionModel{},
 		&postgres.EventPhotoModel{},
 		&postgres.UserEventViewModel{},
 		&postgres.ChatRoomModel{},
 		&postgres.ChatRoomParticipantModel{},
 		&postgres.ChatMessageModel{},
-		&postgres.MessageReactionModel{},
+		&postgres.MailboxReactionModel{},
 	}
 
 	if err := db.AutoMigrate(models...); err != nil {

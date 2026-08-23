@@ -36,8 +36,9 @@ export default defineConfig({
   test: {
     environment: 'happy-dom',
     globals: true,
-    setupFiles: ['./src/test-setup.ts'],
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    setupFiles: ['./src/tests/setup.ts'],
+    // Every test lives under src/tests so the suite is one tree to read.
+    include: ['src/tests/**/*.{test,spec}.{ts,tsx}'],
   },
   server: {
     https: devHttps,

@@ -33,12 +33,12 @@ export function HomeQuickNav() {
   if (!manageHref) return null;
 
   const primaryClass = cn(
-    'inline-flex items-center justify-center gap-2 rounded-full px-6 py-3',
+    'inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3',
     'bg-[#6d28d9] text-sm text-white shadow-sm transition comfortaa-regular',
     'hover:bg-[#5b21b6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6d28d9]/40',
   );
   const secondaryClass = cn(
-    'inline-flex items-center justify-center gap-2 rounded-full px-6 py-3',
+    'inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3',
     'border border-neutral-200 bg-white text-sm text-neutral-900 shadow-sm transition comfortaa-regular',
     'hover:border-[#6d28d9] hover:text-[#6d28d9]',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6d28d9]/40',

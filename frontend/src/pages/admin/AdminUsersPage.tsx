@@ -102,7 +102,7 @@ export default function AdminUsersPage() {
                   type="button"
                   onClick={() => changeFilter(tab.value)}
                   className={cn(
-                    'rounded-full px-4 py-1.5 text-sm font-medium transition-colors comfortaa-regular',
+                    'rounded-lg px-4 py-2 text-sm font-medium transition-colors comfortaa-regular',
                     active
                       ? 'bg-[var(--nexus-purple)] text-white'
                       : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200',

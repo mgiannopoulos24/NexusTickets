@@ -186,9 +186,15 @@ func messageModelToDomain(m MessageModel) domain.Message {
 		RecipientID:        m.RecipientID,
 		Subject:            m.Subject,
 		Body:               m.Body,
+		ImageURL:           m.ImageURL,
+		FileURL:            m.FileURL,
+		FileName:           m.FileName,
+		GifURL:             m.GifURL,
+		ReplyToID:          m.ReplyToID,
 		ReadAt:             m.ReadAt,
 		DeletedBySender:    m.DeletedBySender,
 		DeletedByRecipient: m.DeletedByRecipient,
+		DeletedForEveryone: m.DeletedForEveryone,
 		CreatedAt:          m.CreatedAt,
 	}
 }
@@ -200,9 +206,15 @@ func messageDomainToModel(msg domain.Message) MessageModel {
 		RecipientID:        msg.RecipientID,
 		Subject:            msg.Subject,
 		Body:               msg.Body,
+		ImageURL:           msg.ImageURL,
+		FileURL:            msg.FileURL,
+		FileName:           msg.FileName,
+		GifURL:             msg.GifURL,
+		ReplyToID:          msg.ReplyToID,
 		ReadAt:             msg.ReadAt,
 		DeletedBySender:    msg.DeletedBySender,
 		DeletedByRecipient: msg.DeletedByRecipient,
+		DeletedForEveryone: msg.DeletedForEveryone,
 		CreatedAt:          msg.CreatedAt,
 	}
 }

@@ -119,15 +119,38 @@ type MessageModel struct {
 	Subject string `gorm:"not null"`
 	Body    string `gorm:"not null"`
 
+	// Attachment columns; empty when the message is plain text.
+	ImageURL string `gorm:"column:image_url;not null;default:''"`
+	FileURL  string `gorm:"column:file_url;not null;default:''"`
+	FileName string `gorm:"column:file_name;not null;default:''"`
+	GifURL   string `gorm:"column:gif_url;not null;default:''"`
+
+	ReplyToID *uuid.UUID `gorm:"column:reply_to_id;type:uuid;index"`
+
 	ReadAt *time.Time `gorm:"column:read_at"`
 
 	DeletedBySender    bool `gorm:"not null;default:false"`
 	DeletedByRecipient bool `gorm:"not null;default:false"`
+	DeletedForEveryone bool `gorm:"column:deleted_for_everyone;not null;default:false"`
 
 	CreatedAt time.Time `gorm:"not null;default:now()"`
 }
 
 func (MessageModel) TableName() string { return "messages" }
+
+// MailboxReactionModel is one emoji reaction on a mailbox message; a user may
+// hold at most one of a given emoji per message.
+type MailboxReactionModel struct {
+	ID uuid.UUID `gorm:"type:uuid;primaryKey"`
+
+	MessageID uuid.UUID `gorm:"type:uuid;not null;index:idx_reaction_message_user,unique,composite:msg_user_emoji"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null;index:idx_reaction_message_user,unique,composite:msg_user_emoji"`
+	Emoji     string    `gorm:"not null;size:32;index:idx_reaction_message_user,unique,composite:msg_user_emoji"`
+
+	CreatedAt time.Time `gorm:"not null;default:now()"`
+}
+
+func (MailboxReactionModel) TableName() string { return "mailbox_message_reactions" }
 
 type CategoryModel struct {
 	ID uuid.UUID `gorm:"type:uuid;primaryKey"`

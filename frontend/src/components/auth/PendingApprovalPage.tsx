@@ -24,14 +24,14 @@ export default function PendingApprovalPage() {
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <Button
               asChild
-              className="w-full rounded-full bg-[#6d28d9] text-white hover:bg-[#5b21b6] sm:w-auto comfortaa-regular"
+              className="w-full bg-[#6d28d9] text-white hover:bg-[#5b21b6] sm:w-auto comfortaa-regular"
             >
               <Link to="/login">Μετάβαση στη σύνδεση</Link>
             </Button>
             <Button
               asChild
               variant="ghost"
-              className="w-full rounded-full sm:w-auto comfortaa-regular"
+              className="w-full sm:w-auto comfortaa-regular"
             >
               <Link to="/">Επιστροφή στην αρχική</Link>
             </Button>

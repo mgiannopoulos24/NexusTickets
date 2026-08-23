@@ -32,7 +32,7 @@ func InitializeApp(db *gorm.DB, redisClient *redis.Client, cfg config.Config) (*
 	eventPhotoRepository := postgres.NewEventPhotoRepositoryPostgres(db)
 	userEventViewRepository := postgres.NewUserEventViewRepositoryPostgres(db)
 	messageRepository := postgres.NewMessageRepositoryPostgres(db)
-	messagingService := service.NewMessagingService(messageRepository, userRepository, bookingRepository, eventRepository, redisClient, hub)
+	messagingService := provideMessagingService(messageRepository, userRepository, bookingRepository, eventRepository, redisClient, hub, cfg)
 	recommendationService := provideRecommendationService(bookingRepository, userEventViewRepository)
 	eventService := provideEventService(eventRepository, bookingRepository, categoryRepository, eventPhotoRepository, userEventViewRepository, cfg, messagingService, recommendationService)
 	eventHandler := handler.NewEventHandler(eventService)
@@ -82,7 +82,7 @@ type AppDependencies struct {
 var RepositorySet = wire.NewSet(postgres.NewUserRepositoryPostgres, postgres.NewEventRepositoryPostgres, postgres.NewTicketTypeRepositoryPostgres, postgres.NewBookingRepositoryPostgres, postgres.NewMessageRepositoryPostgres, postgres.NewCategoryRepositoryPostgres, postgres.NewEventPhotoRepositoryPostgres, postgres.NewUserEventViewRepositoryPostgres, postgres.NewChatRoomRepository)
 
 var ServiceSet = wire.NewSet(
-	provideAuthService, service.NewUserService, service.NewChatService, service.NewMessagingService, provideEventService, service.NewBookingService, service.NewCatalogExportService, provideRecommendationService,
+	provideAuthService, service.NewUserService, service.NewChatService, provideMessagingService, provideEventService, service.NewBookingService, service.NewCatalogExportService, provideRecommendationService,
 )
 
 var HandlerSet = wire.NewSet(handler.NewAuthHandler, handler.NewUserHandler, handler.NewEventHandler, handler.NewCategoryHandler, handler.NewBookingHandler, handler.NewMessageHandler, handler.NewChatHandler, handler.NewAdminExportHandler)

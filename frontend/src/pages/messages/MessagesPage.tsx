@@ -1,32 +1,36 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { MessagesSquare } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { EmptyState } from '@/components/shared/EmptyState';
 import { ErrorMessage } from '@/components/shared/ErrorMessage';
-import { SkeletonList } from '@/components/shared/SkeletonList';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { ConversationList } from '@/components/messenger/ConversationList';
+import { MessageComposer } from '@/components/messenger/MessageComposer';
+import { MessageThread } from '@/components/messenger/MessageThread';
+import { NewConversationDialog } from '@/components/messenger/NewConversationDialog';
 import {
   useDeleteMessageMutation,
-  useListMessagesQuery,
+  useListConversationsQuery,
   useListRecipientsQuery,
+  useListThreadQuery,
+  useReactToMessageMutation,
   useSendMessageMutation,
+  useUploadAttachmentMutation,
 } from '@/app/messagesApi';
+import { useAppSelector } from '@/app/hooks';
 import { useAuth } from '@/hooks/useAuth';
+import { sendTypingHint, useTypingSignal } from '@/hooks/useTypingSignal';
 import { cn } from '@/lib/utils';
-import type { Message, MessageRecipient } from '@/types/message';
+import type { Attachment, Message, MessageParticipant, MessageRecipient } from '@/types/message';
+import type { OutgoingMessage } from '@/components/messenger/MessageComposer';
 
-type Folder = 'inbox' | 'sent';
-
-const PAGE_SIZE = 50;
+const BOOKING_RULE = 'messaging requires a booking between the two users';
 
 function errorText(err: unknown, fallback: string): string {
   if (typeof err === 'object' && err !== null && 'data' in err) {
     const data = (err as { data?: { error?: { message?: string } } }).data;
     const message = data?.error?.message;
-    if (message === 'messaging requires a booking between the two users') {
+    if (message === BOOKING_RULE) {
       return 'Μπορείτε να στείλετε μήνυμα μόνο σε διοργανωτές των εκδηλώσεων που κρατήσατε (ή στην υποστήριξη).';
     }
     if (message) return message;
@@ -35,340 +39,268 @@ function errorText(err: unknown, fallback: string): string {
   return fallback;
 }
 
-function participantLabel(r: MessageRecipient): string {
-  const name = r.full_name.trim() || r.username;
-  if (r.support) return `${name} — Υποστήριξη`;
-  if (r.role === 'organizer') return `${name} — Διοργανωτής`;
-  return name;
-}
-
-/** Who the message is "with", from the current user's point of view. */
-function counterparty(m: Message, folder: Folder): string {
-  const p = folder === 'inbox' ? m.sender : m.recipient;
-  if (!p) return '—';
-  return p.full_name.trim() || p.username;
+function recipientToParticipant(r: MessageRecipient): MessageParticipant {
+  return { id: r.id, username: r.username, full_name: r.full_name, role: r.role };
 }
 
 export default function MessagesPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [folder, setFolder] = useState<Folder>('inbox');
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-
   const {
-    data: messages,
-    isLoading,
-    isFetching,
-    error: listError,
-    refetch,
-  } = useListMessagesQuery({ folder, limit: PAGE_SIZE, offset: 0 });
-
+    data: conversations,
+    isLoading: conversationsLoading,
+    error: conversationsError,
+    refetch: refetchConversations,
+  } = useListConversationsQuery();
   const { data: recipients } = useListRecipientsQuery();
   const [sendMessage, { isLoading: isSending }] = useSendMessageMutation();
   const [deleteMessage] = useDeleteMessageMutation();
+  const [uploadAttachment] = useUploadAttachmentMutation();
+  const [reactToMessage] = useReactToMessageMutation();
 
-  // Compose state. The footer links here with ?compose=1 (and ?support=1 to
-  // preselect an administrator), so a support request is one click away.
-  //
-  // Those two intents are read straight from the URL rather than copied into
-  // state by an effect: the composer is open when the user opened it *or* the
-  // link asked for it, and the recipient/subject fall back to the support
-  // defaults until the user picks something else.
+  const [query, setQuery] = useState('');
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [pickerOpened, setPickerOpened] = useState(false);
+  const [pickerDismissed, setPickerDismissed] = useState(false);
+
+  // The footer links here with ?compose=1 (and ?support=1 to reach an
+  // administrator). Both intents are read straight off the URL rather than
+  // copied into state by an effect.
   const composeRequested = searchParams.get('compose') === '1';
   const supportRequested = searchParams.get('support') === '1';
 
-  const [composeOpened, setComposeOpened] = useState(false);
-  const [composeDismissed, setComposeDismissed] = useState(false);
-  const [recipientOverride, setRecipientOverride] = useState<string | null>(null);
-  const [subjectOverride, setSubjectOverride] = useState<string | null>(null);
-  const [body, setBody] = useState('');
-  const [composeError, setComposeError] = useState<string | null>(null);
-
   const supportContact = useMemo(() => recipients?.find((r) => r.support), [recipients]);
 
-  const isComposing = !composeDismissed && (composeOpened || composeRequested);
-  const recipientId = recipientOverride ?? (supportRequested ? (supportContact?.id ?? '') : '');
-  const subject = subjectOverride ?? (supportRequested ? 'Αίτημα υποστήριξης' : '');
+  // The open thread lives in the URL, so a conversation can be linked to and
+  // the back button steps between them. A support link resolves to the
+  // administrator as soon as the recipient list has loaded.
+  const activeUserId =
+    searchParams.get('to') ?? (supportRequested ? (supportContact?.id ?? null) : null);
 
-  const setRecipientId = (v: string) => setRecipientOverride(v);
-  const setSubject = (v: string) => setSubjectOverride(v);
+  const isPickerOpen =
+    !pickerDismissed && (pickerOpened || (composeRequested && !supportRequested));
 
-  const openCompose = () => {
-    setComposeDismissed(false);
-    setComposeOpened(true);
+  const openThread = (userId: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('to', userId);
+    next.delete('compose');
+    next.delete('support');
+    setSearchParams(next, { replace: true });
+    setSendError(null);
+    setReplyTo(null);
+    setPickerOpened(false);
+    setPickerDismissed(true);
   };
 
-  const closeCompose = () => {
-    setComposeOpened(false);
-    setComposeDismissed(true);
-    setComposeError(null);
-    setRecipientOverride(null);
-    setSubjectOverride(null);
-    setBody('');
-    if (composeRequested || supportRequested) {
-      const next = new URLSearchParams(searchParams);
-      next.delete('compose');
-      next.delete('support');
-      setSearchParams(next, { replace: true });
-    }
+  const closeThread = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('to');
+    next.delete('support');
+    setSearchParams(next, { replace: true });
   };
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setComposeError(null);
+  const openPicker = () => {
+    setPickerDismissed(false);
+    setPickerOpened(true);
+  };
 
-    if (!recipientId) {
-      setComposeError('Επιλέξτε παραλήπτη.');
-      return;
-    }
-    if (subject.trim() === '' || body.trim() === '') {
-      setComposeError('Συμπληρώστε θέμα και μήνυμα.');
-      return;
-    }
+  const {
+    data: threadMessages,
+    isLoading: threadLoading,
+    error: threadError,
+  } = useListThreadQuery({ userId: activeUserId ?? '' }, { skip: !activeUserId });
 
+  // Typing hints are transient: they expire on their own if the other side
+  // stops without sending anything.
+  const typingBy = useAppSelector((state) => state.messaging.typingBy);
+  const isTyping = useTypingSignal(activeUserId ? typingBy[activeUserId] : undefined);
+  const notifyTyping = useCallback(() => {
+    if (activeUserId) sendTypingHint(activeUserId);
+  }, [activeUserId]);
+
+  const activeConversation = useMemo(
+    () => conversations?.find((c) => c.user.id === activeUserId),
+    [conversations, activeUserId],
+  );
+
+  // A thread opened from the picker has no conversation row yet, so fall back
+  // to the recipient list for the header identity.
+  const activeRecipient = useMemo(
+    () => recipients?.find((r) => r.id === activeUserId),
+    [recipients, activeUserId],
+  );
+
+  const activeParticipant: MessageParticipant | null =
+    activeConversation?.user ?? (activeRecipient ? recipientToParticipant(activeRecipient) : null);
+  const activeSupport = activeConversation?.support ?? activeRecipient?.support ?? false;
+
+  const visibleConversations = useMemo(() => {
+    const list = conversations ?? [];
+    const q = query.trim().toLocaleLowerCase('el-GR');
+    if (!q) return list;
+    return list.filter((c) =>
+      `${c.user.full_name} ${c.user.username} ${c.last_message.body}`
+        .toLocaleLowerCase('el-GR')
+        .includes(q),
+    );
+  }, [conversations, query]);
+
+  // Replies inherit the thread's topic; only a brand-new thread asks for one.
+  const lastSubject = threadMessages?.[threadMessages.length - 1]?.subject?.trim() ?? '';
+  const hasThread = (threadMessages?.length ?? 0) > 0;
+  const defaultSubject = hasThread
+    ? lastSubject.startsWith('Απ:')
+      ? lastSubject
+      : `Απ: ${lastSubject}`
+    : '';
+
+  const handleSend = async ({ subject, body, attachment, gifUrl, replyToId }: OutgoingMessage) => {
+    if (!activeUserId) return;
+    setSendError(null);
+    const finalSubject = subject || defaultSubject || 'Μήνυμα';
     try {
-      await sendMessage({ recipient_id: recipientId, subject: subject.trim(), body: body.trim() }).unwrap();
-      toast.success('Το μήνυμα στάλθηκε.');
-      closeCompose();
-      setFolder('sent');
+      await sendMessage({
+        recipient_id: activeUserId,
+        subject: finalSubject,
+        body,
+        ...(replyToId ? { reply_to_id: replyToId } : {}),
+        ...(gifUrl ? { gif_url: gifUrl } : {}),
+        ...(attachment?.kind === 'image' ? { image_url: attachment.url } : {}),
+        ...(attachment?.kind === 'file'
+          ? { file_url: attachment.url, file_name: attachment.name }
+          : {}),
+      }).unwrap();
     } catch (err) {
-      setComposeError(errorText(err, 'Η αποστολή απέτυχε.'));
+      setSendError(errorText(err, 'Η αποστολή απέτυχε.'));
     }
   };
 
-  const handleReply = (m: Message) => {
-    const other = folder === 'inbox' ? m.sender : m.recipient;
-    if (!other) return;
-    setRecipientId(other.id);
-    setSubject(m.subject.startsWith('Απ:') ? m.subject : `Απ: ${m.subject}`);
-    setBody('');
-    setComposeError(null);
-    openCompose();
+  const handleUpload = async (file: File): Promise<Attachment> => {
+    try {
+      return await uploadAttachment(file).unwrap();
+    } catch (err) {
+      throw new Error(errorText(err, 'Η μεταφόρτωση απέτυχε.'), { cause: err });
+    }
   };
 
   const handleDelete = async (id: string) => {
+    if (!activeUserId) return;
     try {
-      await deleteMessage(id).unwrap();
-      toast.success('Το μήνυμα διαγράφηκε.');
+      await deleteMessage({ id, peerId: activeUserId }).unwrap();
+      // Both sides keep a tombstone, so say what actually happened.
+      toast.success('Το μήνυμα αποσύρθηκε και για τους δύο.');
+      if (replyTo?.id === id) setReplyTo(null);
     } catch (err) {
       toast.error(errorText(err, 'Η διαγραφή απέτυχε.'));
     }
   };
 
-  const isUnread = (m: Message): boolean => folder === 'inbox' && m.read_at === null;
-  const canReply = (m: Message): boolean => {
-    const other = folder === 'inbox' ? m.sender : m.recipient;
-    return !!other && other.id !== user?.id;
+  const handleReact = async (messageId: string, emoji: string) => {
+    if (!activeUserId) return;
+    try {
+      await reactToMessage({ messageId, emoji, peerId: activeUserId }).unwrap();
+    } catch (err) {
+      toast.error(errorText(err, 'Η αντίδραση απέτυχε.'));
+    }
   };
 
-  return (
-    <div className="min-h-screen bg-neutral-50 py-8">
-      <div className="mx-auto max-w-4xl px-4">
-        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="comfortaa-bold text-2xl font-bold text-neutral-900">Μηνύματα</h1>
-            <p className="comfortaa-regular mt-1 text-sm text-neutral-600">
-              Επικοινωνία με διοργανωτές και την υποστήριξη.
-            </p>
-          </div>
-          {!isComposing && (
-            <Button type="button" onClick={openCompose}>
-              Νέο μήνυμα
-            </Button>
-          )}
-        </div>
-
-        {isComposing && (
-          <form
-            onSubmit={handleSend}
-            className="mb-6 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm"
-          >
-            <h2 className="comfortaa-bold mb-4 text-lg text-neutral-900">Νέο μήνυμα</h2>
-
-            <div className="space-y-4">
-              <div>
-                <label
-                  htmlFor="msg-recipient"
-                  className="comfortaa-regular mb-1.5 block text-sm font-medium text-neutral-800"
-                >
-                  Προς <span className="text-[var(--nexus-red)]">*</span>
-                </label>
-                <select
-                  id="msg-recipient"
-                  value={recipientId}
-                  onChange={(e) => setRecipientId(e.target.value)}
-                  className={cn(
-                    'h-9 w-full rounded-lg border border-neutral-200 bg-white px-2.5 text-sm',
-                    'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none',
-                  )}
-                >
-                  <option value="">Επιλέξτε παραλήπτη…</option>
-                  {(recipients ?? []).map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {participantLabel(r)}
-                    </option>
-                  ))}
-                </select>
-                {recipients && recipients.length === 0 && (
-                  <p className="comfortaa-regular mt-1.5 text-sm text-neutral-600">
-                    Δεν υπάρχουν διαθέσιμοι παραλήπτες ακόμη. Η επικοινωνία με διοργανωτή ανοίγει
-                    μετά από κράτηση.
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label
-                  htmlFor="msg-subject"
-                  className="comfortaa-regular mb-1.5 block text-sm font-medium text-neutral-800"
-                >
-                  Θέμα <span className="text-[var(--nexus-red)]">*</span>
-                </label>
-                <Input
-                  id="msg-subject"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  maxLength={200}
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="msg-body"
-                  className="comfortaa-regular mb-1.5 block text-sm font-medium text-neutral-800"
-                >
-                  Μήνυμα <span className="text-[var(--nexus-red)]">*</span>
-                </label>
-                <Textarea
-                  id="msg-body"
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  rows={5}
-                  maxLength={4000}
-                />
-              </div>
-
-              {composeError && <ErrorMessage message={composeError} />}
-
-              <div className="flex gap-2">
-                <Button type="submit" disabled={isSending}>
-                  {isSending ? 'Αποστολή…' : 'Αποστολή'}
-                </Button>
-                <Button type="button" variant="outline" onClick={closeCompose} disabled={isSending}>
-                  Ακύρωση
-                </Button>
-              </div>
-            </div>
-          </form>
-        )}
-
-        <div className="mb-4 flex gap-2">
-          {(['inbox', 'sent'] as const).map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFolder(f)}
-              aria-pressed={folder === f}
-              className={cn(
-                'comfortaa-regular rounded-lg px-4 py-2 text-sm transition-colors',
-                folder === f
-                  ? 'bg-[#6d28d9] text-white'
-                  : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50',
-              )}
-            >
-              {f === 'inbox' ? 'Εισερχόμενα' : 'Απεσταλμένα'}
-            </button>
-          ))}
-        </div>
-
-        {isLoading ? (
-          <SkeletonList rows={4} />
-        ) : listError ? (
-          <ErrorMessage
-            message={errorText(listError, 'Σφάλμα φόρτωσης μηνυμάτων.')}
-            onRetry={() => void refetch()}
-          />
-        ) : (messages ?? []).length === 0 ? (
-          <EmptyState
-            title={folder === 'inbox' ? 'Κανένα εισερχόμενο μήνυμα' : 'Κανένα απεσταλμένο μήνυμα'}
-            description={
-              folder === 'inbox'
-                ? 'Εδώ θα εμφανίζονται τα μηνύματα που λαμβάνετε από διοργανωτές και την υποστήριξη.'
-                : 'Τα μηνύματα που στέλνετε θα εμφανίζονται εδώ.'
-            }
-          />
-        ) : (
-          <ul className={cn('space-y-2', isFetching && 'opacity-60 transition-opacity')}>
-            {(messages ?? []).map((m) => {
-              const expanded = expandedId === m.id;
-              return (
-                <li
-                  key={m.id}
-                  className={cn(
-                    'rounded-xl border bg-white px-4 py-3',
-                    isUnread(m) ? 'border-[#6d28d9] bg-[#f5f3ff]' : 'border-neutral-200',
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedId(expanded ? null : m.id)}
-                      aria-expanded={expanded}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <div className="flex items-center gap-2">
-                        {isUnread(m) && (
-                          <span
-                            className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#6d28d9]"
-                            aria-label="μη αναγνωσμένο"
-                          />
-                        )}
-                        <p className="comfortaa-bold truncate text-sm font-semibold text-neutral-900">
-                          {m.subject || '(χωρίς θέμα)'}
-                        </p>
-                      </div>
-                      <p className="comfortaa-regular mt-0.5 text-xs text-neutral-600">
-                        {folder === 'inbox' ? 'Από' : 'Προς'}: {counterparty(m, folder)}
-                      </p>
-                      <p
-                        className={cn(
-                          'comfortaa-regular mt-1 text-sm text-neutral-700',
-                          expanded ? 'whitespace-pre-wrap' : 'line-clamp-2',
-                        )}
-                      >
-                        {m.body}
-                      </p>
-                      <p className="comfortaa-regular mt-1 text-xs text-neutral-500">
-                        {new Date(m.created_at).toLocaleString('el-GR')}
-                      </p>
-                    </button>
-
-                    <div className="flex shrink-0 flex-col gap-1">
-                      {canReply(m) && (
-                        <button
-                          type="button"
-                          onClick={() => handleReply(m)}
-                          className="comfortaa-regular rounded-lg px-3 py-1 text-xs text-[#6d28d9] hover:bg-[#f5f3ff]"
-                        >
-                          Απάντηση
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => void handleDelete(m.id)}
-                        className="comfortaa-regular rounded-lg px-3 py-1 text-xs text-[var(--nexus-red)] hover:bg-red-50"
-                      >
-                        Διαγραφή
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+  if (conversationsError) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-10">
+        <ErrorMessage
+          message={errorText(conversationsError, 'Δεν ήταν δυνατή η φόρτωση των μηνυμάτων.')}
+          onRetry={() => void refetchConversations()}
+        />
       </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-6xl px-0 py-0 sm:px-4 sm:py-6">
+      <div className="flex h-[calc(100dvh-4rem)] overflow-hidden border-neutral-200 bg-white sm:h-[calc(100dvh-9rem)] sm:rounded-xl sm:border sm:shadow-sm">
+        {/* Sidebar: full width on a phone until a thread is opened. */}
+        <aside
+          className={cn(
+            'w-full shrink-0 border-neutral-200 md:w-80 md:border-r lg:w-96',
+            activeUserId ? 'hidden md:block' : 'block',
+          )}
+        >
+          <ConversationList
+            conversations={visibleConversations}
+            activeUserId={activeUserId}
+            query={query}
+            onQueryChange={setQuery}
+            onSelect={openThread}
+            onCompose={openPicker}
+            isLoading={conversationsLoading}
+          />
+        </aside>
+
+        <section className={cn('min-w-0 flex-1', activeUserId ? 'block' : 'hidden md:block')}>
+          {activeParticipant ? (
+            <div className="flex h-full min-h-0 flex-col">
+              <MessageThread
+                participant={activeParticipant}
+                support={activeSupport}
+                messages={threadMessages ?? []}
+                currentUserId={user?.id ?? ''}
+                isLoading={threadLoading}
+                isTyping={isTyping}
+                onBack={closeThread}
+                onDelete={handleDelete}
+                onReply={setReplyTo}
+                onReact={handleReact}
+              />
+              <MessageComposer
+                defaultSubject={defaultSubject}
+                requireSubject={!hasThread}
+                disabled={!activeUserId}
+                isSending={isSending}
+                error={
+                  sendError ??
+                  (threadError
+                    ? errorText(threadError, 'Δεν ήταν δυνατή η φόρτωση της συνομιλίας.')
+                    : null)
+                }
+                onSend={handleSend}
+                onTyping={notifyTyping}
+                onUpload={handleUpload}
+                replyTo={replyTo}
+                onCancelReply={() => setReplyTo(null)}
+              />
+            </div>
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+              <MessagesSquare className="size-12 text-neutral-300" aria-hidden />
+              <h2 className="comfortaa-bold mt-4 text-lg font-bold text-neutral-900">
+                Επιλέξτε μια συνομιλία
+              </h2>
+              <p className="comfortaa-regular mt-1 max-w-sm text-sm text-neutral-600">
+                Διαλέξτε κάποιον από τη λίστα ή ξεκινήστε νέα συνομιλία με διοργανωτή εκδήλωσης που
+                κρατήσατε.
+              </p>
+            </div>
+          )}
+        </section>
+      </div>
+
+      <NewConversationDialog
+        open={isPickerOpen}
+        onOpenChange={(open) => {
+          setPickerOpened(open);
+          setPickerDismissed(!open);
+          if (!open && composeRequested) {
+            const next = new URLSearchParams(searchParams);
+            next.delete('compose');
+            next.delete('support');
+            setSearchParams(next, { replace: true });
+          }
+        }}
+        recipients={recipients ?? []}
+        onPick={openThread}
+      />
     </div>
   );
 }

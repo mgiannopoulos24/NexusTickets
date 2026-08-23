@@ -46,7 +46,7 @@ var ServiceSet = wire.NewSet(
 	provideAuthService,
 	service.NewUserService,
 	service.NewChatService,
-	service.NewMessagingService,
+	provideMessagingService,
 	provideEventService,
 	service.NewBookingService,
 	service.NewCatalogExportService,

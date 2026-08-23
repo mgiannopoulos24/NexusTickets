@@ -79,11 +79,16 @@ export function SectionSwiper({
         </div>
       </div>
 
+      {/* Swiper's track is overflow:hidden, which clipped the bottom of each
+          card's ring and hover shadow. Pad the track and pull the wrapper back
+          by the same amount so the cards stay put but their edges show. */}
       <div
+        className="-my-3"
         onMouseEnter={() => swiperRef.current?.autoplay?.stop()}
         onMouseLeave={() => swiperRef.current?.autoplay?.start()}
       >
         <Swiper
+          className="!py-3"
           modules={[Autoplay, A11y, Navigation]}
           onSwiper={(s) => {
             swiperRef.current = s;
