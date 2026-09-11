@@ -1,6 +1,4 @@
 /// <reference types="vitest/config" />
-// Dev TLS certs in localhost.pem + localhost-key.pem (regenerate if missing/expired):
-//   scripts/setup-certs.sh
 import path from 'path';
 import fs from 'fs';
 
@@ -9,21 +7,25 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
-// Backend dev server (override with env e.g. `VITE_API_PROXY_TARGET=http://127.0.0.1:8080 bun run dev`).
-const API_TARGET = process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:8080';
+// Dev TLS. The cert/key default to the mkcert files scripts/setup-certs.sh
+// writes next to this config; Docker mounts docker/tls/local and points the
+// env vars at it. HTTPS is on whenever both files exist (VITE_DEV_TLS=0 forces
+// plain HTTP), so tests / CI / a bare container without certs still start.
+const TLS_CERT = process.env.VITE_TLS_CERT_FILE ?? 'localhost.pem';
+const TLS_KEY = process.env.VITE_TLS_KEY_FILE ?? 'localhost-key.pem';
+const devHttps =
+  process.env.VITE_DEV_TLS !== '0' && fs.existsSync(TLS_CERT) && fs.existsSync(TLS_KEY)
+    ? { cert: fs.readFileSync(TLS_CERT), key: fs.readFileSync(TLS_KEY) }
+    : undefined;
+
+// Backend dev server. It serves TLS with the same local cert, so the default
+// follows the page: https when we have certs, http otherwise. Override with
+// VITE_API_PROXY_TARGET (Docker: https://backend:8080).
+const API_TARGET =
+  process.env.VITE_API_PROXY_TARGET ??
+  (devHttps ? 'https://127.0.0.1:8080' : 'http://127.0.0.1:8080');
 // Host port published to the browser (Docker: set to match FRONTEND_PORT mapping, e.g. 3000:5173 → 3000).
 const HMR_CLIENT_PORT = Number(process.env.VITE_HMR_CLIENT_PORT || 5173);
-
-// Dev HTTPS only when the mkcert files are present. Without this guard, running
-// tests / CI / a container (no certs) crashes at config load. Local dev with
-// certs still gets HTTPS as before.
-const devHttps =
-  fs.existsSync('localhost-key.pem') && fs.existsSync('localhost.pem')
-    ? {
-        key: fs.readFileSync('localhost-key.pem'),
-        cert: fs.readFileSync('localhost.pem'),
-      }
-    : undefined;
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -44,6 +46,8 @@ export default defineConfig({
     https: devHttps,
     // Docker / --host 0.0.0.0: browser cannot open wss to 0.0.0.0; HMR must use a real hostname.
     // https://vite.dev/config/server-options.html#server-hmr
+    // Because `proxy` is set, Vite serves HTTPS over HTTP/1.1 rather than
+    // HTTP/2, which is what lets the WebSocket upgrades below go through.
     hmr: {
       host: 'localhost',
       clientPort: HMR_CLIENT_PORT,

@@ -1,0 +1,49 @@
+name: submission
+
+# Builds what gets handed in on e-class: the report PDF and the source zip
+# (no node_modules, build output, secrets or uploads). Run it by hand from the
+# Actions tab; both land as workflow artifacts.
+on:
+  workflow_dispatch:
+
+jobs:
+  report:
+    name: report.pdf (typst)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: typst-community/setup-typst@v4
+        with:
+          typst-version: "0.14.0"
+
+      - name: compile
+        run: typst compile report/report.typ report/report.pdf
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: report
+          path: report/report.pdf
+          if-no-files-found: error
+
+  source:
+    name: source zip
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: zip tracked files
+        # `git archive` packs exactly what is committed: node_modules, dist/,
+        # .env, uploads/ and other ignored files never make it in.
+        run: git archive --format=zip --prefix=nexustickets/ -o nexustickets-source.zip HEAD
+
+      - name: sanity check
+        run: |
+          unzip -l nexustickets-source.zip | grep -qE "node_modules|/dist/|\.env$" && { echo "zip contains build/secret files"; exit 1; } || true
+          unzip -l nexustickets-source.zip | tail -1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source
+          path: nexustickets-source.zip
+          if-no-files-found: error

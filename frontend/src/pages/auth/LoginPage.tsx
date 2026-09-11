@@ -1,28 +1,35 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { useLang } from '@/contexts/langContext';
 
-const loginSchema = z.object({
-  username: z.string().min(1, 'Εισάγετε όνομα χρήστη'),
-  password: z.string().min(1, 'Εισάγετε κωδικό'),
-});
+function makeSchema(t: (key: string) => string) {
+  return z.object({
+    username: z.string().min(1, t('login.usernameRequired')),
+    password: z.string().min(1, t('login.passwordRequired')),
+  });
+}
 
-type LoginForm = z.infer<typeof loginSchema>;
+type LoginForm = z.infer<ReturnType<typeof makeSchema>>;
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, user } = useAuth();
+  const { t } = useLang();
+  const loginSchema = useMemo(() => makeSchema(t), [t]);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/';
+  const from =
+    (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ??
+    (user?.role === 'admin' ? '/admin/users' : '/');
 
   const {
     register,
@@ -44,7 +51,7 @@ export default function LoginPage() {
     try {
       await login(data.username.trim(), data.password);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Προέκυψε σφάλμα. Δοκιμάστε ξανά.';
+      const msg = err instanceof Error ? err.message : t('login.error');
       setSubmitError(msg);
     }
   };
@@ -53,13 +60,11 @@ export default function LoginPage() {
     <div className="bg-[var(--nexus-lightgray)]/40">
       <main className="mx-auto flex max-w-md flex-col gap-8 px-4 py-12 sm:px-6 lg:px-8">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Σύνδεση</h1>
-          <p className="mt-2 text-sm text-neutral-600">
-            Συνδεθείτε για να συνεχίσετε στο NexusTickets.
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-950">{t('login.title')}</h1>
+          <p className="mt-2 text-sm text-neutral-600">{t('login.subtitle')}</p>
           {(location.state as { pendingApproval?: boolean } | null)?.pendingApproval && (
-            <p className="mt-3 rounded-lg border border-[#6d28d9]/30 bg-[#6d28d9]/5 px-3 py-2 text-sm text-neutral-800">
-              Η εγγραφή ελήφθη. Η ενεργοποίηση του λογαριασμού σας εκκρεμεί έγκριση από διαχειριστή.
+            <p className="mt-3 rounded-lg border border-[var(--nexus-purple)]/30 bg-[var(--nexus-purple)]/5 px-3 py-2 text-sm text-neutral-800">
+              {t('login.pendingNotice')}
             </p>
           )}
         </div>
@@ -75,7 +80,7 @@ export default function LoginPage() {
                 htmlFor="login-username"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                Όνομα χρήστη
+                {t('login.username')}
               </label>
               <Input
                 id="login-username"
@@ -93,7 +98,7 @@ export default function LoginPage() {
                 htmlFor="login-password"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                Κωδικός
+                {t('login.password')}
               </label>
               <Input
                 id="login-password"
@@ -119,20 +124,20 @@ export default function LoginPage() {
 
           <Button
             type="submit"
-            className="mt-6 w-full bg-[#6d28d9] text-white hover:bg-[#5b21b6]"
+            className="mt-6 w-full bg-[var(--nexus-purple)] text-white hover:bg-[var(--nexus-purple-dark)]"
           >
-            Σύνδεση
+            {t('login.submit')}
           </Button>
 
           <p className="mt-6 text-center text-sm text-neutral-600">
-            Δεν έχετε λογαριασμό;{' '}
-            <Link to="/register" className="font-medium text-[#6d28d9] hover:underline">
-              Εγγραφή
+            {t('login.noAccount')}{' '}
+            <Link to="/register" className="font-medium text-[var(--nexus-purple)] hover:underline">
+              {t('login.register')}
             </Link>
           </p>
           <p className="mt-3 text-center text-sm text-neutral-600">
-            <Link to="/" className="font-medium text-[#6d28d9] hover:underline">
-              Επιστροφή στην αρχική
+            <Link to="/" className="font-medium text-[var(--nexus-purple)] hover:underline">
+              {t('login.backHome')}
             </Link>
           </p>
         </form>

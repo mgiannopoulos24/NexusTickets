@@ -11,6 +11,7 @@ import (
 	"nexustickets/internal/config"
 	"nexustickets/internal/handler"
 	wshub "nexustickets/internal/handler/ws"
+	repo "nexustickets/internal/repository"
 	"nexustickets/internal/repository/postgres"
 	"nexustickets/internal/service"
 )
@@ -23,11 +24,13 @@ type AppDependencies struct {
 	CategoryHandler       *handler.CategoryHandler
 	BookingHandler        *handler.BookingHandler
 	MessageHandler        *handler.MessageHandler
-	ChatHandler           *handler.ChatHandler
+	SupportHandler        *handler.SupportHandler
 	AdminExportHandler    *handler.AdminExportHandler
 	RecommendationService *service.RecommendationService
 	// EventService is exposed so main can run the COMPLETED sweeper.
 	EventService *service.EventService
+	// Users is exposed so main can make sure the built-in admin exists.
+	Users repo.UserRepository
 }
 
 var RepositorySet = wire.NewSet(
@@ -39,17 +42,17 @@ var RepositorySet = wire.NewSet(
 	postgres.NewCategoryRepositoryPostgres,
 	postgres.NewEventPhotoRepositoryPostgres,
 	postgres.NewUserEventViewRepositoryPostgres,
-	postgres.NewChatRoomRepository,
+	postgres.NewSupportRepositoryPostgres,
 )
 
 var ServiceSet = wire.NewSet(
 	provideAuthService,
 	service.NewUserService,
-	service.NewChatService,
 	provideMessagingService,
 	provideEventService,
 	service.NewBookingService,
 	service.NewCatalogExportService,
+	service.NewSupportService,
 	provideRecommendationService,
 )
 
@@ -60,8 +63,8 @@ var HandlerSet = wire.NewSet(
 	handler.NewCategoryHandler,
 	handler.NewBookingHandler,
 	handler.NewMessageHandler,
-	handler.NewChatHandler,
 	handler.NewAdminExportHandler,
+	handler.NewSupportHandler,
 )
 
 func InitializeApp(db *gorm.DB, redisClient *redisv9.Client, cfg config.Config) (*AppDependencies, error) {

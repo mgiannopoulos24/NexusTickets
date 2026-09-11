@@ -1,4 +1,5 @@
 import type { TicketType } from '@/types/models';
+import { tr } from '@/lib/i18n';
 
 /**
  * A ticket type as edited in a form.
@@ -56,7 +57,7 @@ export function parseTicketDrafts(
   capacity: number,
 ): { tickets: ParsedTicketType[] } | { error: string } {
   if (drafts.length === 0) {
-    return { error: 'Προσθέστε τουλάχιστον έναν τύπο εισιτηρίου.' };
+    return { error: tr('ticketTypes.atLeastOne') };
   }
 
   const tickets: ParsedTicketType[] = [];
@@ -65,16 +66,16 @@ export function parseTicketDrafts(
     const price = Number.parseFloat(d.price.replace(',', '.'));
     const quantity = Number.parseInt(d.quantity.trim(), 10);
 
-    if (name === '') return { error: 'Κάθε τύπος εισιτηρίου χρειάζεται όνομα.' };
+    if (name === '') return { error: tr('ticketTypes.nameRequired') };
     if (!Number.isFinite(price) || price < 0) {
-      return { error: `Μη έγκυρη τιμή για τον τύπο «${name}».` };
+      return { error: tr('ticketTypes.invalidPrice', { name }) };
     }
     if (!Number.isFinite(quantity) || quantity < 0) {
-      return { error: `Μη έγκυρο πλήθος θέσεων για τον τύπο «${name}».` };
+      return { error: tr('ticketTypes.invalidQuantity', { name }) };
     }
     if (quantity < d.sold) {
       return {
-        error: `Ο τύπος «${name}» έχει ήδη ${d.sold} κρατήσεις — οι θέσεις δεν μπορούν να πέσουν κάτω από αυτό.`,
+        error: tr('ticketTypes.belowSold', { name, sold: d.sold }),
       };
     }
 
@@ -84,7 +85,7 @@ export function parseTicketDrafts(
   const sum = tickets.reduce((acc, t) => acc + t.quantity, 0);
   if (sum > capacity) {
     return {
-      error: `Το άθροισμα των θέσεων (${sum}) υπερβαίνει τη χωρητικότητα (${capacity}).`,
+      error: tr('ticketTypes.exceedsCapacity', { sum, capacity }),
     };
   }
 

@@ -10,16 +10,8 @@ import { ErrorMessage } from '@/components/shared/ErrorMessage';
 import { SkeletonList } from '@/components/shared/SkeletonList';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { EventStatus } from '@/types/enums';
 import type { Event } from '@/types/models';
-
-const STATUS_LABEL: Record<EventStatus, string> = {
-  draft: 'Πρόχειρο',
-  published: 'Δημοσιευμένο',
-  completed: 'Ολοκληρωμένο',
-  cancelled: 'Ακυρωμένο',
-  deleted: 'Διαγραμμένο',
-};
+import { useLang } from '@/contexts/langContext';
 
 const bookedSeats = (ev: Event): number => ev.tickets_sold ?? 0;
 
@@ -28,37 +20,38 @@ const canDelete = (ev: Event): boolean =>
   ev.status === 'draft' || (ev.status === 'published' && bookedSeats(ev) === 0);
 
 export default function OrganizerEventsPage() {
+  const { t } = useLang();
   const { data: events, isLoading, error, refetch } = useGetOrganizerEventsQuery();
   const [deleteEvent, { isLoading: deleting }] = useDeleteEventMutation();
 
   const onDelete = async (ev: Event) => {
-    if (!window.confirm(`Διαγραφή «${ev.title}»; Η ενέργεια δεν αναιρείται.`)) return;
+    if (!window.confirm(t('organizerEvents.confirmDelete', { title: ev.title }))) return;
     try {
       await deleteEvent(ev.id).unwrap();
-      toast.success('Η εκδήλωση διαγράφηκε');
+      toast.success(t('organizerEvents.deleted'));
       // The list re-reads itself: deleteEvent invalidates the organizer tag.
     } catch (e) {
-      toast.error(apiErrorMessage(e, 'Η διαγραφή απέτυχε'));
+      toast.error(apiErrorMessage(e, t('organizerEvents.deleteFailed')));
     }
   };
 
   return (
     <OrganizerLayout>
-      <div className="bg-white p-6">
+      <div className="bg-white p-4 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="comfortaa-bold text-2xl font-bold text-neutral-950">
-              Οι εκδηλώσεις μου
+              {t('organizerEvents.title')}
             </h1>
             <p className="comfortaa-regular mt-2 text-sm text-neutral-600">
-              Δημιουργία, επεξεργασία και δημοσίευση των εκδηλώσεών σας.
+              {t('organizerEvents.subtitle')}
             </p>
           </div>
           <Link
             to="/organizer/events/new"
-            className="comfortaa-regular inline-flex shrink-0 items-center justify-center rounded-none border-2 border-[#6d28d9] bg-[#6d28d9] px-4 py-2 text-sm text-white hover:bg-[#5b21b6]"
+            className="comfortaa-regular inline-flex shrink-0 items-center justify-center rounded-none border-2 border-[var(--nexus-purple)] bg-[var(--nexus-purple)] px-4 py-2 text-sm text-white hover:bg-[var(--nexus-purple-dark)]"
           >
-            Νέα εκδήλωση
+            {t('organizerEvents.new')}
           </Link>
         </div>
 
@@ -67,29 +60,29 @@ export default function OrganizerEventsPage() {
         ) : error ? (
           <ErrorMessage
             className="mt-6"
-            message={apiErrorMessage(error, 'Δεν ήταν δυνατή η φόρτωση των εκδηλώσεων.')}
+            message={apiErrorMessage(error, t('organizerEvents.loadError'))}
             onRetry={() => void refetch()}
           />
         ) : (events ?? []).length === 0 ? (
           <EmptyState
             className="mt-6"
-            title="Δεν υπάρχουν εκδηλώσεις ακόμα"
-            description="Δημιουργήστε την πρώτη σας εκδήλωση για να αρχίσετε να δέχεστε κρατήσεις."
+            title={t('organizerEvents.emptyTitle')}
+            description={t('organizerEvents.emptyBody')}
           >
             <Link
               to="/organizer/events/new"
-              className="comfortaa-regular inline-block rounded-lg bg-[#6d28d9] px-4 py-2 text-sm text-white hover:bg-[#5b21b6]"
+              className="comfortaa-regular inline-block rounded-lg bg-[var(--nexus-purple)] px-4 py-2 text-sm text-white hover:bg-[var(--nexus-purple-dark)]"
             >
-              Δημιουργήστε την πρώτη σας
+              {t('organizerEvents.createFirst')}
             </Link>
           </EmptyState>
         ) : (
           <div className="mt-6 overflow-x-auto rounded-xl border border-neutral-200">
             <div className="comfortaa-regular grid min-w-[46rem] grid-cols-[minmax(0,1fr)_140px_100px_220px_100px] bg-neutral-50 px-4 py-3 text-xs font-semibold text-neutral-600">
-              <div>Τίτλος</div>
-              <div>Κατάσταση</div>
-              <div>Κρατήσεις</div>
-              <div>Ημερομηνίες</div>
+              <div>{t('organizerEvents.colTitle')}</div>
+              <div>{t('organizerEvents.colStatus')}</div>
+              <div>{t('organizerEvents.colBookings')}</div>
+              <div>{t('organizerEvents.colDates')}</div>
               <div />
             </div>
             <ul
@@ -102,7 +95,7 @@ export default function OrganizerEventsPage() {
                       to={`/organizer/events/${encodeURIComponent(ev.id)}/edit`}
                       className="min-w-0 pr-3"
                     >
-                      <p className="comfortaa-regular truncate text-sm font-medium text-neutral-900 hover:text-[#6d28d9]">
+                      <p className="comfortaa-regular truncate text-sm font-medium text-neutral-900 hover:text-[var(--nexus-purple)]">
                         {ev.title}
                       </p>
                       <p className="comfortaa-regular truncate text-xs text-neutral-500">
@@ -110,13 +103,13 @@ export default function OrganizerEventsPage() {
                       </p>
                     </Link>
                     <div className="comfortaa-regular text-xs text-neutral-700">
-                      {STATUS_LABEL[ev.status] ?? ev.status}
+                      {t(`status.event.${ev.status}`)}
                     </div>
                     <div className="comfortaa-regular text-xs text-neutral-700">
                       {bookedSeats(ev) > 0 ? (
                         <Link
                           to={`/organizer/events/${encodeURIComponent(ev.id)}/bookings`}
-                          className="text-[#6d28d9] underline hover:no-underline"
+                          className="text-[var(--nexus-purple)] underline hover:no-underline"
                         >
                           {bookedSeats(ev)}
                         </Link>
@@ -132,7 +125,7 @@ export default function OrganizerEventsPage() {
                       {bookedSeats(ev) > 0 && (
                         <Link
                           to={`/organizer/events/${encodeURIComponent(ev.id)}/bookings`}
-                          title="Προβολή κρατήσεων"
+                          title={t('organizerEvents.viewBookings')}
                         >
                           <Button variant="ghost" size="icon" className="size-8">
                             <FileTextIcon className="size-4" />
@@ -145,7 +138,7 @@ export default function OrganizerEventsPage() {
                           size="icon"
                           disabled={deleting}
                           className="size-8 text-neutral-500 hover:text-[var(--nexus-red)]"
-                          title="Διαγραφή"
+                          title={t('organizerEvents.delete')}
                           onClick={() => void onDelete(ev)}
                         >
                           <Trash2Icon className="size-4" />

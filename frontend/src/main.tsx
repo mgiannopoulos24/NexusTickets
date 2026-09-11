@@ -7,6 +7,7 @@ import { AuthProvider } from '@/contexts/AuthContent';
 import { LangProvider } from '@/contexts/LangContext';
 import App from '@/App';
 import './styles/globals.css';
+import { tr } from '@/lib/i18n';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -14,7 +15,7 @@ createRoot(document.getElementById('root')!).render(
       <BrowserRouter>
         <AuthProvider>
           <LangProvider>
-            <Suspense fallback={<div>Φόρτωση...</div>}>
+            <Suspense fallback={<div>{tr('common.loading')}</div>}>
               <App />
             </Suspense>
           </LangProvider>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLang } from '@/contexts/langContext';
 
 interface DateRangeCalendarProps {
   from?: Date;
@@ -10,6 +11,7 @@ interface DateRangeCalendarProps {
 }
 
 export function DateRangeCalendar({ from, to, onSelect, className }: DateRangeCalendarProps) {
+  const { t } = useLang();
   const [currentMonth, setCurrentMonth] = useState(from ?? new Date());
   const [hoverDate, setHoverDate] = useState<Date | null>(null);
 
@@ -138,7 +140,7 @@ export function DateRangeCalendar({ from, to, onSelect, className }: DateRangeCa
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
   };
 
-  const daysOfWeek = ['Κυρ', 'Δευ', 'Τρί', 'Τετ', 'Πέμ', 'Παρ', 'Σάβ'];
+  const daysOfWeek = t('calendar.days').split(',');
 
   return (
     <div className={cn('w-full max-w-xs max-w-sm', className)}>
@@ -168,18 +170,18 @@ export function DateRangeCalendar({ from, to, onSelect, className }: DateRangeCa
       <div className="mt-3 sm:mt-4 flex gap-2 sm:gap-4 text-[10px] sm:text-xs">
         <div className="flex items-center gap-1 sm:gap-2">
           <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 border-2 border-green-600 rounded" />
-          <span className="hidden sm:inline">Έναρξη</span>
-          <span className="sm:hidden">Από</span>
+          <span className="hidden sm:inline">{t('calendar.start')}</span>
+          <span className="sm:hidden">{t('calendar.from')}</span>
         </div>
         <div className="flex items-center gap-1 sm:gap-2">
           <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 border-2 border-red-600 rounded" />
-          <span className="hidden sm:inline">Λήξη</span>
-          <span className="sm:hidden">Έως</span>
+          <span className="hidden sm:inline">{t('calendar.end')}</span>
+          <span className="sm:hidden">{t('calendar.to')}</span>
         </div>
         <div className="flex items-center gap-1 sm:gap-2">
           <div className="h-2.5 w-2.5 sm:h-3 sm:w-3 bg-gray-200 rounded" />
-          <span className="hidden sm:inline">Περίοδος</span>
-          <span className="sm:hidden">Περ.</span>
+          <span className="hidden sm:inline">{t('calendar.period')}</span>
+          <span className="sm:hidden">{t('calendar.periodShort')}</span>
         </div>
       </div>
     </div>

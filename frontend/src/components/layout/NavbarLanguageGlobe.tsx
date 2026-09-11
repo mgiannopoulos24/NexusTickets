@@ -3,24 +3,37 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 
 import { ButtonAlt } from '@/components/ui/button-alt';
 import { SelectAltPanelContainer, SelectAltScrollRegion } from '@/components/ui/select-alt';
+import flagGb from '@/assets/icons/flag-gb.svg';
+import flagGr from '@/assets/icons/flag-gr.svg';
 import globeIcon from '@/assets/icons/globe.svg';
 import { useLang } from '@/contexts/langContext';
 
 /** Locales with `src/locales/*.yaml` bundles (parsed at build time). */
 const LANGUAGE_OPTIONS = [
-  { value: 'en' as const, label: 'English' },
-  { value: 'el' as const, label: 'Ελληνικά' },
+  { value: 'el' as const, label: 'Ελληνικά', flag: flagGr },
+  { value: 'en' as const, label: 'English', flag: flagGb },
 ] as const;
 
+function Flag({ src }: { src: string }) {
+  return (
+    <img
+      src={src}
+      alt=""
+      aria-hidden
+      className="mr-2 inline-block h-[14px] w-[21px] shrink-0 rounded-[2px] object-cover ring-1 ring-black/10"
+    />
+  );
+}
+
 export function NavbarLanguageGlobe() {
-  const { locale, setLocale } = useLang();
+  const { locale, setLocale, t } = useLang();
   const [panelOpen, setPanelOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
   const baseId = useId();
   const listboxId = `${baseId}-listbox`;
   const triggerId = `${baseId}-trigger`;
 
-  const currentLabel = LANGUAGE_OPTIONS.find((o) => o.value === locale)?.label ?? locale;
+  const current = LANGUAGE_OPTIONS.find((o) => o.value === locale);
 
   return (
     <div
@@ -37,7 +50,7 @@ export function NavbarLanguageGlobe() {
         aria-expanded={panelOpen}
         aria-controls={panelOpen ? `${baseId}-panel` : undefined}
         aria-haspopup="dialog"
-        aria-label="Γλώσσα"
+        aria-label={t('nav.language')}
       >
         <img src={globeIcon} alt="" aria-hidden className="size-6" />
       </ButtonAlt>
@@ -57,7 +70,10 @@ export function NavbarLanguageGlobe() {
               aria-haspopup="listbox"
               onClick={() => setListOpen((v) => !v)}
             >
-              <span className="min-w-0 truncate">{currentLabel}</span>
+              <span className="flex min-w-0 items-center truncate">
+                {current ? <Flag src={current.flag} /> : null}
+                {current?.label ?? locale}
+              </span>
               {listOpen ? (
                 <ChevronUp className="size-3.5 shrink-0 text-neutral-500" aria-hidden />
               ) : (
@@ -81,6 +97,7 @@ export function NavbarLanguageGlobe() {
                         setListOpen(false);
                       }}
                     >
+                      <Flag src={opt.flag} />
                       {opt.label}
                     </ButtonAlt>
                   );

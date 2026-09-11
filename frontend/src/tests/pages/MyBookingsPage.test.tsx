@@ -11,6 +11,7 @@ let api: MockFetch;
 const withEvent = {
   event: {
     id: EVENT_ID,
+    organizer_id: 'org-1',
     title: 'Συναυλία Κλασικής Μουσικής',
     venue: 'Μέγαρο Μουσικής',
     city: 'Αθήνα',
@@ -37,6 +38,17 @@ describe('MyBookingsPage (§11)', () => {
     expect(screen.getByText('Κανονικό')).toBeInTheDocument();
     expect(screen.getByText('Επιβεβαιωμένη')).toBeInTheDocument();
     expect(screen.getByText('40.00 €')).toBeInTheDocument();
+  });
+
+  it('links each booking to a message to its organizer (§10)', async () => {
+    api.on('/bookings/me', () => [booking({ ...withEvent })]);
+    renderWithProviders(<MyBookingsPage />);
+
+    const link = await screen.findByRole('link', { name: /Μήνυμα στον διοργανωτή/ });
+    const href = link.getAttribute('href') ?? '';
+    expect(href).toContain('/messages?compose=1');
+    expect(href).toContain('to=org-1');
+    expect(href).toContain(`event=${EVENT_ID}`);
   });
 
   it('flags a booking whose event was cancelled (§10)', async () => {

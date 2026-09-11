@@ -2,13 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { EventMapEmbed } from '@/components/events/EventMapEmbed';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
+import { useLang } from '@/contexts/langContext';
+import { tr } from '@/lib/i18n';
 
 type ApiEnvelope<T> = {
   data: T | null;
@@ -28,62 +30,61 @@ function coordToNull(v: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-const registerSchema = z
-  .object({
-    username: z.string().trim().min(3, 'Το όνομα χρήστη πρέπει να έχει τουλάχιστον 3 χαρακτήρες'),
-    password: z
-      .string()
-      .min(8, 'Ο κωδικός πρέπει να έχει τουλάχιστον 8 χαρακτήρες')
-      .max(72, 'Ο κωδικός δεν μπορεί να ξεπερνά τους 72 χαρακτήρες')
-      .refine((v) => /\p{L}/u.test(v) && /\d/.test(v), {
-        message: 'Ο κωδικός πρέπει να περιέχει τουλάχιστον ένα γράμμα και έναν αριθμό',
+function makeSchema(t: (key: string) => string) {
+  return z
+    .object({
+      username: z.string().trim().min(3, t('register.v.username')),
+      password: z
+        .string()
+        .min(8, t('register.v.passwordMin'))
+        .max(72, t('register.v.passwordMax'))
+        .refine((v) => /\p{L}/u.test(v) && /\d/.test(v), {
+          message: t('register.v.passwordMix'),
+        }),
+      confirm_password: z.string().min(1, t('register.v.confirm')),
+      first_name: z.string().trim().min(1, t('register.v.firstName')),
+      last_name: z.string().trim().min(1, t('register.v.lastName')),
+      email: z.string().trim().email(t('register.v.email')),
+      phone: z.string().refine(
+        (v) => {
+          const t = v.trim();
+          if (t === '') return true;
+          const digits = (t.match(/\d/g) ?? []).length;
+          return /^\+?[\d(][\d\s().-]*$/.test(t) && digits >= 8 && digits <= 15;
+        },
+        { message: t('register.v.phone') },
+      ),
+      address: z.string(),
+      city: z.string(),
+      country: z.string(),
+      latitude: z.string(),
+      longitude: z.string(),
+      vat_number: z.string().refine((v) => v.trim() === '' || /^\d{9}$/.test(v.trim()), {
+        message: t('register.v.vat'),
       }),
-    confirm_password: z.string().min(1, 'Επιβεβαιώστε τον κωδικό'),
-    first_name: z.string().trim().min(1, 'Εισάγετε όνομα'),
-    last_name: z.string().trim().min(1, 'Εισάγετε επώνυμο'),
-    email: z.string().trim().email('Εισάγετε έγκυρο email'),
-    phone: z.string().refine(
-      (v) => {
-        const t = v.trim();
-        if (t === '') return true;
-        const digits = (t.match(/\d/g) ?? []).length;
-        return /^\+?[\d(][\d\s().-]*$/.test(t) && digits >= 8 && digits <= 15;
-      },
-      { message: 'Εισάγετε έγκυρο τηλέφωνο (8–15 ψηφία)' },
-    ),
-    address: z.string(),
-    city: z.string(),
-    country: z.string(),
-    latitude: z.string(),
-    longitude: z.string(),
-    vat_number: z
-      .string()
-      .refine((v) => v.trim() === '' || /^\d{9}$/.test(v.trim()), {
-        message: 'Το ΑΦΜ πρέπει να αποτελείται από 9 ψηφία',
-      }),
-    role: z.enum(['attendee', 'organizer']),
-  })
-  .refine((v) => v.password === v.confirm_password, {
-    message: 'Οι κωδικοί δεν ταιριάζουν',
-    path: ['confirm_password'],
-  });
+      role: z.enum(['attendee', 'organizer']),
+    })
+    .refine((v) => v.password === v.confirm_password, {
+      message: t('register.v.mismatch'),
+      path: ['confirm_password'],
+    });
+}
 
-type RegisterForm = z.infer<typeof registerSchema>;
+type RegisterForm = z.infer<ReturnType<typeof makeSchema>>;
 
 type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'error';
 
 function mapRegisterError(err: unknown): string {
   const msg = err instanceof Error ? err.message : '';
-  if (msg.includes('username already taken')) return 'Το όνομα χρήστη χρησιμοποιείται ήδη.';
-  if (msg.includes('email already taken')) return 'Το email χρησιμοποιείται ήδη.';
-  if (msg.includes('missing required registration fields'))
-    return 'Συμπληρώστε όλα τα υποχρεωτικά πεδία.';
-  if (msg.includes('email address is not valid')) return 'Το email δεν είναι έγκυρο.';
-  if (msg.includes('phone number is not valid')) return 'Το τηλέφωνο δεν είναι έγκυρο.';
-  if (msg.includes('VAT number')) return 'Το ΑΦΜ πρέπει να αποτελείται από 9 ψηφία.';
-  if (msg.includes('password must')) return 'Ο κωδικός δεν πληροί τις προϋποθέσεις ασφαλείας.';
-  if (msg.includes('role must be')) return 'Επιλέξτε έγκυρο ρόλο λογαριασμού.';
-  return 'Προέκυψε σφάλμα. Δοκιμάστε ξανά.';
+  if (msg.includes('username already taken')) return tr('register.e.usernameTaken');
+  if (msg.includes('email already taken')) return tr('register.e.emailTaken');
+  if (msg.includes('missing required registration fields')) return tr('register.e.required');
+  if (msg.includes('email address is not valid')) return tr('register.e.email');
+  if (msg.includes('phone number is not valid')) return tr('register.e.phone');
+  if (msg.includes('VAT number')) return tr('register.e.vat');
+  if (msg.includes('password must')) return tr('register.e.password');
+  if (msg.includes('role must be')) return tr('register.e.role');
+  return tr('register.e.generic');
 }
 
 async function checkUsernameAvailable(username: string): Promise<boolean> {
@@ -92,7 +93,7 @@ async function checkUsernameAvailable(username: string): Promise<boolean> {
   );
   const json = (await res.json()) as ApiEnvelope<{ available: boolean }>;
   if (!res.ok || json.error || !json.data) {
-    throw new Error(json.error?.message ?? 'Σφάλμα ελέγχου ονόματος χρήστη');
+    throw new Error(json.error?.message ?? tr('register.e.usernameCheck'));
   }
   return json.data.available;
 }
@@ -100,6 +101,8 @@ async function checkUsernameAvailable(username: string): Promise<boolean> {
 export default function RegisterPage() {
   const navigate = useNavigate();
   const { register: registerAccount, user } = useAuth();
+  const { t } = useLang();
+  const registerSchema = useMemo(() => makeSchema(t), [t]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
   const [usernameHint, setUsernameHint] = useState<string | null>(null);
@@ -168,12 +171,12 @@ export default function RegisterPage() {
         .then((available) => {
           setUsernameStatus(available ? 'available' : 'taken');
           setUsernameHint(
-            available ? 'Διαθέσιμο όνομα χρήστη' : 'Το όνομα χρήστη χρησιμοποιείται ήδη',
+            available ? t('register.usernameAvailable') : t('register.usernameTaken'),
           );
           if (!available) {
             setError('username', {
               type: 'validate',
-              message: 'Το όνομα χρήστη χρησιμοποιείται ήδη',
+              message: t('register.usernameTaken'),
             });
           } else {
             clearErrors('username');
@@ -181,7 +184,7 @@ export default function RegisterPage() {
         })
         .catch(() => {
           setUsernameStatus('error');
-          setUsernameHint('Δεν ήταν δυνατός ο έλεγχος διαθεσιμότητας');
+          setUsernameHint(t('register.usernameCheckFailed'));
         });
     }, 450);
 
@@ -197,16 +200,16 @@ export default function RegisterPage() {
         const available = await checkUsernameAvailable(normalizedUsername);
         if (!available) {
           setUsernameStatus('taken');
-          setUsernameHint('Το όνομα χρήστη χρησιμοποιείται ήδη');
+          setUsernameHint(t('register.usernameTaken'));
           setError('username', {
             type: 'validate',
-            message: 'Το όνομα χρήστη χρησιμοποιείται ήδη',
+            message: t('register.usernameTaken'),
           });
           return;
         }
       } catch {
         // If availability check fails here, we still block submit to avoid confusion.
-        setSubmitError('Δεν ήταν δυνατός ο έλεγχος διαθεσιμότητας ονόματος χρήστη.');
+        setSubmitError(t('register.usernameCheckFailedSubmit'));
         return;
       }
     }
@@ -244,10 +247,10 @@ export default function RegisterPage() {
     <div className="bg-[var(--nexus-lightgray)]/40">
       <main className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-12 sm:px-6 lg:px-8">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-950">Εγγραφή</h1>
-          <p className="mt-2 text-sm text-neutral-600">
-            Δημιουργήστε λογαριασμό για να κάνετε κρατήσεις και να διαχειρίζεστε τις επιλογές σας.
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-950">
+            {t('register.title')}
+          </h1>
+          <p className="mt-2 text-sm text-neutral-600">{t('register.subtitle')}</p>
         </div>
 
         <form
@@ -258,24 +261,21 @@ export default function RegisterPage() {
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <fieldset className="md:col-span-2">
               <legend className="mb-1.5 block text-sm font-medium text-neutral-800">
-                Τύπος λογαριασμού <span className="text-[var(--nexus-red)]">*</span>
+                {t('register.accountType')} <span className="text-[var(--nexus-red)]">*</span>
               </legend>
-              <p className="mb-2.5 text-sm text-neutral-600">
-                Επιλέξτε πώς θα χρησιμοποιείτε την εφαρμογή. Ο διαχειριστής μπορεί να αλλάξει τον
-                ρόλο σας αργότερα.
-              </p>
+              <p className="mb-2.5 text-sm text-neutral-600">{t('register.accountTypeHint')}</p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {(
                   [
                     {
                       value: 'attendee',
-                      title: 'Συμμετέχων',
-                      hint: 'Αναζήτηση εκδηλώσεων και κρατήσεις εισιτηρίων.',
+                      title: t('register.attendee'),
+                      hint: t('register.attendeeHint'),
                     },
                     {
                       value: 'organizer',
-                      title: 'Διοργανωτής',
-                      hint: 'Δημιουργία και διαχείριση δικών σας εκδηλώσεων.',
+                      title: t('register.organizer'),
+                      hint: t('register.organizerHint'),
                     },
                   ] as const
                 ).map((option) => (
@@ -314,7 +314,7 @@ export default function RegisterPage() {
                 htmlFor="reg-username"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                Όνομα χρήστη <span className="text-[var(--nexus-red)]">*</span>
+                {t('register.username')} <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Input
                 id="reg-username"
@@ -340,7 +340,7 @@ export default function RegisterPage() {
                 htmlFor="reg-password"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                Κωδικός <span className="text-[var(--nexus-red)]">*</span>
+                {t('register.password')} <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Input
                 id="reg-password"
@@ -359,7 +359,7 @@ export default function RegisterPage() {
                 htmlFor="reg-confirm"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                Επιβεβαίωση κωδικού <span className="text-[var(--nexus-red)]">*</span>
+                {t('register.confirmPassword')} <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Input
                 id="reg-confirm"
@@ -380,7 +380,7 @@ export default function RegisterPage() {
                 htmlFor="reg-firstname"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                Όνομα <span className="text-[var(--nexus-red)]">*</span>
+                {t('register.firstName')} <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Input
                 id="reg-firstname"
@@ -399,7 +399,7 @@ export default function RegisterPage() {
                 htmlFor="reg-lastname"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                Επώνυμο <span className="text-[var(--nexus-red)]">*</span>
+                {t('register.lastName')} <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Input
                 id="reg-lastname"
@@ -437,7 +437,7 @@ export default function RegisterPage() {
                 htmlFor="reg-phone"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                Τηλέφωνο
+                {t('register.phone')}
               </label>
               <Input id="reg-phone" type="tel" autoComplete="tel" {...register('phone')} />
             </div>
@@ -447,7 +447,7 @@ export default function RegisterPage() {
                 htmlFor="reg-vat"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                ΑΦΜ
+                {t('register.vat')}
               </label>
               <Input id="reg-vat" type="text" {...register('vat_number')} />
             </div>
@@ -457,7 +457,7 @@ export default function RegisterPage() {
                 htmlFor="reg-address"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                Διεύθυνση
+                {t('register.address')}
               </label>
               <Input
                 id="reg-address"
@@ -472,7 +472,7 @@ export default function RegisterPage() {
                 htmlFor="reg-city"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                Πόλη
+                {t('register.city')}
               </label>
               <Input
                 id="reg-city"
@@ -487,7 +487,7 @@ export default function RegisterPage() {
                 htmlFor="reg-country"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                Χώρα
+                {t('register.country')}
               </label>
               <Input
                 id="reg-country"
@@ -502,13 +502,13 @@ export default function RegisterPage() {
                 htmlFor="reg-latitude"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                Γεωγρ. πλάτος
+                {t('register.latitude')}
               </label>
               <Input
                 id="reg-latitude"
                 type="text"
                 inputMode="decimal"
-                placeholder="π.χ. 37.9838"
+                placeholder={t('register.latPlaceholder')}
                 {...register('latitude')}
               />
             </div>
@@ -518,13 +518,13 @@ export default function RegisterPage() {
                 htmlFor="reg-longitude"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                Γεωγρ. μήκος
+                {t('register.longitude')}
               </label>
               <Input
                 id="reg-longitude"
                 type="text"
                 inputMode="decimal"
-                placeholder="π.χ. 23.7275"
+                placeholder={t('register.lngPlaceholder')}
                 {...register('longitude')}
               />
             </div>
@@ -552,15 +552,15 @@ export default function RegisterPage() {
           <Button
             type="submit"
             disabled={isSubmitting || usernameStatus === 'checking'}
-            className="mt-6 w-full bg-[#6d28d9] text-white hover:bg-[#5b21b6]"
+            className="mt-6 w-full bg-[var(--nexus-purple)] text-white hover:bg-[var(--nexus-purple-dark)]"
           >
-            {isSubmitting ? 'Υποβολή…' : 'Εγγραφή'}
+            {isSubmitting ? t('register.submitting') : t('register.submit')}
           </Button>
 
           <p className="mt-6 text-center text-sm text-neutral-600">
-            Έχετε ήδη λογαριασμό;{' '}
-            <Link to="/login" className="font-medium text-[#6d28d9] hover:underline">
-              Σύνδεση
+            {t('register.haveAccount')}{' '}
+            <Link to="/login" className="font-medium text-[var(--nexus-purple)] hover:underline">
+              {t('register.login')}
             </Link>
           </p>
         </form>

@@ -65,7 +65,7 @@
 - [X] `[!]` Migration `000006`: messages
 - [X] `[!]` Migration `000007`: event_photos
 - [X] `[!]` Migration `000008`: user_event_views
-- [X] Migration `000009`: seed admin user
+- [X] Built-in admin created on startup (`service.EnsureAdmin`, `ADMIN_*` env)
 - [X] Migration `000010`: seed initial categories
 - [X] All indexes from database ruleset
 
@@ -137,13 +137,13 @@
 - [X] Calculate total_cost server-side (never trust client value)
 
 ### 3.7 Messaging — REST + WebSocket (Requirement 10)
-- [X] `[!]` `messaging_service.go`: SendMessage, GetInbox, GetSent, DeleteForUser, MarkAsRead, GetUnreadCount, NotifyEventCancellation
-- [X] `[!]` REST handlers: `GET /api/v1/messages/inbox`, `GET /api/v1/messages/sent`, `GET /api/v1/messages/unread-count`, `POST /api/v1/messages`, `DELETE /api/v1/messages/:id`
+- [X] `[!]` `messaging_service.go`: SendMessage, GetInbox, GetSent, GetMessage (marks read), DeleteForUser (per folder), GetUnreadCount, ListRecipients, NotifyEventCancellation, NotifyEventAttendees
+- [X] `[!]` REST handlers: `GET /messages/inbox`, `GET /messages/sent` (paginated, `meta.total`), `GET /messages/:id`, `GET /messages/unread-count`, `GET /messages/recipients`, `POST /messages`, `POST /messages/events/:eventId/notify` (organizer), `DELETE /messages/:id`
 - [X] `[!]` WebSocket Hub (`handler/ws/hub.go`) — userID → set of clients, broadcast channel, register/unregister
 - [X] `[!]` WebSocket Client (`handler/ws/client.go`) — ReadPump, WritePump, ping/pong keepalive, max message size
 - [X] `[!]` WebSocket upgrade handler: `GET /api/v1/ws/messages?token=<jwt>`
 - [X] `[!]` After SendMessage: broadcast `new_message` + `unread_count` to recipient via Hub
-- [X] `[!]` Cache unread count in Redis (`INCR nexustickets:unread:{user_id}` on send, `SET 0` on inbox open)
+- [X] `[!]` Cache unread count in Redis (`nexustickets:unread:{user_id}`, recomputed from the DB on send / open / delete)
 - [X] `[!]` `NotifyEventCancellation`: bulk INSERT messages + WS broadcast to all attendees with confirmed bookings
 
 ### 3.8 Search & Browse
@@ -268,18 +268,17 @@
 - [X] `[!]` Cancel action — confirmation dialog, warn about bulk notification to attendees
 - [X] `[!]` Delete action — only shown when allowed (DRAFT or no bookings)
 - [X] `EventBookingsPage.tsx` — all bookings for an event, paginated
-- [ ] Photo upload — drag & drop, preview, delete
+- [X] Photo gallery on the event page (slider) + seeded photos; upload/delete in the edit form
 
-### 6.5 Messaging — WebSocket (Requirement 10)
-- [X] `[!]` `messagingSlice.ts` — unreadCount, pendingMessages (incoming WS buffer)
-- [X] `[!]` `messagingApi.ts` — getInbox, getSent, sendMessage, deleteMessage, markRead (REST)
-- [X] `[!]` `InboxPage.tsx` — list, unread highlighted, pagination; reset unread on open
-- [X] `[!]` `SentPage.tsx` — sent messages list, pagination
-- [X] `[!]` `MessageDetailPage.tsx` — full body, reply button
-- [X] `[!]` Compose/reply form — recipient, subject, body
-- [X] `[!]` Delete action for inbox/sent
-- [X] `[!]` Unread badge in Navbar — sourced from `state.messaging.unreadCount` (WebSocket-driven)
-- [X] On inbox open: call markRead REST + dispatch `setUnreadCount(0)` in Redux
+### 6.5 Messaging — mailbox + WebSocket (Requirement 10)
+- [X] `[!]` `messagingSlice.ts` — unreadCount (seeded from REST, kept live by the WebSocket)
+- [X] `[!]` `messagesApi.ts` — listMailbox (inbox/sent, paginated), getMessage, sendMessage, deleteMessage, listRecipients, notifyAttendees, getUnreadCount
+- [X] `[!]` `MessagesPage.tsx` — Εισερχόμενα / Απεσταλμένα folders, table with unread dot + bold rows, pager; state in the URL
+- [X] `[!]` `MessageView.tsx` — full body, event link, reply (inbox) and delete (own folder) with confirmation
+- [X] `[!]` `ComposeMessageDialog.tsx` — recipient (booking contacts + support), subject, body; reply prefills `Re:`
+- [X] `[!]` `NotifyAttendeesDialog.tsx` — organizer notice to everyone who booked (EventBookingsPage)
+- [X] `[!]` Unread badge in Navbar + toast on `new_message` — sourced from `state.messaging.unreadCount`
+- [X] "Μήνυμα στον διοργανωτή" from each booking (MyBookingsPage) opens the composer preaddressed
 
 ### 6.6 Admin
 - [X] `[!]` `usersApi.ts` — listUsers, getUser, approveUser, rejectUser (RTK Query, tag invalidation)
@@ -319,31 +318,31 @@
 
 ## 9. Report (`./report/`)
 
-- [ ] Cover page — title, team names, student IDs, date
-- [ ] Table of contents
-- [ ] Chapter 1: Introduction
-- [ ] Chapter 2: Architecture overview (REST + WebSocket)
-- [ ] Chapter 3: Database design + ER diagram
-- [ ] Chapter 4: Backend implementation
-- [ ] Chapter 5: Frontend implementation
-- [ ] Chapter 6: Authentication & security
-- [ ] Chapter 7: Recommendation engine (BMF algorithm, evaluation)
-- [ ] Chapter 8: Testing strategy
-- [ ] Epilogue — development summary, difficulties, solutions
-- [ ] Export as `./report/report.pdf`
+- [X] Cover page — title, team names, student IDs, date
+- [X] Table of contents
+- [X] Chapter 1: Introduction
+- [X] Chapter 2: Architecture overview (REST + WebSocket)
+- [X] Chapter 3: Database design + ER diagram
+- [X] Chapter 4: Backend implementation
+- [X] Chapter 5: Frontend implementation
+- [X] Chapter 6: Authentication & security
+- [X] Chapter 7: Recommendation engine (BMF algorithm, evaluation)
+- [X] Chapter 8: Testing strategy
+- [X] Epilogue — development summary, difficulties, solutions
+- [X] Export as `./report/report.pdf` (`typst compile report/report.typ`)
 
 ---
 
 ## 10. Documentation (`./docs/`)
 
-- [ ] `docs/setup.md`
-- [ ] `docs/deployment.md`
-- [ ] `docs/api.md` (REST + WebSocket protocol)
-- [ ] `docs/database.md` + ER diagram
-- [ ] `docs/architecture.md`
+- [X] `docs/setup.md`
+- [X] `docs/deployment.md`
+- [X] `docs/api.md` (REST + WebSocket protocol)
+- [X] `docs/database.md` + ER diagram
+- [X] `docs/architecture.md`
 - [X] `docs/recommendation.md` (BMF design, DB-driven training, offline evaluation)
-- [ ] Configure `gofiber/swagger`, annotate all handlers
-- [ ] `swag init` → `docs/swagger.json`
+- [ ] ~~Configure `gofiber/swagger`, annotate all handlers~~ (dropped; `docs/api.md` is the reference)
+- [ ] ~~`swag init` → `docs/swagger.json`~~
 
 ---
 
@@ -360,11 +359,11 @@
 - [ ] `bun run test` passes
 - [ ] Docker Compose starts cleanly from scratch
 - [ ] App runs following `docs/setup.md` on a fresh machine
-- [ ] XML export validates against assignment DTD
+- [X] XML export validates against assignment DTD (55 real events, lxml)
 - [ ] OpenStreetMap renders on event detail
 - [ ] WebSocket connects and delivers messages in realtime
 - [ ] Recommendation endpoint returns results
-- [ ] Report PDF in `./report/`
+- [X] Report PDF in `./report/`
 - [ ] Source zip excludes `node_modules`, `dist`, `.env`, `backend/uploads/`
 - [ ] Zip + PDF uploaded to e-class before deadline
 

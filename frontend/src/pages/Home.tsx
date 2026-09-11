@@ -1,17 +1,18 @@
-import { Link } from 'react-router-dom';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
 import Awesomplete from 'awesomplete';
 
-import { CategoryFilterStrip } from '@/components/home/CategoryFilterStrip';
+import { CategoryFilterStrip, SECTION_TABS_HEIGHT_PX } from '@/components/home/CategoryFilterStrip';
+import { HeroSlider } from '@/components/home/HeroSlider';
+import { heroBandColor } from '@/components/home/heroBand';
 import type { HomeSectionTab } from '@/components/home/CategoryFilterStrip';
 import HomeQuickNav from '@/components/home/HomeQuickNav';
 import EventCard from '@/components/events/EventCard';
 import { Input } from '@/components/ui/input';
 import { SectionSwiper } from '@/components/ui/section-swiper';
 import {
-  HOME_SECTION_LABELS,
-  HOME_SECTION_SUBTITLES,
+  homeSectionLabel,
+  homeSectionSubtitle,
   HOME_SLIDER_ORDER,
   homeViewAllHref,
   homeViewAllLabel,
@@ -27,13 +28,15 @@ import {
 import { categoryIdForSlug } from '@/lib/categorySlug';
 import { cn } from '@/lib/utils';
 import type { Event as EventModel } from '@/types/models';
+import { useLang } from '@/contexts/langContext';
 
 function sectionDomId(key: HomeSliderKey): string {
   return `home-section-${key}`;
 }
 
 /** Pixels to leave below sticky navbar when scrolling to a section. */
-const SECTION_SCROLL_OFFSET_PX = 72;
+// Navbar (64px) + the sticky tab row: what must stay clear above a section.
+const SECTION_SCROLL_OFFSET_PX = 64 + SECTION_TABS_HEIGHT_PX;
 
 const EMPTY_SECTIONS: Record<HomeSliderKey, EventModel[]> = {
   popular: [],
@@ -45,6 +48,7 @@ const EMPTY_SECTIONS: Record<HomeSliderKey, EventModel[]> = {
 };
 
 export default function Home() {
+  const { t } = useLang();
   const [active, setActive] = useState<HomeSliderKey>('popular');
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -52,13 +56,12 @@ export default function Home() {
   const abortRef = useRef<AbortController | null>(null);
   const suggestTimerRef = useRef<number | null>(null);
 
-
   const sectionTabs = useMemo<HomeSectionTab[]>(
     () =>
       HOME_SLIDER_ORDER.map((key) => ({
         key,
         id: sectionDomId(key),
-        label: HOME_SECTION_LABELS[key],
+        label: homeSectionLabel(key),
       })),
     [],
   );
@@ -119,9 +122,7 @@ export default function Home() {
 
   // Only a failure of the main rail is worth showing: the category rails simply
   // render empty if their query fails.
-  const eventsError = popularQ.error
-    ? apiErrorMessage(popularQ.error, 'Δεν ήταν δυνατή η φόρτωση των εκδηλώσεων.')
-    : null;
+  const eventsError = popularQ.error ? apiErrorMessage(popularQ.error, t('home.loadError')) : null;
 
   const eventsBySection = useMemo<Record<HomeSliderKey, EventModel[]>>(() => {
     const popular = popularQ.data?.events ?? [];
@@ -144,6 +145,15 @@ export default function Home() {
       cinema: cinemaQ.data?.events ?? [],
     };
   }, [popularQ.data, recommendedQ.data, newestQ.data, theaterQ.data, musicQ.data, cinemaQ.data]);
+
+  // The hero shows the most popular events, posters first (like a billboard).
+  const heroEvents = useMemo(() => {
+    const pool = eventsBySection.popular.length ? eventsBySection.popular : eventsBySection.new;
+    return [...pool]
+      .sort((a, b) => Number(Boolean(b.featured_image_url)) - Number(Boolean(a.featured_image_url)))
+      .slice(0, 6);
+  }, [eventsBySection]);
+  const [heroIndex, setHeroIndex] = useState(0);
 
   useEffect(() => {
     const input = searchRef.current;
@@ -233,133 +243,127 @@ export default function Home() {
 
   return (
     <>
-      <section className="home-hero relative border-b border-neutral-100 md:h-[550px] md:overflow-hidden">
+      {/* Hero, after more.com: text + pill search on the left; on the right a
+          half-pill colour band (cycling per slide) with a cross-fading poster
+          slider straddling its edge. Below md the band goes and the slider
+          stacks under the text. */}
+      <section className="relative overflow-hidden border-b border-neutral-100 bg-white md:h-[min(80vh,550px)]">
         <div
-          className="pointer-events-none absolute inset-y-0 right-0 hidden bg-[#d4f040] md:rounded-l-full md:block"
-          style={{
-            left: 'calc(max(0px, (100vw - 1400px) / 2) + 2rem + var(--hero-left-col))',
-          }}
+          className="pointer-events-none absolute inset-y-0 right-0 hidden w-[44vw] rounded-l-full transition-colors duration-1000 md:block"
+          style={{ backgroundColor: heroBandColor(heroIndex) }}
           aria-hidden
         />
-        <div className="relative z-10 mx-auto grid h-full max-w-[1400px] grid-cols-1 gap-10 px-4 py-10 sm:px-6 md:grid-cols-[var(--hero-left-col)_minmax(0,1fr)] md:items-stretch md:gap-0 md:px-8 md:py-0">
-          <div className="flex min-h-0 w-full flex-col justify-center md:min-h-[550px]">
-            <div className="w-full min-w-0 max-w-[800px]">
-              <h1 className="text-balance text-3xl comfortaa-bold tracking-tight text-[#000020]">
-                Η επόμενη εμπειρία σου ξεκινάει εδώ
-              </h1>
-              <p className="mt-4 text-lg comfortaa-regular text-neutral-500 tracking-tight">
-                Κλείσε τώρα το εισιτήριό σου εύκολα, γρήγορα και με ασφάλεια.
-              </p>
-              <div className="mt-8">
-                <label htmlFor="home-search" className="sr-only">
-                  Αναζήτηση
-                </label>
-                <div className="relative flex items-center">
-                  <Search
-                    className="pointer-events-none absolute left-5 size-5 text-indigo-500"
-                    aria-hidden={true}
-                  />
-                  <Input
-                    id="home-search"
-                    type="search"
-                    placeholder="Αναζήτηση εκδήλωσης, χώρου ή περιοχής"
-                    ref={searchRef}
-                    onChange={(e) => fetchSuggestions(e.target.value)}
-                    className={cn(
-                      'h-14 w-full rounded-xl border-0 bg-white pl-14 pr-6 text-[16px] max-[600px]:text-[14px]',
-                      'comfortaa-regular text-neutral-900 ring-0 placeholder:text-neutral-500',
-                      'max-[600px]:placeholder:text-[14px]',
-                      'transition-shadow duration-300 ease-out motion-reduce:transition-none',
-                      'shadow-[0_4px_14px_-4px_rgba(15,23,42,0.12),inset_0_0_0_1px_rgb(229_231_235)]',
-                      'hover:shadow-[0_4px_14px_-4px_rgba(15,23,42,0.12),inset_0_0_0_1px_rgb(212_212_216)]',
-                      'focus-visible:shadow-[0_4px_14px_-4px_rgba(15,23,42,0.14),inset_0_0_0_2px_#6d28d9]',
-                      'focus-visible:ring-0 focus-visible:outline-none',
-                    )}
-                  />
-                </div>
+        <div className="relative mx-auto flex h-full max-w-[1400px] flex-col gap-8 px-4 py-10 sm:px-6 md:flex-row md:items-center md:gap-0 md:py-0 lg:px-8">
+          <div className="min-w-0 text-center md:w-[420px] md:shrink-0 md:text-left">
+            <h1 className="text-balance text-3xl leading-tight comfortaa-bold tracking-tight text-[#000020] sm:text-4xl">
+              {t('hero.title')}
+            </h1>
+            <p className="mt-3 hidden text-lg comfortaa-regular text-neutral-500 sm:block">
+              {t('hero.lead')}
+            </p>
+            <div className="mt-8">
+              <label htmlFor="home-search" className="sr-only">
+                {t('hero.search')}
+              </label>
+              <div className="home-search relative flex items-center">
+                <Search
+                  className="pointer-events-none absolute left-5 z-10 size-[18px] text-[var(--nexus-purple)]"
+                  aria-hidden={true}
+                />
+                <Input
+                  id="home-search"
+                  type="search"
+                  placeholder={t('hero.searchPlaceholder')}
+                  ref={searchRef}
+                  onChange={(e) => fetchSuggestions(e.target.value)}
+                  className={cn(
+                    'h-[60px] w-full rounded-full border-0 bg-white pl-[50px] pr-6 text-[16px] max-[600px]:text-[14px]',
+                    'comfortaa-regular text-neutral-900 ring-0 placeholder:text-neutral-500',
+                    'max-[600px]:placeholder:text-[14px]',
+                    'transition-shadow duration-300 ease-out motion-reduce:transition-none',
+                    'shadow-[0_0_0_1px_rgba(0,0,0,0.1),0_4px_6px_rgba(0,0,0,0.12)]',
+                    'hover:shadow-[0_0_0_1px_rgba(0,0,0,0.15),0_6px_9px_rgba(0,0,0,0.2)]',
+                    'focus-visible:shadow-[0_0_0_2px_var(--nexus-purple),0_4px_6px_rgba(0,0,0,0.2)]',
+                    'focus-visible:ring-0 focus-visible:outline-none',
+                  )}
+                />
               </div>
             </div>
           </div>
 
-          <div className="relative min-h-[280px] min-w-0 md:min-h-[550px]">
-            <div
-              className="absolute inset-0 rounded-t-[2.5rem] bg-[#d4f040] md:hidden"
-              aria-hidden
-            />
-            <div className="relative z-10 flex h-full min-h-[280px] items-center justify-center p-6 md:min-h-[550px] md:p-8">
-              <div className="h-full w-full max-w-lg rounded-2xl border border-neutral-200/80 bg-white/95 p-6 text-neutral-900 shadow-sm backdrop-blur-sm md:p-8">
-                <p className="text-xs uppercase tracking-[0.2em] text-neutral-500 comfortaa-regular">
-                  Προτεινόμενο
-                </p>
-                <p className="mt-2 text-2xl font-bold tracking-tight comfortaa-bold text-[#000020]">
-                  Θεατρική σεζόν
-                </p>
-                <p className="mt-2 text-sm text-neutral-600 comfortaa-regular">
-                  Ανακάλυψε παραστάσεις κοντά σου.
-                </p>
-                <Link
-                  to="/events/category/theater"
-                  className="mt-5 inline-flex w-fit rounded-lg bg-[#6d28d9] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 comfortaa-regular"
-                >
-                  Δες εκδηλώσεις θεάτρου
-                </Link>
-              </div>
-            </div>
+          {/* Like more.com: the slider is anchored to the right edge, as wide
+              as what is left after the 520px text column, capped at the
+              poster's own 816px. */}
+          <div className="relative z-10 min-w-0 md:absolute md:inset-y-0 md:right-0 md:flex md:w-[calc(100%-520px)] md:max-w-[816px] md:items-center">
+            {heroEvents.length > 0 ? (
+              <HeroSlider events={heroEvents} onIndexChange={setHeroIndex} />
+            ) : (
+              <div
+                className="aspect-[816/465] w-full animate-pulse rounded-md bg-neutral-200"
+                aria-hidden
+              />
+            )}
           </div>
         </div>
       </section>
 
       <HomeQuickNav />
 
-      <CategoryFilterStrip
-        sectionTabs={sectionTabs}
-        activeSection={active}
-        onSectionTabClick={scrollToSection}
-      />
+      {/* One wrapper for the tab row and the sections: the sticky row stays
+          pinned only while this block scrolls, then releases before the footer. */}
+      <div>
+        <CategoryFilterStrip
+          sectionTabs={sectionTabs}
+          activeSection={active}
+          onSectionTabClick={scrollToSection}
+        />
 
-      <div className="mx-auto max-w-[1400px] px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
-        {HOME_SLIDER_ORDER.map((key, idx) => {
-          const sId = sectionDomId(key);
-          const events = eventsBySection[key];
-          return (
-            <div
-              key={sId}
-              id={sId}
-              ref={(el) => {
-                sectionRefs.current[sId] = el;
-              }}
-              className={cn('scroll-mt-[72px]', idx > 0 && 'mt-12')}
-              tabIndex={-1}
-            >
-              <SectionSwiper
-                title={HOME_SECTION_LABELS[key]}
-                subtitle={HOME_SECTION_SUBTITLES[key]}
-                viewAllHref={homeViewAllHref(key)}
-                viewAllLabel={homeViewAllLabel(key)}
+        <div className="mx-auto max-w-[1400px] px-4 py-10 sm:px-6 lg:px-8 lg:py-14">
+          {HOME_SLIDER_ORDER.map((key, idx) => {
+            const sId = sectionDomId(key);
+            const events = eventsBySection[key];
+            return (
+              <div
+                key={sId}
+                id={sId}
+                ref={(el) => {
+                  sectionRefs.current[sId] = el;
+                }}
+                className={cn('scroll-mt-[130px]', idx > 0 && 'mt-12')}
+                tabIndex={-1}
               >
-                {eventsLoading ? (
-                  <div className="text-sm text-neutral-600 comfortaa-regular">Φόρτωση…</div>
-                ) : eventsError ? (
-                  <div className="text-sm text-[var(--nexus-red)] comfortaa-regular">
-                    {eventsError}
-                  </div>
-                ) : events.length === 0 ? (
-                  <div className="text-sm text-neutral-600 comfortaa-regular">
-                    {key === 'theater' || key === 'music' || key === 'cinema'
-                      ? 'Δεν υπάρχουν εκδηλώσεις σε αυτή την κατηγορία.'
-                      : 'Δεν υπάρχουν εκδηλώσεις ακόμα.'}
-                  </div>
-                ) : (
-                  events.map((ev) => (
-                    <div key={`${sId}-${ev.id}`} className="snap-start">
-                      <EventCard event={ev} />
+                <SectionSwiper
+                  title={homeSectionLabel(key)}
+                  subtitle={homeSectionSubtitle(key)}
+                  viewAllHref={homeViewAllHref(key)}
+                  viewAllLabel={homeViewAllLabel(key)}
+                >
+                  {eventsLoading ? (
+                    <div className="text-sm text-neutral-600 comfortaa-regular">
+                      {t('common.loading')}
                     </div>
-                  ))
-                )}
-              </SectionSwiper>
-            </div>
-          );
-        })}
+                  ) : eventsError ? (
+                    <div className="text-sm text-[var(--nexus-red)] comfortaa-regular">
+                      {eventsError}
+                    </div>
+                  ) : events.length === 0 ? (
+                    <div className="text-sm text-neutral-600 comfortaa-regular">
+                      {key === 'theater' || key === 'music' || key === 'cinema'
+                        ? t('home.noEventsInCategory')
+                        : t('home.noEventsYet')}
+                    </div>
+                  ) : (
+                    events.map((ev) => (
+                      <div key={`${sId}-${ev.id}`} className="snap-start">
+                        <EventCard event={ev} />
+                      </div>
+                    ))
+                  )}
+                </SectionSwiper>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </>
   );

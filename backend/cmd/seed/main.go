@@ -45,6 +45,8 @@ func main() {
 	seedUsers(pg.Gorm)
 	seedCategories(pg.Gorm)
 	seedEvents(pg.Gorm)
+	seedEventPhotos(pg.Gorm, ensureMediaRoot(cfg.MediaStoragePath))
+	seedPeople(pg.Gorm)
 
 	log.Info("seed complete")
 }
@@ -141,6 +143,7 @@ func seedCategories(d *gorm.DB) {
 		{ID: mustUUID("00000000-0000-0000-0000-000000000104"), Name: "Τεχνολογία"},
 		{ID: mustUUID("00000000-0000-0000-0000-000000000105"), Name: "Εκπαίδευση"},
 		{ID: mustUUID("00000000-0000-0000-0000-000000000106"), Name: "Τέχνη"},
+		{ID: mustUUID("00000000-0000-0000-0000-000000000107"), Name: "Σινεμά"},
 	}
 
 	for _, c := range cats {
@@ -155,7 +158,7 @@ func seedCategories(d *gorm.DB) {
 			panic(err)
 		}
 	}
-	fmt.Println("seeded 6 categories")
+	fmt.Printf("seeded %d categories\n", len(cats))
 }
 
 func seedEvents(d *gorm.DB) {
@@ -703,6 +706,20 @@ func seedEvents(d *gorm.DB) {
 		"00000000-0000-0000-0000-000000000104": "conference",
 		"00000000-0000-0000-0000-000000000105": "workshop",
 		"00000000-0000-0000-0000-000000000106": "exhibition",
+		"00000000-0000-0000-0000-000000000107": "screening",
+	}
+
+	// A hundred generated events on top of the hand-written ones, so lists,
+	// search and pagination have something realistic to show.
+	for _, g := range generatedEvents(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)) {
+		tickets := make([]ticketSeed, 0, len(g.tickets))
+		for _, t := range g.tickets {
+			tickets = append(tickets, ticketSeed{id: t.id, name: t.name, price: t.price, quantity: t.quantity, available: t.quantity})
+		}
+		events = append(events, eventSeed{
+			id: g.id, title: g.title, desc: g.desc, venue: g.venue, addr: sp(g.addr), city: g.city, country: sp("Ελλάδα"),
+			lat: fp(g.lat), lng: fp(g.lng), start: g.start, end: g.end, capacity: g.capacity, catID: g.catID, tickets: tickets,
+		})
 	}
 
 	now := time.Now().UTC()
@@ -776,7 +793,7 @@ func seedEvents(d *gorm.DB) {
 		}
 	}
 
-	fmt.Println("seeded 50 events with ticket types")
+	fmt.Printf("seeded %d events with ticket types\n", len(events))
 }
 
 func strPtr(s string) *string { return &s }

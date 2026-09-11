@@ -30,7 +30,6 @@ func provideMessagingService(
 	cfg config.Config,
 ) *service.MessagingService {
 	svc := service.NewMessagingService(messages, users, bookings, events, rdb, hub)
-	svc.SetMediaRoot(cfg.MediaStoragePath)
 	return svc
 }
 

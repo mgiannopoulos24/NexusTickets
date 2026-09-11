@@ -1,21 +1,36 @@
 import { useEffect } from 'react';
+import { toast } from 'sonner';
+
 import { useAppDispatch } from '@/app/hooks';
+import { messagesApi, useGetUnreadCountQuery } from '@/app/messagesApi';
+import { supportApi } from '@/app/supportApi';
+import { setUnreadCount } from '@/app/messagingSlice';
 import { useAuth } from '@/hooks/useAuth';
 import { wsClient } from '@/utils/wsClient';
-import { appendToThread, messagesApi } from '@/app/messagesApi';
-import { clearTyping, markTyping, pushIncomingMessage, setUnreadCount } from '@/app/messagingSlice';
 import {
   WSMessageTypes,
   type WSEnvelope,
-  type WSMessageChangedPayload,
   type WSNewMessagePayload,
-  type WSTypingPayload,
+  type WSSupportUpdatePayload,
   type WSUnreadCountPayload,
 } from '@/types/ws';
+import { tr } from '@/lib/i18n';
 
+/**
+ * Keeps the push channel open while signed in. The server sends two things:
+ * the unread total (drives the navbar badge) and each new inbox message, which
+ * refreshes an open inbox and pops a toast so the arrival is visible wherever
+ * the user is in the app (assignment §10).
+ */
 export function useWebSocket(): void {
   const dispatch = useAppDispatch();
   const { accessToken } = useAuth();
+
+  // The socket only reports changes, so the badge starts from a REST read.
+  const { data: initialUnread } = useGetUnreadCountQuery(undefined, { skip: !accessToken });
+  useEffect(() => {
+    if (typeof initialUnread === 'number') dispatch(setUnreadCount(initialUnread));
+  }, [dispatch, initialUnread]);
 
   useEffect(() => {
     if (!accessToken) {
@@ -25,66 +40,42 @@ export function useWebSocket(): void {
 
     wsClient.connect(accessToken);
     const unsubscribe = wsClient.subscribe((envelope: WSEnvelope) => {
-      if (
-        envelope.type === WSMessageTypes.message_deleted ||
-        envelope.type === WSMessageTypes.reaction_changed
-      ) {
-        // Whichever of the two we are, the thread is cached under the other
-        // person, so invalidate both keys and let the subscribed one refetch.
-        const payload = envelope.payload as WSMessageChangedPayload;
-        dispatch(
-          messagesApi.util.invalidateTags([
-            { type: 'Message', id: `THREAD-${payload.sender_id}` },
-            { type: 'Message', id: `THREAD-${payload.recipient_id}` },
-            { type: 'Message', id: 'CONVERSATIONS' },
-          ]),
-        );
-        return;
-      }
-      if (envelope.type === WSMessageTypes.typing) {
-        const payload = envelope.payload as WSTypingPayload;
-        dispatch(markTyping({ userId: payload.user_id, at: Date.now() }));
-        return;
-      }
       if (envelope.type === WSMessageTypes.new_message) {
         const payload = envelope.payload as WSNewMessagePayload;
-        dispatch(pushIncomingMessage(payload));
-        // The message arrived, so they have stopped typing.
-        dispatch(clearTyping(payload.sender_id));
-        // Splice it straight into the open thread so it appears immediately,
-        // then let the sidebar refetch for the preview and ordering.
-        dispatch(
-          messagesApi.util.updateQueryData(
-            'listThread',
-            { userId: payload.sender_id },
-            (draft) => {
-              appendToThread(draft, {
-                id: payload.id,
-                sender_id: payload.sender_id,
-                recipient_id: payload.recipient_id,
-                subject: payload.subject,
-                body: payload.body,
-                read_at: null,
-                created_at: payload.created_at,
-                image_url: payload.image_url,
-                file_url: payload.file_url,
-                file_name: payload.file_name,
-                gif_url: payload.gif_url,
-              });
-            },
-          ),
-        );
-        dispatch(
-          messagesApi.util.invalidateTags([
-            { type: 'Message', id: 'CONVERSATIONS' },
-            { type: 'Message', id: 'inbox' },
-          ]),
-        );
+        dispatch(messagesApi.util.invalidateTags([{ type: 'Message', id: 'inbox' }]));
+        toast.message(tr('ws.newMessage'), {
+          description: payload.subject,
+          id: `message-${payload.id}`,
+        });
         return;
       }
       if (envelope.type === WSMessageTypes.unread_count) {
         const payload = envelope.payload as WSUnreadCountPayload;
-        dispatch(setUnreadCount(payload.unread_count));
+        dispatch(setUnreadCount(payload.count));
+        return;
+      }
+      if (envelope.type === WSMessageTypes.support_update) {
+        const payload = envelope.payload as WSSupportUpdatePayload;
+        // Refresh the queue / list and the open thread, wherever they are shown.
+        dispatch(
+          supportApi.util.invalidateTags([
+            { type: 'Support', id: 'LIST' },
+            { type: 'Support', id: payload.ticket_id },
+          ]),
+        );
+        const title = payload.by_admin
+          ? payload.action === 'closed'
+            ? tr('ws.ticketClosedForYou')
+            : tr('ws.ticketAnswered')
+          : payload.action === 'opened'
+            ? tr('ws.ticketOpened')
+            : payload.action === 'closed'
+              ? tr('ws.ticketClosedByUser')
+              : tr('ws.ticketReplied');
+        toast.message(title, {
+          description: payload.subject,
+          id: `support-${payload.ticket_id}-${payload.action}`,
+        });
       }
     });
 

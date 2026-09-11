@@ -36,6 +36,8 @@ const OrganizerEventEditPage = lazy(() => import('@/pages/organizer/OrganizerEve
 const MyBookingsPage = lazy(() => import('@/pages/bookings/MyBookingsPage'));
 const EventBookingsPage = lazy(() => import('@/pages/organizer/EventBookingsPage'));
 const MessagesPage = lazy(() => import('@/pages/messages/MessagesPage'));
+const SupportPage = lazy(() => import('@/pages/support/SupportPage'));
+const AdminSupportPage = lazy(() => import('@/pages/admin/AdminSupportPage'));
 
 const routes: RouteConfig[] = [
   {
@@ -118,28 +120,28 @@ const routes: RouteConfig[] = [
     element: <OrganizerDashboardPage />,
     layout: 'app',
     protected: true,
-    roles: ['organizer'],
+    roles: ['organizer', 'admin'],
   },
   {
     path: '/organizer/events/new',
     element: <OrganizerEventNewPage />,
     layout: 'app',
     protected: true,
-    roles: ['organizer'],
+    roles: ['organizer', 'admin'],
   },
   {
     path: '/organizer/events/:id/edit',
     element: <OrganizerEventEditPage />,
     layout: 'app',
     protected: true,
-    roles: ['organizer'],
+    roles: ['organizer', 'admin'],
   },
   {
     path: '/organizer/events',
     element: <OrganizerEventsPage />,
     layout: 'app',
     protected: true,
-    roles: ['organizer'],
+    roles: ['organizer', 'admin'],
   },
   {
     path: '/bookings/me',
@@ -153,7 +155,7 @@ const routes: RouteConfig[] = [
     element: <EventBookingsPage />,
     layout: 'app',
     protected: true,
-    roles: ['organizer'],
+    roles: ['organizer', 'admin'],
   },
   {
     path: '/messages',
@@ -161,6 +163,20 @@ const routes: RouteConfig[] = [
     layout: 'app',
     protected: true,
     roles: ['attendee', 'organizer', 'admin'],
+  },
+  {
+    path: '/support',
+    element: <SupportPage />,
+    layout: 'app',
+    protected: true,
+    roles: ['attendee', 'organizer', 'admin'],
+  },
+  {
+    path: '/admin/support',
+    element: <AdminSupportPage />,
+    layout: 'app',
+    protected: true,
+    roles: ['admin'],
   },
   {
     path: '/account',

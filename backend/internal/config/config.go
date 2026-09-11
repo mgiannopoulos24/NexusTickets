@@ -42,6 +42,10 @@ const (
 	envTLSKeyFile  = "TLS_KEY_FILE"
 
 	envRecDataDir = "RECOMMENDATION_DATA_DIR"
+
+	envAdminUsername = "ADMIN_USERNAME"
+	envAdminPassword = "ADMIN_PASSWORD"
+	envAdminEmail    = "ADMIN_EMAIL"
 )
 
 type Config struct {
@@ -80,6 +84,12 @@ type Config struct {
 	// When both are non-empty, the HTTP server uses TLS (paths to PEM files).
 	TLSCertFile string
 	TLSKeyFile  string
+
+	// The built-in administrator (assignment §3), created on first start when
+	// no admin account exists yet.
+	AdminUsername string `validate:"min=3,max=64"`
+	AdminPassword string `validate:"min=8"`
+	AdminEmail    string `validate:"email"`
 }
 
 func Load() (Config, error) {
@@ -102,6 +112,9 @@ func Load() (Config, error) {
 		RecDataDir:    strings.TrimSpace(getEnv(envRecDataDir, "../data")),
 		TLSCertFile:   strings.TrimSpace(os.Getenv(envTLSCertFile)),
 		TLSKeyFile:    strings.TrimSpace(os.Getenv(envTLSKeyFile)),
+		AdminUsername: getEnv(envAdminUsername, "admin"),
+		AdminPassword: getEnv(envAdminPassword, "ChangeMe123!"),
+		AdminEmail:    getEnv(envAdminEmail, "admin@nexustickets.local"),
 	}
 
 	appPort, err := parsePort(getEnv(envAppPort, "8080"))

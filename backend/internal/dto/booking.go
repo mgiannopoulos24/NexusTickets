@@ -9,13 +9,15 @@ type CreateBookingRequest struct {
 // BookingEventSummary is enough of the event to render a booking row without a
 // second request per booking.
 type BookingEventSummary struct {
-	ID      string `json:"id"`
-	Title   string `json:"title"`
-	Venue   string `json:"venue"`
-	City    string `json:"city"`
-	StartAt string `json:"start_at"`
-	EndAt   string `json:"end_at"`
-	Status  string `json:"status"`
+	ID string `json:"id"`
+	// OrganizerID lets the attendee open a message to the organizer (§10).
+	OrganizerID string `json:"organizer_id"`
+	Title       string `json:"title"`
+	Venue       string `json:"venue"`
+	City        string `json:"city"`
+	StartAt     string `json:"start_at"`
+	EndAt       string `json:"end_at"`
+	Status      string `json:"status"`
 }
 
 // BookingAttendee identifies who made the booking (shown to the organizer).

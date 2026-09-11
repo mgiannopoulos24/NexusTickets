@@ -1,164 +1,118 @@
+import { unwrap, unwrapList, type ApiEnvelope } from '@/app/apiEnvelope';
+import { baseApi } from '@/utils/api';
 import type {
-  Attachment,
-  Conversation,
+  MailboxFolder,
+  MailboxPage,
   Message,
   MessageRecipient,
+  NotifyAttendeesRequest,
   SendMessageRequest,
 } from '@/types/message';
-import { baseApi } from '@/utils/api';
-
-type ApiEnvelope<T> = {
-  data: T | null;
-  error?: { code: string; message: string } | null;
-  meta?: unknown;
-};
-
-function unwrap<T>(response: unknown): T {
-  const body = response as ApiEnvelope<T>;
-  if (body.error) {
-    throw new Error(body.error.message ?? 'Σφάλμα αιτήματος');
-  }
-  if (body.data === null || body.data === undefined) {
-    throw new Error('Άκυρη απάντηση');
-  }
-  return body.data;
-}
 
 export type MailboxArgs = {
-  folder: 'inbox' | 'sent';
+  folder: MailboxFolder;
   limit: number;
   offset: number;
 };
 
-/**
- * Appends a message to a cached thread if it is not already there. Both the
- * WebSocket push and our own send land here, so a message shows up without a
- * refetch — and a duplicate (push racing the mutation response) is ignored.
- */
-export function appendToThread(draft: Message[], message: Message): void {
-  if (draft.some((m) => m.id === message.id)) return;
-  draft.push(message);
-  draft.sort((a, b) => a.created_at.localeCompare(b.created_at));
-}
+type MailboxMeta = { total?: number; limit?: number; offset?: number };
 
+/**
+ * The mailbox of assignment §10: inbox and sent folders, open / delete one
+ * message, compose to someone you share a booking with, and the organizer's
+ * notice to everyone who booked an event.
+ */
 export const messagesApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
-    listMessages: build.query<Message[], MailboxArgs>({
+    listMailbox: build.query<MailboxPage, MailboxArgs>({
       query: ({ folder, limit, offset }) => ({
         url: `/messages/${folder}?limit=${limit}&offset=${offset}`,
         method: 'GET',
       }),
-      transformResponse: (response: unknown): Message[] => unwrap<Message[]>(response),
-      providesTags: (result, _err, { folder }) =>
-        result
-          ? [
-              ...result.map((m) => ({ type: 'Message' as const, id: m.id })),
-              { type: 'Message' as const, id: folder },
-            ]
-          : [{ type: 'Message' as const, id: folder }],
+      transformResponse: (response: unknown, _meta, { limit, offset }): MailboxPage => {
+        const body = response as ApiEnvelope<Message[]>;
+        const messages = unwrapList<Message>(body);
+        const meta = (body.meta ?? {}) as MailboxMeta;
+        return {
+          messages,
+          total: meta.total ?? messages.length,
+          limit: meta.limit ?? limit,
+          offset: meta.offset ?? offset,
+        };
+      },
+      providesTags: (result, _err, { folder }) => [
+        { type: 'Message' as const, id: folder },
+        ...(result?.messages ?? []).map((m) => ({ type: 'Message' as const, id: m.id })),
+      ],
     }),
 
-    /** The user's threads, newest activity first. Reading this marks nothing. */
-    listConversations: build.query<Conversation[], void>({
-      query: () => ({ url: '/messages/conversations', method: 'GET' }),
-      transformResponse: (response: unknown): Conversation[] => unwrap<Conversation[]>(response),
-      providesTags: [{ type: 'Message', id: 'CONVERSATIONS' }],
+    /** Opens one message. For the recipient the server marks it read. */
+    getMessage: build.query<Message, string>({
+      query: (id) => ({ url: `/messages/${encodeURIComponent(id)}`, method: 'GET' }),
+      transformResponse: (response: unknown): Message => unwrap<Message>(response),
+      providesTags: (_result, _err, id) => [{ type: 'Message' as const, id }],
+      // Opening marks it read on the server, so refresh the inbox page for the
+      // row to lose its "new" mark (the badge itself arrives over the socket).
+      async onQueryStarted(_id, { dispatch, queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+          if (data.read_at) {
+            dispatch(messagesApi.util.invalidateTags([{ type: 'Message', id: 'inbox' }]));
+          }
+        } catch {
+          // The page renders the error; nothing to roll back.
+        }
+      },
     }),
 
-    /**
-     * The whole exchange with one person, oldest first. The server marks their
-     * side of it read, so the unread badge and the sidebar both change.
-     */
-    listThread: build.query<Message[], { userId: string; limit?: number; offset?: number }>({
-      query: ({ userId, limit = 200, offset = 0 }) => ({
-        url: `/messages/thread/${encodeURIComponent(userId)}?limit=${limit}&offset=${offset}`,
-        method: 'GET',
-      }),
-      transformResponse: (response: unknown): Message[] => unwrap<Message[]>(response),
-      providesTags: (_result, _err, { userId }) => [{ type: 'Message' as const, id: `THREAD-${userId}` }],
+    getUnreadCount: build.query<number, void>({
+      query: () => ({ url: '/messages/unread-count', method: 'GET' }),
+      transformResponse: (response: unknown): number => unwrap<{ count: number }>(response).count,
+      providesTags: [{ type: 'Message' as const, id: 'unread' }],
     }),
 
-    /** Who the current user is allowed to write to (booking partners + support). */
     listRecipients: build.query<MessageRecipient[], void>({
       query: () => ({ url: '/messages/recipients', method: 'GET' }),
       transformResponse: (response: unknown): MessageRecipient[] =>
-        unwrap<MessageRecipient[]>(response),
-      providesTags: [{ type: 'Message', id: 'RECIPIENTS' }],
-    }),
-
-    unreadCount: build.query<number, void>({
-      query: () => ({ url: '/messages/unread-count', method: 'GET' }),
-      transformResponse: (response: unknown): number =>
-        unwrap<{ count: number }>(response).count ?? 0,
-      providesTags: [{ type: 'Message', id: 'UNREAD' }],
+        unwrapList<MessageRecipient>(response),
+      providesTags: [{ type: 'Message' as const, id: 'recipients' }],
     }),
 
     sendMessage: build.mutation<Message, SendMessageRequest>({
       query: (body) => ({ url: '/messages', method: 'POST', body }),
       transformResponse: (response: unknown): Message => unwrap<Message>(response),
-      // Show our own message the moment the server confirms it, rather than
-      // waiting for a refetch of the whole thread.
-      async onQueryStarted({ recipient_id }, { dispatch, queryFulfilled }) {
-        try {
-          const { data } = await queryFulfilled;
-          dispatch(
-            messagesApi.util.updateQueryData('listThread', { userId: recipient_id }, (draft) => {
-              appendToThread(draft, data);
-            }),
-          );
-        } catch {
-          // The composer surfaces the failure; nothing to patch.
-        }
-      },
-      // The sidebar preview and ordering still come from the server.
-      invalidatesTags: [
-        { type: 'Message' as const, id: 'sent' },
-        { type: 'Message' as const, id: 'CONVERSATIONS' },
-      ],
+      invalidatesTags: [{ type: 'Message', id: 'sent' }],
     }),
 
-    /** Toggles one emoji on a message for the current user. */
-    reactToMessage: build.mutation<void, { messageId: string; emoji: string; peerId: string }>({
-      query: ({ messageId, emoji }) => ({
-        url: `/messages/${encodeURIComponent(messageId)}/reactions`,
+    notifyAttendees: build.mutation<{ recipients: number }, NotifyAttendeesRequest>({
+      query: ({ event_id, subject, body }) => ({
+        url: `/messages/events/${encodeURIComponent(event_id)}/notify`,
         method: 'POST',
-        body: { emoji },
+        body: { subject, body },
       }),
-      invalidatesTags: (_r, _e, { peerId }) => [{ type: 'Message' as const, id: `THREAD-${peerId}` }],
+      transformResponse: (response: unknown): { recipients: number } =>
+        unwrap<{ recipients: number }>(response),
+      invalidatesTags: [{ type: 'Message', id: 'sent' }],
     }),
 
-    /** Stores a picture or file and hands back the URL to attach to a message. */
-    uploadAttachment: build.mutation<Attachment, File>({
-      query: (file) => {
-        const form = new FormData();
-        form.append('file', file);
-        return { url: '/messages/attachments', method: 'POST', body: form };
-      },
-      transformResponse: (response: unknown): Attachment => unwrap<Attachment>(response),
-    }),
-
-    deleteMessage: build.mutation<void, { id: string; peerId: string }>({
+    /** Removes the message from the caller's own folder only. */
+    deleteMessage: build.mutation<void, { id: string; folder: MailboxFolder }>({
       query: ({ id }) => ({ url: `/messages/${encodeURIComponent(id)}`, method: 'DELETE' }),
-      invalidatesTags: (_result, _err, { id, peerId }) => [
+      invalidatesTags: (_result, _err, { id, folder }) => [
         { type: 'Message', id },
-        { type: 'Message', id: `THREAD-${peerId}` },
-        { type: 'Message', id: 'inbox' },
-        { type: 'Message', id: 'sent' },
-        { type: 'Message', id: 'UNREAD' },
-        { type: 'Message', id: 'CONVERSATIONS' },
+        { type: 'Message', id: folder },
       ],
     }),
   }),
+  overrideExisting: false,
 });
 
 export const {
-  useReactToMessageMutation,
-  useUploadAttachmentMutation,
-  useListConversationsQuery,
-  useListThreadQuery,
-  useListMessagesQuery,
+  useListMailboxQuery,
+  useGetMessageQuery,
+  useGetUnreadCountQuery,
   useListRecipientsQuery,
-  useUnreadCountQuery,
   useSendMessageMutation,
+  useNotifyAttendeesMutation,
   useDeleteMessageMutation,
 } = messagesApi;

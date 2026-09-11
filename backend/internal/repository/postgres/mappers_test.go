@@ -158,10 +158,12 @@ func TestMessageMapping_RoundTrip(t *testing.T) {
 	readAt := time.Date(2026, 3, 18, 14, 0, 0, 0, time.UTC)
 	createdAt := time.Date(2026, 3, 18, 13, 55, 0, 0, time.UTC)
 
+	eventID := uuid.MustParse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee")
 	msg := domain.Message{
 		ID:                 id,
 		SenderID:           senderID,
 		RecipientID:        recipientID,
+		EventID:            &eventID,
 		Subject:            "Hello",
 		Body:               "Message body",
 		ReadAt:             &readAt,
@@ -173,8 +175,6 @@ func TestMessageMapping_RoundTrip(t *testing.T) {
 	m := messageDomainToModel(msg)
 	got := messageModelToDomain(m)
 
-	// Reactions and the quoted preview are attached separately when a thread is
-	// rendered, so they are not part of the row round-trip.
 	if !reflect.DeepEqual(got, msg) {
 		t.Fatalf("round-trip mismatch:\nexpected: %#v\ngot:      %#v", msg, got)
 	}

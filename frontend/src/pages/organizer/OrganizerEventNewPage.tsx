@@ -16,7 +16,7 @@ import {
   useUploadFeaturedImageMutation,
   type EventWritePayload,
 } from '@/app/eventsApi';
-import { DEFAULT_EVENT_TYPE, EVENT_TYPES } from '@/constants/eventTypes';
+import { DEFAULT_EVENT_TYPE, eventTypeOptions } from '@/constants/eventTypes';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -32,6 +32,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import type { EventDetail } from '@/types/eventDetail';
 import { emptyEventDetail } from '@/types/eventDetail';
+import { useLang } from '@/contexts/langContext';
+import { tr } from '@/lib/i18n';
 
 type TicketDraft = {
   clientId: string;
@@ -136,8 +138,8 @@ function NewEventTimePicker({
         format="HH:mm"
         locale="el-GR"
         maxDetail="minute"
-        clockAriaLabel="Αναλογικό ρολόι"
-        clearAriaLabel="Καθαρισμός ώρας"
+        clockAriaLabel={tr('eventForm.clock')}
+        clearAriaLabel={tr('eventForm.clearTime')}
         disabled={disabled}
         clockProps={{
           size: 200,
@@ -198,7 +200,7 @@ function DateTimeDialogField({
           size="sm"
           className="h-7 w-7 cursor-pointer px-0 text-sm text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 comfortaa-regular"
           onClick={() => handleOpen(true)}
-          aria-label={`${label} επεξεργασία`}
+          aria-label={tr('eventForm.editField', { label })}
         >
           <PencilIcon className="size-4" />
         </Button>
@@ -215,7 +217,7 @@ function DateTimeDialogField({
           <DialogHeader>
             <DialogTitle className="comfortaa-bold">{label}</DialogTitle>
             <DialogDescription className="comfortaa-regular">
-              {step === 'date' ? 'Επιλέξτε ημερομηνία' : 'Επιλέξτε ώρα'}
+              {step === 'date' ? tr('eventForm.pickDate') : tr('eventForm.pickTime')}
             </DialogDescription>
           </DialogHeader>
 
@@ -235,7 +237,7 @@ function DateTimeDialogField({
                   disabled={!tempDate}
                   className="comfortaa-regular"
                 >
-                  Επόμενο →
+                  {tr('eventForm.next')}
                 </Button>
               </div>
             </div>
@@ -249,14 +251,14 @@ function DateTimeDialogField({
                   onClick={() => setStep('date')}
                   className="comfortaa-regular"
                 >
-                  ← Πίσω
+                  {tr('eventForm.back')}
                 </Button>
                 <Button
                   type="button"
                   onClick={handleConfirm}
-                  className="bg-[#6d28d9] text-white hover:bg-[#5b21b6] comfortaa-regular"
+                  className="bg-[var(--nexus-purple)] text-white hover:bg-[var(--nexus-purple-dark)] comfortaa-regular"
                 >
-                  Επιβεβαίωση
+                  {tr('eventForm.confirm')}
                 </Button>
               </div>
             </div>
@@ -268,6 +270,7 @@ function DateTimeDialogField({
 }
 
 export default function OrganizerEventNewPage() {
+  const { t } = useLang();
   const navigate = useNavigate();
   const [createEvent] = useCreateEventMutation();
   const [uploadFeaturedImage] = useUploadFeaturedImageMutation();
@@ -285,7 +288,7 @@ export default function OrganizerEventNewPage() {
   const [eventType, setEventType] = useState<string>(DEFAULT_EVENT_TYPE);
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [ticketRows, setTicketRows] = useState<TicketDraft[]>([
-    { clientId: '1', name: 'Γενική είσοδος', price: '0', quantity: '100' },
+    { clientId: '1', name: tr('eventForm.defaultTicketName'), price: '0', quantity: '100' },
   ]);
   const [detail, setDetail] = useState<EventDetail>(emptyEventDetail());
 
@@ -311,8 +314,6 @@ export default function OrganizerEventNewPage() {
       }
     };
   }, []);
-
-
 
   const syncStart = (nextDate: Date | undefined, nextTime: string) => {
     setStartDate(nextDate);
@@ -390,23 +391,23 @@ export default function OrganizerEventNewPage() {
   const onSubmit = async () => {
     setError(null);
     if (!startDate || !endDate) {
-      setError('Ορίστε ημερομηνίες έναρξης και λήξης.');
+      setError(t('eventForm.v.dates'));
       return;
     }
     const startAt = toUtcRfc3339(startDate, startTime);
     const endAt = toUtcRfc3339(endDate, endTime);
     if (!startAt || !endAt) {
-      setError('Μη έγκυρη ώρα (χρησιμοποιήστε μορφή ΩΩ:ΛΛ).');
+      setError(t('eventForm.v.time'));
       return;
     }
     if (new Date(endAt) <= new Date(startAt)) {
-      setError('Η λήξη πρέπει να είναι μετά την έναρξη.');
+      setError(t('eventForm.v.endAfterStart'));
       return;
     }
 
     const cap = Number.parseInt(capacity.trim(), 10);
     if (!Number.isFinite(cap) || cap < 0) {
-      setError('Μη έγκυρη χωρητικότητα.');
+      setError(t('eventForm.v.capacity'));
       return;
     }
 
@@ -416,33 +417,31 @@ export default function OrganizerEventNewPage() {
       quantity: Number.parseInt(r.quantity.trim(), 10),
     }));
 
-    for (const t of parsedTickets) {
+    for (const ticket of parsedTickets) {
       if (
-        t.name === '' ||
-        !Number.isFinite(t.price) ||
-        t.price < 0 ||
-        !Number.isFinite(t.quantity) ||
-        t.quantity < 0
+        ticket.name === '' ||
+        !Number.isFinite(ticket.price) ||
+        ticket.price < 0 ||
+        !Number.isFinite(ticket.quantity) ||
+        ticket.quantity < 0
       ) {
-        setError('Συμπληρώστε έγκυρα στοιχεία για όλους τους τύπους εισιτηρίων.');
+        setError(t('eventForm.v.ticketTypes'));
         return;
       }
     }
 
     if (selectedCategories.size === 0) {
-      setError('Επιλέξτε τουλάχιστον μία κατηγορία.');
+      setError(t('eventForm.v.category'));
       return;
     }
     if (parsedTickets.length === 0) {
-      setError('Προσθέστε τουλάχιστον έναν τύπο εισιτηρίου.');
+      setError(t('eventForm.v.oneTicketType'));
       return;
     }
 
     const sumQty = parsedTickets.reduce((acc, t) => acc + t.quantity, 0);
     if (sumQty > cap) {
-      setError(
-        'Το άθροισμα των θέσεων ανά τύπο δεν μπορεί να υπερβαίνει τη συνολική χωρητικότητα.',
-      );
+      setError(t('eventForm.v.seatsOverCapacity'));
       return;
     }
 
@@ -480,15 +479,13 @@ export default function OrganizerEventNewPage() {
         } catch {
           // The event exists; only the image failed, so say so and carry on to
           // the edit screen where it can be retried.
-          toast.error(
-            'Η εκδήλωση δημιουργήθηκε, αλλά η μεταφόρτωση της εικόνας απέτυχε. Μπορείτε να προσθέσετε εικόνα από την επεξεργασία.',
-          );
+          toast.error(t('eventForm.createdImageFailed'));
         }
       }
 
       void navigate(`/organizer/events/${encodeURIComponent(id)}/edit`);
     } catch (e: unknown) {
-      setError(apiErrorMessage(e, 'Αποτυχία δημιουργίας'));
+      setError(apiErrorMessage(e, t('eventForm.createFailed')));
     } finally {
       setSubmitting(false);
     }
@@ -496,26 +493,26 @@ export default function OrganizerEventNewPage() {
 
   return (
     <OrganizerLayout>
-      <div className="bg-white p-6">
+      <div className="bg-white p-4 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="text-xs text-neutral-500 comfortaa-regular">
               <Link to="/organizer/events" className="hover:underline">
-                Οι εκδηλώσεις μου
+                {t('eventForm.myEvents')}
               </Link>{' '}
-              / Νέα εκδήλωση
+              / {t('eventForm.newEvent')}
             </p>
             <h1 className="mt-1 text-2xl font-bold text-neutral-950 comfortaa-bold">
-              Νέα εκδήλωση
+              {t('eventForm.newEvent')}
             </h1>
           </div>
           <Button
             type="button"
             onClick={() => void onSubmit()}
             disabled={submitting || loadingCats}
-            className="rounded-none border-2 border-[#6d28d9] bg-transparent px-4 py-1.5 text-sm text-[#6d28d9] hover:bg-[#6d28d9] hover:text-white comfortaa-regular"
+            className="rounded-none border-2 border-[var(--nexus-purple)] bg-transparent px-4 py-1.5 text-sm text-[var(--nexus-purple)] hover:bg-[var(--nexus-purple)] hover:text-white comfortaa-regular"
           >
-            {submitting ? 'Δημιουργία…' : 'Δημιουργία'}
+            {submitting ? t('eventForm.creating') : t('eventForm.create')}
           </Button>
         </div>
 
@@ -529,13 +526,13 @@ export default function OrganizerEventNewPage() {
           <div className="space-y-5">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-neutral-800 comfortaa-regular">
-                Τίτλος
+                {t('eventForm.title')}
               </label>
               <Input value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-neutral-800 comfortaa-regular">
-                Περιγραφή
+                {t('eventForm.description')}
               </label>
               <Textarea
                 value={description}
@@ -546,7 +543,7 @@ export default function OrganizerEventNewPage() {
             {mapPreviewCoords && (
               <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
                 <p className="border-b border-neutral-100 bg-neutral-50 px-4 py-2 text-sm font-medium text-neutral-800 comfortaa-bold">
-                  Χάρτης τοποθεσίας
+                  {t('eventForm.map')}
                 </p>
                 <div className="p-2">
                   <EventMapEmbed
@@ -561,10 +558,10 @@ export default function OrganizerEventNewPage() {
 
             <div className="rounded-2xl border border-neutral-200 p-4">
               <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
-                Τύποι εισιτηρίων
+                {t('eventForm.ticketTypes')}
               </p>
               <p className="mt-1 text-xs text-neutral-500 comfortaa-regular">
-                Το άθροισμα των θέσεων ανά τύπο δεν μπορεί να υπερβαίνει τη συνολική χωρητικότητα.
+                {t('eventForm.ticketTypesHint')}
               </p>
               <div className="mt-4 space-y-3">
                 {ticketRows.map((row) => (
@@ -573,18 +570,18 @@ export default function OrganizerEventNewPage() {
                     className="grid grid-cols-1 gap-2 rounded-lg border border-neutral-100 p-3 sm:grid-cols-[minmax(0,1fr)_100px_100px_auto]"
                   >
                     <Input
-                      placeholder="Όνομα τύπου"
+                      placeholder={t('eventForm.typeName')}
                       value={row.name}
                       onChange={(e) => updateTicketRow(row.clientId, { name: e.target.value })}
                     />
                     <Input
-                      placeholder="Τιμή"
+                      placeholder={t('eventForm.price')}
                       inputMode="decimal"
                       value={row.price}
                       onChange={(e) => updateTicketRow(row.clientId, { price: e.target.value })}
                     />
                     <Input
-                      placeholder="Θέσεις"
+                      placeholder={t('eventForm.seats')}
                       inputMode="numeric"
                       value={row.quantity}
                       onChange={(e) => updateTicketRow(row.clientId, { quantity: e.target.value })}
@@ -594,7 +591,7 @@ export default function OrganizerEventNewPage() {
                       variant="ghost"
                       size="icon"
                       className="justify-self-end text-neutral-500 hover:text-[var(--nexus-red)]"
-                      aria-label="Αφαίρεση τύπου"
+                      aria-label={t('eventForm.removeType')}
                       disabled={ticketRows.length <= 1}
                       onClick={() => removeTicketRow(row.clientId)}
                     >
@@ -610,7 +607,7 @@ export default function OrganizerEventNewPage() {
                   onClick={addTicketRow}
                 >
                   <PlusIcon className="mr-1 size-4" />
-                  Προσθήκη τύπου
+                  {t('eventForm.addType')}
                 </Button>
               </div>
             </div>
@@ -618,14 +615,16 @@ export default function OrganizerEventNewPage() {
 
           <aside className="space-y-5">
             <div className="rounded-2xl border border-neutral-200 p-4">
-              <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">Λεπτομέρειες</p>
+              <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
+                {t('eventForm.details')}
+              </p>
               <div className="mt-4 space-y-3">
                 <div>
                   <label
                     htmlFor="event-type"
                     className="mb-1 block text-xs text-neutral-600 comfortaa-regular"
                   >
-                    Τύπος εκδήλωσης
+                    {t('eventForm.eventType')}
                   </label>
                   <select
                     id="event-type"
@@ -633,7 +632,7 @@ export default function OrganizerEventNewPage() {
                     onChange={(e) => setEventType(e.target.value)}
                     className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                   >
-                    {EVENT_TYPES.map((t) => (
+                    {eventTypeOptions().map((t) => (
                       <option key={t.value} value={t.value}>
                         {t.label}
                       </option>
@@ -645,7 +644,7 @@ export default function OrganizerEventNewPage() {
                     htmlFor="event-capacity"
                     className="mb-1 block text-xs text-neutral-600 comfortaa-regular"
                   >
-                    Χωρητικότητα
+                    {t('eventForm.capacity')}
                   </label>
                   <Input
                     id="event-capacity"
@@ -656,59 +655,59 @@ export default function OrganizerEventNewPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                    Χώρος
+                    {t('eventForm.venue')}
                   </label>
                   <Input value={venue} onChange={(e) => setVenue(e.target.value)} />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                    Πόλη
+                    {t('eventForm.city')}
                   </label>
                   <Input value={city} onChange={(e) => setCity(e.target.value)} />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                    Χώρα
+                    {t('eventForm.country')}
                   </label>
                   <Input value={country} onChange={(e) => setCountry(e.target.value)} />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                    Διεύθυνση (οδός)
+                    {t('eventForm.street')}
                   </label>
                   <Input
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
-                    placeholder="π.χ. Ιπποκράτους 7"
+                    placeholder={t('eventForm.streetPlaceholder')}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                      Γεωγρ. πλάτος
+                      {t('eventForm.latitude')}
                     </label>
                     <Input
                       value={latitude}
                       onChange={(e) => setLatitude(e.target.value)}
-                      placeholder="π.χ. 37.9838"
+                      placeholder={t('eventForm.latPlaceholder')}
                       inputMode="decimal"
                     />
                   </div>
                   <div>
                     <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                      Γεωγρ. μήκος
+                      {t('eventForm.longitude')}
                     </label>
                     <Input
                       value={longitude}
                       onChange={(e) => setLongitude(e.target.value)}
-                      placeholder="π.χ. 23.7275"
+                      placeholder={t('eventForm.lngPlaceholder')}
                       inputMode="decimal"
                     />
                   </div>
                 </div>
                 <div>
                   <DateTimeDialogField
-                    label="Έναρξη"
+                    label={t('eventForm.start')}
                     date={startDate}
                     timeHHMM={startTime}
                     onChange={(d, t) => syncStart(d, t)}
@@ -716,7 +715,7 @@ export default function OrganizerEventNewPage() {
                 </div>
                 <div>
                   <DateTimeDialogField
-                    label="Λήξη"
+                    label={t('eventForm.end')}
                     date={endDate}
                     timeHHMM={endTime}
                     onChange={(d, t) => syncEnd(d, t)}
@@ -724,7 +723,7 @@ export default function OrganizerEventNewPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                    Εικόνα εμφάνισης (προαιρετικό)
+                    {t('eventForm.featuredImage')}
                   </label>
                   <div className="rounded-xl border border-neutral-200 bg-white p-3">
                     <div className="flex flex-col gap-3">
@@ -732,12 +731,12 @@ export default function OrganizerEventNewPage() {
                         {featuredPreview ? (
                           <img
                             src={featuredPreview}
-                            alt="Προεπισκόπηση εικόνας εμφάνισης"
+                            alt={t('eventForm.featuredPreview')}
                             className="h-full w-full object-cover"
                           />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center text-[11px] text-neutral-500 comfortaa-regular">
-                            Δεν έχει επιλεγεί εικόνα
+                            {t('eventForm.noImage')}
                           </div>
                         )}
                       </div>
@@ -752,13 +751,13 @@ export default function OrganizerEventNewPage() {
                         }}
                         className={cn(
                           'block w-full text-sm text-neutral-700 file:mr-2 file:rounded-none',
-                          'file:bg-transparent file:border-2 file:border-[#6d28d9] file:px-2 file:py-1 file:text-xs file:text-[#6d28d9] file:hover:bg-[#6d28d9] file:hover:text-white',
+                          'file:bg-transparent file:border-2 file:border-[var(--nexus-purple)] file:px-2 file:py-1 file:text-xs file:text-[var(--nexus-purple)] file:hover:bg-[var(--nexus-purple)] file:hover:text-white',
                           'comfortaa-regular',
                         )}
                       />
                       {pendingFeaturedFile ? (
                         <p className="text-[11px] text-neutral-500 comfortaa-regular">
-                          Η εικόνα θα μεταφορτωθεί αμέσως μετά τη δημιουργία της εκδήλωσης.
+                          {t('eventForm.imageAfterCreate')}
                         </p>
                       ) : null}
                     </div>
@@ -768,9 +767,13 @@ export default function OrganizerEventNewPage() {
             </div>
 
             <div className="rounded-2xl border border-neutral-200 p-4">
-              <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">Κατηγορίες</p>
+              <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
+                {t('eventForm.categories')}
+              </p>
               {loadingCats ? (
-                <p className="mt-4 text-sm text-neutral-600 comfortaa-regular">Φόρτωση…</p>
+                <p className="mt-4 text-sm text-neutral-600 comfortaa-regular">
+                  {t('eventForm.loading')}
+                </p>
               ) : (
                 <div className="mt-4 space-y-2">
                   {categoryNames.map((name) => {

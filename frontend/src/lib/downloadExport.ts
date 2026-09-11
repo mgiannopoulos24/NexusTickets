@@ -1,3 +1,4 @@
+import { tr } from '@/lib/i18n';
 /**
  * Downloads an authenticated file from the API and saves it via the browser.
  *
@@ -14,7 +15,7 @@ export async function downloadAuthenticatedFile(
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) {
-    throw new Error(`Η εξαγωγή απέτυχε (${res.status})`);
+    throw new Error(tr('errors.exportFailed', { status: res.status }));
   }
 
   const blob = await res.blob();

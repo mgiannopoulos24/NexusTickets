@@ -25,9 +25,11 @@ func RegisterEventRoutes(router fiber.Router, eventHandler *EventHandler, jwtSec
 
 	events.Get("/:id", middleware.OptionalJWTAuth(jwtSecret), eventHandler.Get)
 
+	// An administrator may also run their own events; ownership checks in the
+	// service keep them from touching other organizers' events through here.
 	organizer := events.Group("/organizer")
 	organizer.Use(middleware.JWTAuth(jwtSecret))
-	organizer.Use(middleware.RequireRole(domain.UserRoleOrganizer))
+	organizer.Use(middleware.RequireRole(domain.UserRoleOrganizer, domain.UserRoleAdmin))
 	organizer.Get("/me", eventHandler.GetOrganizerEvents)
 	organizer.Post("/", eventHandler.Create)
 	organizer.Patch("/:id", eventHandler.Update)

@@ -106,64 +106,34 @@ type Booking struct {
 	UpdatedAt time.Time
 }
 
-// Message represents an inbox/sent message between users.
+// Message is one entry of a user's mailbox (assignment §10): a note from one
+// user to another, filed under the sender's "sent" and the recipient's
+// "inbox". Each side can drop it from their own folder without affecting the
+// other's copy.
 type Message struct {
 	ID uuid.UUID
 
 	SenderID    uuid.UUID
 	RecipientID uuid.UUID
 
+	// EventID is the event the message is about, when there is one: a question
+	// about a booking, or an organizer's notice to everyone who booked.
+	EventID *uuid.UUID
+
 	Subject string
 	Body    string
 
-	// Attachments. A message carries at most one of these; the body is then
-	// optional and acts as a caption.
-	ImageURL string
-	FileURL  string
-	FileName string
-	GifURL   string
-
-	// ReplyToID quotes an earlier message in the same thread.
-	ReplyToID *uuid.UUID
-	// ReplyTo is the quoted message, filled in when a thread is rendered.
-	ReplyTo *MessagePreview
-
-	Reactions []MailboxReaction
-
+	// ReadAt is set the first time the recipient opens the message.
 	ReadAt *time.Time
 
 	DeletedBySender    bool
 	DeletedByRecipient bool
-	// DeletedForEveryone leaves a tombstone both sides can see, instead of the
-	// message quietly vanishing from one mailbox.
-	DeletedForEveryone bool
 
 	CreatedAt time.Time
 }
 
-// MessagePreview is the one-line quote shown above a reply.
-type MessagePreview struct {
-	ID       string
-	SenderID uuid.UUID
-	Body     string
-	Deleted  bool
-}
-
-// MailboxReaction is one emoji a user put on a mailbox message. (The chat
-// subsystem has its own MessageReaction; these are separate tables.)
-type MailboxReaction struct {
-	ID        uuid.UUID
-	MessageID uuid.UUID
-	UserID    uuid.UUID
-	Emoji     string
-	CreatedAt time.Time
-}
-
-// HasAttachment reports whether the message carries media instead of, or
-// alongside, a text body.
-func (m Message) HasAttachment() bool {
-	return m.ImageURL != "" || m.FileURL != "" || m.GifURL != ""
-}
+// IsUnread reports whether the recipient has not opened the message yet.
+func (m Message) IsUnread() bool { return m.ReadAt == nil }
 
 // Category represents an event category (taxonomy).
 type Category struct {

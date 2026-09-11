@@ -118,7 +118,7 @@ export default function EventsIndexPage() {
           <section className="space-y-4">
             <div className="flex items-center gap-2">
               <Sparkles className="w-6 h-6 text-yellow-500" />
-              <h2 className="text-2xl font-bold comfortaa-bold">Προτεινόμενες Εκδηλώσεις</h2>
+              <h2 className="text-2xl font-bold comfortaa-bold">{t('eventsIndex.recommended')}</h2>
             </div>
             {recLoading ? (
               <SkeletonList rows={3} />
@@ -144,26 +144,24 @@ export default function EventsIndexPage() {
                   className="comfortaa-regular text-sm text-muted-foreground"
                 >
                   {events.length === 0
-                    ? 'Καμία εκδήλωση'
-                    : `${events.length} ${events.length === 1 ? 'εκδήλωση' : 'εκδηλώσεις'}${
-                        hasMore ? '+' : ''
-                      } σε αυτή τη σελίδα`}
-                  {hasActiveFilters ? ' — με φίλτρα' : ''}
+                    ? t('eventsIndex.none')
+                    : t(events.length === 1 ? 'eventsIndex.countOne' : 'eventsIndex.countMany', {
+                        count: events.length,
+                        more: hasMore ? '+' : '',
+                      })}
+                  {hasActiveFilters ? t('eventsIndex.withFilters') : ''}
                 </p>
               )}
             </div>
             {isFetching && (
               <Badge variant="outline" className="animate-pulse">
-                Φόρτωση...
+                {t('eventsIndex.loading')}
               </Badge>
             )}
           </div>
 
           {error ? (
-            <ErrorMessage
-              message="Δεν ήταν δυνατή η φόρτωση των εκδηλώσεων."
-              onRetry={() => void refetch()}
-            />
+            <ErrorMessage message={t('eventsIndex.loadError')} onRetry={() => void refetch()} />
           ) : isLoading ? (
             <SkeletonList rows={pageSize} />
           ) : events.length > 0 ? (
@@ -202,8 +200,8 @@ export default function EventsIndexPage() {
             </>
           ) : (
             <EmptyState
-              title="Καμία εκδήλωση"
-              description="Δεν βρέθηκαν εκδηλώσεις με αυτά τα κριτήρια. Δοκιμάστε να χαλαρώσετε τα φίλτρα."
+              title={t('eventsIndex.emptyTitle')}
+              description={t('eventsIndex.emptyBody')}
             />
           )}
         </div>

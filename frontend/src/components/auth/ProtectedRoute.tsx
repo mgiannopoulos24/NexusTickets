@@ -4,6 +4,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 
 import { useAuth } from '@/hooks/useAuth';
 import type { UserRole } from '@/types/enums';
+import { tr } from '@/lib/i18n';
 
 type ProtectedRouteProps = {
   children: ReactNode;
@@ -22,8 +23,10 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <div className="text-center">
-          <Loader2 className="mx-auto h-12 w-12 animate-spin text-[#6d28d9]" />
-          <p className="comfortaa-regular mt-4 text-lg text-neutral-600">Έλεγχος πρόσβασης…</p>
+          <Loader2 className="mx-auto h-12 w-12 animate-spin text-[var(--nexus-purple)]" />
+          <p className="comfortaa-regular mt-4 text-lg text-neutral-600">
+            {tr('common.checkingAccess')}
+          </p>
         </div>
       </div>
     );

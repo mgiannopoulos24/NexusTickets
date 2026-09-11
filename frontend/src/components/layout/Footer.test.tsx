@@ -60,13 +60,13 @@ describe('Footer', () => {
 
   it('points an admin at incoming requests instead', () => {
     renderAs('admin');
-    expect(columnLinks('Υποστήριξη')).toEqual(['Αιτήματα χρηστών', 'Νέο μήνυμα']);
+    expect(columnLinks('Υποστήριξη')).toEqual(['Αιτήματα χρηστών', 'Κλειστά αιτήματα']);
   });
 
-  it('links a new request straight into the support composer', () => {
+  it('links a new request straight into the support ticket form', () => {
     renderAs('attendee');
     const link = screen.getByRole('link', { name: 'Νέο αίτημα' });
-    expect(link).toHaveAttribute('href', '/messages?compose=1&support=1');
+    expect(link).toHaveAttribute('href', '/support?new=1');
   });
 
   it('shows each role its own workspace column', () => {

@@ -24,7 +24,7 @@ import {
   ticketTypesToDrafts,
   type TicketTypeDraft,
 } from '@/lib/ticketTypeDrafts';
-import { DEFAULT_EVENT_TYPE, EVENT_TYPES } from '@/constants/eventTypes';
+import { DEFAULT_EVENT_TYPE, eventTypeOptions } from '@/constants/eventTypes';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import {
@@ -46,6 +46,8 @@ import { PencilIcon, Trash2Icon } from 'lucide-react';
 import TimePicker from 'react-time-picker';
 import 'react-time-picker/dist/TimePicker.css';
 import 'react-clock/dist/Clock.css';
+import { useLang } from '@/contexts/langContext';
+import { tr } from '@/lib/i18n';
 
 function isUUID(raw: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw);
@@ -160,8 +162,8 @@ function AdminTimePicker({
         format="HH:mm"
         locale="el-GR"
         maxDetail="minute"
-        clockAriaLabel="Αναλογικό ρολόι"
-        clearAriaLabel="Καθαρισμός ώρας"
+        clockAriaLabel={tr('eventForm.clock')}
+        clearAriaLabel={tr('eventForm.clearTime')}
         disabled={disabled}
         clockProps={{
           size: 200,
@@ -222,7 +224,7 @@ function DateTimeDialogField({
           size="sm"
           className="h-7 w-7 cursor-pointer px-0 text-sm text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 comfortaa-regular"
           onClick={() => handleOpen(true)}
-          aria-label={`${label} επεξεργασία`}
+          aria-label={tr('eventForm.editField', { label })}
         >
           <PencilIcon className="size-4" />
         </Button>
@@ -239,7 +241,7 @@ function DateTimeDialogField({
           <DialogHeader>
             <DialogTitle className="comfortaa-bold">{label}</DialogTitle>
             <DialogDescription className="comfortaa-regular">
-              {step === 'date' ? 'Επιλέξτε ημερομηνία' : 'Επιλέξτε ώρα'}
+              {step === 'date' ? tr('eventForm.pickDate') : tr('eventForm.pickTime')}
             </DialogDescription>
           </DialogHeader>
 
@@ -259,7 +261,7 @@ function DateTimeDialogField({
                   disabled={!tempDate}
                   className="comfortaa-regular"
                 >
-                  Επόμενο →
+                  {tr('eventForm.next')}
                 </Button>
               </div>
             </div>
@@ -273,14 +275,14 @@ function DateTimeDialogField({
                   onClick={() => setStep('date')}
                   className="comfortaa-regular"
                 >
-                  ← Πίσω
+                  {tr('eventForm.back')}
                 </Button>
                 <Button
                   type="button"
                   onClick={handleConfirm}
-                  className="bg-[#6d28d9] text-white hover:bg-[#5b21b6] comfortaa-regular"
+                  className="bg-[var(--nexus-purple)] text-white hover:bg-[var(--nexus-purple-dark)] comfortaa-regular"
                 >
-                  Επιβεβαίωση
+                  {tr('eventForm.confirm')}
                 </Button>
               </div>
             </div>
@@ -319,6 +321,7 @@ function formFromEvent(ev: Event): FormState {
  * data changes", instead of copying the response into state from an effect.
  */
 export default function OrganizerEventEditPage() {
+  const { t } = useLang();
   const { id = '' } = useParams();
   const { user } = useAuth();
 
@@ -333,7 +336,7 @@ export default function OrganizerEventEditPage() {
     return (
       <OrganizerLayout>
         <div className="p-6">
-          <ErrorMessage message="Μη έγκυρο αναγνωριστικό εκδήλωσης." />
+          <ErrorMessage message={t('eventForm.invalidId')} />
         </div>
       </OrganizerLayout>
     );
@@ -354,7 +357,7 @@ export default function OrganizerEventEditPage() {
       <OrganizerLayout>
         <div className="p-6">
           <ErrorMessage
-            message={apiErrorMessage(eventQuery.error, 'Δεν ήταν δυνατή η φόρτωση της εκδήλωσης.')}
+            message={apiErrorMessage(eventQuery.error, t('eventForm.loadError'))}
             onRetry={() => void eventQuery.refetch()}
           />
         </div>
@@ -366,7 +369,7 @@ export default function OrganizerEventEditPage() {
     return (
       <OrganizerLayout>
         <div className="p-6">
-          <ErrorMessage message="Δεν έχετε δικαίωμα επεξεργασίας αυτής της εκδήλωσης." />
+          <ErrorMessage message={t('eventForm.forbidden')} />
         </div>
       </OrganizerLayout>
     );
@@ -382,6 +385,7 @@ function OrganizerEventEditForm({
   initialEvent: Event;
   categories: Category[];
 }) {
+  const { t } = useLang();
   const eventId = initialEvent.id;
 
   const [updateEvent] = useUpdateEventMutation();
@@ -395,7 +399,9 @@ function OrganizerEventEditForm({
   const [event, setEvent] = useState<Event>(initialEvent);
   const [form, setForm] = useState<FormState>(() => formFromEvent(initialEvent));
 
-  const initialStart = initialEvent.start_at ? fromRfc3339ToDateAndTime(initialEvent.start_at) : null;
+  const initialStart = initialEvent.start_at
+    ? fromRfc3339ToDateAndTime(initialEvent.start_at)
+    : null;
   const initialEnd = initialEvent.end_at ? fromRfc3339ToDateAndTime(initialEvent.end_at) : null;
 
   const [startDate, setStartDate] = useState<Date | undefined>(initialStart?.date);
@@ -493,9 +499,9 @@ function OrganizerEventEditForm({
       setForm((prev) => ({ ...prev, featured_image_url: next }));
       setEvent(saved);
       if (next) setFeaturedPreview(next);
-      setSaveOk('Αποθηκεύτηκε');
+      setSaveOk(t('eventForm.saved'));
     } catch (e: unknown) {
-      setSaveError(apiErrorMessage(e, 'Αποτυχία μεταφόρτωσης εικόνας'));
+      setSaveError(apiErrorMessage(e, t('eventForm.imageUploadFailed')));
       if (featuredObjectUrlRef.current) {
         URL.revokeObjectURL(featuredObjectUrlRef.current);
         featuredObjectUrlRef.current = null;
@@ -513,9 +519,9 @@ function OrganizerEventEditForm({
     try {
       await uploadPhoto({ id: eventId, file }).unwrap();
       await refreshEvent();
-      setSaveOk('Η φωτογραφία προστέθηκε');
+      setSaveOk(t('eventForm.photoAdded'));
     } catch (e: unknown) {
-      setSaveError(apiErrorMessage(e, 'Αποτυχία μεταφόρτωσης φωτογραφίας'));
+      setSaveError(apiErrorMessage(e, t('eventForm.photoUploadFailed')));
     }
   };
 
@@ -525,9 +531,9 @@ function OrganizerEventEditForm({
     try {
       await deletePhoto({ id: eventId, photoId }).unwrap();
       await refreshEvent();
-      setSaveOk('Η φωτογραφία διαγράφηκε');
+      setSaveOk(t('eventForm.photoDeleted'));
     } catch (e: unknown) {
-      setSaveError(apiErrorMessage(e, 'Αποτυχία διαγραφής φωτογραφίας'));
+      setSaveError(apiErrorMessage(e, t('eventForm.photoDeleteFailed')));
     }
   };
 
@@ -549,12 +555,12 @@ function OrganizerEventEditForm({
 
       const capacityNum = Number.parseInt(form.capacity.trim(), 10);
       if (!Number.isFinite(capacityNum) || capacityNum < 0) {
-        setSaveError('Μη έγκυρη χωρητικότητα.');
+        setSaveError(t('eventForm.v.capacity'));
         setSaving(false);
         return;
       }
       if (form.categories.size === 0) {
-        setSaveError('Επιλέξτε τουλάχιστον μία κατηγορία.');
+        setSaveError(t('eventForm.v.category'));
         setSaving(false);
         return;
       }
@@ -595,19 +601,19 @@ function OrganizerEventEditForm({
       // New ticket types come back with server ids; re-seed so a second save
       // updates them instead of creating duplicates.
       setTicketDrafts(ticketTypesToDrafts(saved.ticket_types ?? []));
-      setSaveOk('Αποθηκεύτηκε');
+      setSaveOk(t('eventForm.saved'));
     } catch (e: unknown) {
-      setSaveError(apiErrorMessage(e, 'Αποτυχία αποθήκευσης'));
+      setSaveError(apiErrorMessage(e, t('eventForm.saveFailed')));
     } finally {
       setSaving(false);
     }
   };
 
   const statusLabel = (s: string | undefined): string => {
-    if (s === 'draft') return 'Πρόχειρο';
-    if (s === 'published') return 'Δημοσιευμένο';
-    if (s === 'cancelled') return 'Ακυρωμένο';
-    if (s === 'completed') return 'Ολοκληρωμένο';
+    if (s === 'draft') return t('status.event.draft');
+    if (s === 'published') return t('status.event.published');
+    if (s === 'cancelled') return t('status.event.cancelled');
+    if (s === 'completed') return t('status.event.completed');
     return s ?? '—';
   };
 
@@ -617,20 +623,16 @@ function OrganizerEventEditForm({
     setSaveOk(null);
     try {
       setEvent(await publishEvent(eventId).unwrap());
-      setSaveOk('Δημοσιεύτηκε');
+      setSaveOk(t('eventForm.published'));
     } catch (e: unknown) {
-      setSaveError(apiErrorMessage(e, 'Αποτυχία δημοσίευσης'));
+      setSaveError(apiErrorMessage(e, t('eventForm.publishFailed')));
     } finally {
       setLifecycleLoading(false);
     }
   };
 
   const onCancelEvent = async () => {
-    if (
-      !window.confirm(
-        'Να ακυρωθεί η εκδήλωση; Οι συμμετέχοντες ενδέχεται να ειδοποιηθούν μέσω του συστήματος μηνυμάτων.',
-      )
-    ) {
+    if (!window.confirm(t('eventForm.confirmCancel'))) {
       return;
     }
     setLifecycleLoading(true);
@@ -638,9 +640,9 @@ function OrganizerEventEditForm({
     setSaveOk(null);
     try {
       setEvent(await cancelEvent(eventId).unwrap());
-      setSaveOk('Η εκδήλωση ακυρώθηκε');
+      setSaveOk(t('eventForm.cancelled'));
     } catch (e: unknown) {
-      setSaveError(apiErrorMessage(e, 'Αποτυχία ακύρωσης'));
+      setSaveError(apiErrorMessage(e, t('eventForm.cancelFailed')));
     } finally {
       setLifecycleLoading(false);
     }
@@ -648,34 +650,34 @@ function OrganizerEventEditForm({
 
   return (
     <OrganizerLayout>
-      <div className="bg-white p-6">
+      <div className="bg-white p-4 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="text-xs text-neutral-500 comfortaa-regular">
               <Link to="/organizer/events" className="hover:underline">
-                Οι εκδηλώσεις μου
+                {t('eventForm.myEvents')}
               </Link>{' '}
-              / Επεξεργασία
+              / {t('eventForm.editCrumb')}
             </p>
             <h1 className="mt-1 truncate text-2xl font-bold text-neutral-950 comfortaa-bold">
-              {event?.title ?? 'Εκδήλωση'}
+              {event?.title ?? t('eventForm.event')}
             </h1>
           </div>
           <Button
             type="button"
             onClick={() => void onSave()}
             disabled={saving || lifecycleLoading || isLocked}
-            className="rounded-none border-2 border-[#6d28d9] bg-transparent px-4 py-1.5 text-sm text-[#6d28d9] hover:bg-[#6d28d9] hover:text-white comfortaa-regular"
+            className="rounded-none border-2 border-[var(--nexus-purple)] bg-transparent px-4 py-1.5 text-sm text-[var(--nexus-purple)] hover:bg-[var(--nexus-purple)] hover:text-white comfortaa-regular"
           >
-            {saving ? 'Αποθήκευση…' : 'Αποθήκευση'}
+            {saving ? t('eventForm.saving') : t('eventForm.save')}
           </Button>
         </div>
 
         {isLocked && (
           <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 comfortaa-regular">
             {event?.status === 'cancelled'
-              ? 'Η εκδήλωση έχει ακυρωθεί και δεν μπορεί να τροποποιηθεί.'
-              : 'Η εκδήλωση έχει ολοκληρωθεί και δεν μπορεί να τροποποιηθεί.'}
+              ? t('eventForm.lockedCancelled')
+              : t('eventForm.lockedCompleted')}
           </p>
         )}
 
@@ -691,361 +693,363 @@ function OrganizerEventEditForm({
         )}
 
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="space-y-5">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-neutral-800 comfortaa-regular">
-                  Τίτλος
-                </label>
-                <Input
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                />
+          <div className="space-y-5">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-neutral-800 comfortaa-regular">
+                {t('eventForm.title')}
+              </label>
+              <Input
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-neutral-800 comfortaa-regular">
+                {t('eventForm.description')}
+              </label>
+              <Textarea
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                className="min-h-32"
+              />
+            </div>
+            {mapPreviewCoords && (
+              <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+                <p className="border-b border-neutral-100 bg-neutral-50 px-4 py-2 text-sm font-medium text-neutral-800 comfortaa-bold">
+                  {t('eventForm.map')}
+                </p>
+                <div className="p-2">
+                  <EventMapEmbed
+                    latitude={mapPreviewCoords.lat}
+                    longitude={mapPreviewCoords.lon}
+                    className="min-h-[280px] rounded-lg"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-neutral-800 comfortaa-regular">
-                  Περιγραφή
-                </label>
-                <Textarea
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="min-h-32"
-                />
-              </div>
-              {mapPreviewCoords && (
-                <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-                  <p className="border-b border-neutral-100 bg-neutral-50 px-4 py-2 text-sm font-medium text-neutral-800 comfortaa-bold">
-                    Χάρτης τοποθεσίας
+            )}
+            <EventDetailTemplateForm value={detail} onChange={setDetail} disabled={saving} />
+          </div>
+
+          <aside className="space-y-5">
+            <div className="rounded-2xl border border-neutral-200 p-4">
+              <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
+                {t('eventForm.details')}
+              </p>
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                    {t('eventForm.status')}
+                  </label>
+                  <p className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-900 comfortaa-regular">
+                    {statusLabel(event?.status)}
                   </p>
-                  <div className="p-2">
-                    <EventMapEmbed
-                      latitude={mapPreviewCoords.lat}
-                      longitude={mapPreviewCoords.lon}
-                      className="min-h-[280px] rounded-lg"
+                  <p className="mt-1 text-[10px] text-neutral-500 comfortaa-regular">
+                    {t('eventForm.statusHintOrganizer')}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {event?.status === 'draft' ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={saving || lifecycleLoading}
+                        onClick={() => void onPublish()}
+                        className="comfortaa-regular"
+                      >
+                        {lifecycleLoading ? '…' : t('eventForm.publish')}
+                      </Button>
+                    ) : null}
+                    {event?.status === 'published' ? (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        disabled={saving || lifecycleLoading}
+                        onClick={() => void onCancelEvent()}
+                        className="comfortaa-regular"
+                      >
+                        {lifecycleLoading ? '…' : t('eventForm.cancelEvent')}
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                    {t('eventForm.venue')}
+                  </label>
+                  <Input
+                    value={form.venue}
+                    onChange={(e) => setForm({ ...form, venue: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                    {t('eventForm.city')}
+                  </label>
+                  <Input
+                    value={form.city}
+                    onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                    {t('eventForm.country')}
+                  </label>
+                  <Input
+                    value={form.country}
+                    onChange={(e) => setForm({ ...form, country: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                    {t('eventForm.street')}
+                  </label>
+                  <Input
+                    value={form.address}
+                    onChange={(e) => setForm({ ...form, address: e.target.value })}
+                    placeholder={t('eventForm.streetPlaceholder')}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                      {t('eventForm.latitudeLong')}
+                    </label>
+                    <Input
+                      value={form.latitude}
+                      onChange={(e) => setForm({ ...form, latitude: e.target.value })}
+                      placeholder={t('eventForm.latPlaceholder')}
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                      {t('eventForm.longitudeLong')}
+                    </label>
+                    <Input
+                      value={form.longitude}
+                      onChange={(e) => setForm({ ...form, longitude: e.target.value })}
+                      placeholder={t('eventForm.lngPlaceholder')}
+                      inputMode="decimal"
                     />
                   </div>
                 </div>
-              )}
-              <EventDetailTemplateForm value={detail} onChange={setDetail} disabled={saving} />
-            </div>
-
-            <aside className="space-y-5">
-              <div className="rounded-2xl border border-neutral-200 p-4">
-                <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
-                  Λεπτομέρειες
-                </p>
-                <div className="mt-4 space-y-3">
-                  <div>
-                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                      Κατάσταση
-                    </label>
-                    <p className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-900 comfortaa-regular">
-                      {statusLabel(event?.status)}
-                    </p>
-                    <p className="mt-1 text-[10px] text-neutral-500 comfortaa-regular">
-                      Πρόχειρο: δεν φαίνεται στη δημόσια λίστα. Μετά τη δημοσίευση είναι ορατή σε
-                      όλους.
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {event?.status === 'draft' ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={saving || lifecycleLoading}
-                          onClick={() => void onPublish()}
-                          className="comfortaa-regular"
-                        >
-                          {lifecycleLoading ? '…' : 'Δημοσίευση'}
-                        </Button>
-                      ) : null}
-                      {event?.status === 'published' ? (
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          disabled={saving || lifecycleLoading}
-                          onClick={() => void onCancelEvent()}
-                          className="comfortaa-regular"
-                        >
-                          {lifecycleLoading ? '…' : 'Ακύρωση εκδήλωσης'}
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                      Χώρος
-                    </label>
-                    <Input
-                      value={form.venue}
-                      onChange={(e) => setForm({ ...form, venue: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                      Πόλη
-                    </label>
-                    <Input
-                      value={form.city}
-                      onChange={(e) => setForm({ ...form, city: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                      Χώρα
-                    </label>
-                    <Input
-                      value={form.country}
-                      onChange={(e) => setForm({ ...form, country: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                      Διεύθυνση (οδός)
-                    </label>
-                    <Input
-                      value={form.address}
-                      onChange={(e) => setForm({ ...form, address: e.target.value })}
-                      placeholder="π.χ. Ιπποκράτους 7"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                        Γεωγρ. πλάτος (latitude)
-                      </label>
-                      <Input
-                        value={form.latitude}
-                        onChange={(e) => setForm({ ...form, latitude: e.target.value })}
-                        placeholder="π.χ. 37.9838"
-                        inputMode="decimal"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                        Γεωγρ. μήκος (longitude)
-                      </label>
-                      <Input
-                        value={form.longitude}
-                        onChange={(e) => setForm({ ...form, longitude: e.target.value })}
-                        placeholder="π.χ. 23.7275"
-                        inputMode="decimal"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <DateTimeDialogField
-                      label="Έναρξη"
-                      date={startDate}
-                      timeHHMM={startTime}
-                      onChange={(d, t) => syncStart(d, t)}
-                    />
-                  </div>
-                  <div>
-                    <DateTimeDialogField
-                      label="Λήξη"
-                      date={endDate}
-                      timeHHMM={endTime}
-                      onChange={(d, t) => syncEnd(d, t)}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                      Featured image
-                    </label>
-                    <div className="rounded-xl border border-neutral-200 bg-white p-3">
-                      <div className="flex flex-col gap-3">
-                        <div className="h-32 w-full overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50">
-                          {featuredPreview ? (
-                            <img
-                              src={featuredPreview}
-                              alt="Featured preview"
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-[11px] text-neutral-500 comfortaa-regular">
-                              No image
-                            </div>
-                          )}
-                        </div>
-
-                        <div>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            disabled={uploadingFeatured}
-                            onChange={(e) => {
-                              const f = e.currentTarget.files?.[0];
-                              if (f) void onUploadFeatured(f);
-                              e.currentTarget.value = '';
-                            }}
-                            className={cn(
-                              'block w-full text-sm text-neutral-700 file:mr-2 file:rounded-none',
-                              'file:bg-transparent file:border-2 file:border-[#6d28d9] file:px-2 file:py-1 file:text-xs file:text-[#6d28d9] file:hover:bg-[#6d28d9] file:hover:text-white',
-                              'comfortaa-regular',
-                            )}
+                <div>
+                  <DateTimeDialogField
+                    label={t('eventForm.start')}
+                    date={startDate}
+                    timeHHMM={startTime}
+                    onChange={(d, t) => syncStart(d, t)}
+                  />
+                </div>
+                <div>
+                  <DateTimeDialogField
+                    label={t('eventForm.end')}
+                    date={endDate}
+                    timeHHMM={endTime}
+                    onChange={(d, t) => syncEnd(d, t)}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                    Featured image
+                  </label>
+                  <div className="rounded-xl border border-neutral-200 bg-white p-3">
+                    <div className="flex flex-col gap-3">
+                      <div className="h-32 w-full overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50">
+                        {featuredPreview ? (
+                          <img
+                            src={featuredPreview}
+                            alt="Featured preview"
+                            className="h-full w-full object-cover"
                           />
-                          <p className="mt-2 text-[11px] text-neutral-500 comfortaa-regular">
-                            {uploadingFeatured
-                              ? 'Μεταφόρτωση…'
-                              : form.featured_image_url
-                                ? form.featured_image_url
-                                : ''}
-                          </p>
-                        </div>
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[11px] text-neutral-500 comfortaa-regular">
+                            No image
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={uploadingFeatured}
+                          onChange={(e) => {
+                            const f = e.currentTarget.files?.[0];
+                            if (f) void onUploadFeatured(f);
+                            e.currentTarget.value = '';
+                          }}
+                          className={cn(
+                            'block w-full text-sm text-neutral-700 file:mr-2 file:rounded-none',
+                            'file:bg-transparent file:border-2 file:border-[var(--nexus-purple)] file:px-2 file:py-1 file:text-xs file:text-[var(--nexus-purple)] file:hover:bg-[var(--nexus-purple)] file:hover:text-white',
+                            'comfortaa-regular',
+                          )}
+                        />
+                        <p className="mt-2 text-[11px] text-neutral-500 comfortaa-regular">
+                          {uploadingFeatured
+                            ? t('eventForm.uploading')
+                            : form.featured_image_url
+                              ? form.featured_image_url
+                              : ''}
+                        </p>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div className="rounded-2xl border border-neutral-200 p-4">
-                <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
-                  Τύπος & χωρητικότητα
-                </p>
-                <div className="mt-4 space-y-3">
-                  <div>
-                    <label
-                      htmlFor="edit-event-type"
-                      className="mb-1 block text-xs text-neutral-600 comfortaa-regular"
-                    >
-                      Τύπος εκδήλωσης
-                    </label>
-                    <select
-                      id="edit-event-type"
-                      value={form.event_type}
-                      disabled={isLocked}
-                      onChange={(e) => setForm({ ...form, event_type: e.target.value })}
-                      className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
-                    >
-                      {EVENT_TYPES.map((t) => (
-                        <option key={t.value} value={t.value}>
-                          {t.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="edit-capacity"
-                      className="mb-1 block text-xs text-neutral-600 comfortaa-regular"
-                    >
-                      Χωρητικότητα
-                    </label>
-                    <Input
-                      id="edit-capacity"
-                      inputMode="numeric"
-                      value={form.capacity}
-                      disabled={isLocked}
-                      onChange={(e) => setForm({ ...form, capacity: e.target.value })}
-                    />
-                    <p className="mt-1 text-[10px] text-neutral-500 comfortaa-regular">
-                      Κρατημένες θέσεις: {event?.tickets_sold ?? 0} · Διαθέσιμες:{' '}
-                      {event?.tickets_remaining ?? 0}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-neutral-200 p-4">
-                <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
-                  Τύποι εισιτηρίων
-                </p>
-                <p className="mt-1 text-[10px] text-neutral-500 comfortaa-regular">
-                  Τύποι με υπάρχουσες κρατήσεις διατηρούν τις πουλημένες θέσεις τους και δεν
-                  διαγράφονται.
-                </p>
-                <TicketTypesEditor
-                  className="mt-4"
-                  drafts={ticketDrafts}
-                  onChange={setTicketDrafts}
-                  capacity={Number.parseInt(form.capacity.trim(), 10) || 0}
-                  disabled={isLocked}
-                />
-              </div>
-
-              <div className="rounded-2xl border border-neutral-200 p-4">
-                <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
-                  Φωτογραφίες (gallery)
-                </p>
-                <p className="mt-1 text-[10px] text-neutral-500 comfortaa-regular">
-                  Εμφανίζονται στη σελίδα της εκδήλωσης και εξάγονται στο &lt;Media&gt; του XML.
-                </p>
-
-                {(event?.photos?.length ?? 0) > 0 ? (
-                  <ul className="mt-3 grid grid-cols-3 gap-2">
-                    {(event?.photos ?? []).map((photo, i) => (
-                      <li key={photo.id} className="group relative">
-                        <img
-                          src={photo.url}
-                          alt={`Φωτογραφία ${i + 1}`}
-                          className="aspect-square w-full rounded-lg border border-neutral-200 object-cover"
-                        />
-                        <button
-                          type="button"
-                          aria-label={`Διαγραφή φωτογραφίας ${i + 1}`}
-                          disabled={isLocked}
-                          onClick={() => void onDeletePhoto(photo.id)}
-                          className={cn(
-                            'absolute top-1 right-1 rounded-full bg-white/90 p-1 text-[var(--nexus-red)] shadow-sm',
-                            'transition-opacity hover:bg-white disabled:cursor-not-allowed disabled:opacity-40',
-                          )}
-                        >
-                          <Trash2Icon className="size-3.5" />
-                        </button>
-                      </li>
+            <div className="rounded-2xl border border-neutral-200 p-4">
+              <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
+                {t('eventForm.typeAndCapacity')}
+              </p>
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label
+                    htmlFor="edit-event-type"
+                    className="mb-1 block text-xs text-neutral-600 comfortaa-regular"
+                  >
+                    {t('eventForm.eventType')}
+                  </label>
+                  <select
+                    id="edit-event-type"
+                    value={form.event_type}
+                    disabled={isLocked}
+                    onChange={(e) => setForm({ ...form, event_type: e.target.value })}
+                    className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+                  >
+                    {eventTypeOptions().map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
                     ))}
-                  </ul>
-                ) : (
-                  <p className="mt-3 text-xs text-neutral-500 comfortaa-regular">
-                    Καμία φωτογραφία ακόμη.
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor="edit-capacity"
+                    className="mb-1 block text-xs text-neutral-600 comfortaa-regular"
+                  >
+                    {t('eventForm.capacity')}
+                  </label>
+                  <Input
+                    id="edit-capacity"
+                    inputMode="numeric"
+                    value={form.capacity}
+                    disabled={isLocked}
+                    onChange={(e) => setForm({ ...form, capacity: e.target.value })}
+                  />
+                  <p className="mt-1 text-[10px] text-neutral-500 comfortaa-regular">
+                    {t('eventForm.seatsSummary', {
+                      sold: event?.tickets_sold ?? 0,
+                      remaining: event?.tickets_remaining ?? 0,
+                    })}
                   </p>
-                )}
-
-                <input
-                  type="file"
-                  accept="image/*"
-                  disabled={uploadingPhoto || isLocked}
-                  onChange={(e) => {
-                    const f = e.currentTarget.files?.[0];
-                    if (f) void onUploadPhoto(f);
-                    e.currentTarget.value = '';
-                  }}
-                  className={cn(
-                    'mt-3 block w-full text-sm text-neutral-700 file:mr-2 file:rounded-none',
-                    'file:bg-transparent file:border-2 file:border-[#6d28d9] file:px-2 file:py-1 file:text-xs file:text-[#6d28d9] file:hover:bg-[#6d28d9] file:hover:text-white',
-                    'comfortaa-regular',
-                  )}
-                />
-                {uploadingPhoto && (
-                  <p className="mt-2 text-[11px] text-neutral-500 comfortaa-regular">
-                    Μεταφόρτωση…
-                  </p>
-                )}
-              </div>
-
-              <div className="rounded-2xl border border-neutral-200 p-4">
-                <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">Κατηγορίες</p>
-                <div className="mt-4 space-y-2">
-                  {categoryNames.map((name) => {
-                    const checked = form.categories.has(name);
-                    return (
-                      <label
-                        key={name}
-                        className="flex items-center gap-2 text-sm text-neutral-700 comfortaa-regular"
-                      >
-                        <Checkbox
-                          checked={checked}
-                          disabled={isLocked}
-                          onCheckedChange={() => toggleCategory(name)}
-                        />
-                        {name}
-                      </label>
-                    );
-                  })}
                 </div>
               </div>
-            </aside>
+            </div>
+
+            <div className="rounded-2xl border border-neutral-200 p-4">
+              <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
+                {t('eventForm.ticketTypes')}
+              </p>
+              <p className="mt-1 text-[10px] text-neutral-500 comfortaa-regular">
+                {t('eventForm.ticketTypesEditHint')}
+              </p>
+              <TicketTypesEditor
+                className="mt-4"
+                drafts={ticketDrafts}
+                onChange={setTicketDrafts}
+                capacity={Number.parseInt(form.capacity.trim(), 10) || 0}
+                disabled={isLocked}
+              />
+            </div>
+
+            <div className="rounded-2xl border border-neutral-200 p-4">
+              <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
+                {t('eventForm.gallery')}
+              </p>
+              <p className="mt-1 text-[10px] text-neutral-500 comfortaa-regular">
+                {t('eventForm.galleryHint')}
+              </p>
+
+              {(event?.photos?.length ?? 0) > 0 ? (
+                <ul className="mt-3 grid grid-cols-3 gap-2">
+                  {(event?.photos ?? []).map((photo, i) => (
+                    <li key={photo.id} className="group relative">
+                      <img
+                        src={photo.url}
+                        alt={t('eventForm.photoN', { n: i + 1 })}
+                        className="aspect-square w-full rounded-lg border border-neutral-200 object-cover"
+                      />
+                      <button
+                        type="button"
+                        aria-label={t('eventForm.deletePhotoN', { n: i + 1 })}
+                        disabled={isLocked}
+                        onClick={() => void onDeletePhoto(photo.id)}
+                        className={cn(
+                          'absolute top-1 right-1 rounded-full bg-white/90 p-1 text-[var(--nexus-red)] shadow-sm',
+                          'transition-opacity hover:bg-white disabled:cursor-not-allowed disabled:opacity-40',
+                        )}
+                      >
+                        <Trash2Icon className="size-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 text-xs text-neutral-500 comfortaa-regular">
+                  {t('eventForm.noPhotos')}
+                </p>
+              )}
+
+              <input
+                type="file"
+                accept="image/*"
+                disabled={uploadingPhoto || isLocked}
+                onChange={(e) => {
+                  const f = e.currentTarget.files?.[0];
+                  if (f) void onUploadPhoto(f);
+                  e.currentTarget.value = '';
+                }}
+                className={cn(
+                  'mt-3 block w-full text-sm text-neutral-700 file:mr-2 file:rounded-none',
+                  'file:bg-transparent file:border-2 file:border-[var(--nexus-purple)] file:px-2 file:py-1 file:text-xs file:text-[var(--nexus-purple)] file:hover:bg-[var(--nexus-purple)] file:hover:text-white',
+                  'comfortaa-regular',
+                )}
+              />
+              {uploadingPhoto && (
+                <p className="mt-2 text-[11px] text-neutral-500 comfortaa-regular">
+                  {t('eventForm.uploading')}
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-neutral-200 p-4">
+              <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
+                {t('eventForm.categories')}
+              </p>
+              <div className="mt-4 space-y-2">
+                {categoryNames.map((name) => {
+                  const checked = form.categories.has(name);
+                  return (
+                    <label
+                      key={name}
+                      className="flex items-center gap-2 text-sm text-neutral-700 comfortaa-regular"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        disabled={isLocked}
+                        onCheckedChange={() => toggleCategory(name)}
+                      />
+                      {name}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          </aside>
         </div>
       </div>
     </OrganizerLayout>

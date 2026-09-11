@@ -145,13 +145,14 @@ func (h *BookingHandler) hydrate(c *fiber.Ctx, bookings []domain.Booking) ([]dto
 		resp := toBookingResponse(b)
 		if ev, ok := refs.Events[b.EventID]; ok {
 			resp.Event = &dto.BookingEventSummary{
-				ID:      ev.ID.String(),
-				Title:   ev.Title,
-				Venue:   ev.Venue,
-				City:    ev.City,
-				StartAt: ev.StartAt.UTC().Format(time.RFC3339),
-				EndAt:   ev.EndAt.UTC().Format(time.RFC3339),
-				Status:  string(ev.Status),
+				ID:          ev.ID.String(),
+				OrganizerID: ev.OrganizerID.String(),
+				Title:       ev.Title,
+				Venue:       ev.Venue,
+				City:        ev.City,
+				StartAt:     ev.StartAt.UTC().Format(time.RFC3339),
+				EndAt:       ev.EndAt.UTC().Format(time.RFC3339),
+				Status:      string(ev.Status),
 			}
 		}
 		if tt, ok := refs.TicketTypes[b.TicketTypeID]; ok {

@@ -30,12 +30,7 @@ export default function EventsBrowsePage() {
     return categories.find((c) => c.id === categoryId)?.name ?? slug ?? '';
   }, [categoryId, categories, slug]);
 
-  const {
-    data,
-    isLoading,
-    error,
-    refetch,
-  } = useSearchEventsQuery(
+  const { data, isLoading, error, refetch } = useSearchEventsQuery(
     { category_ids: categoryId ? [categoryId] : undefined, limit: PAGE_SIZE, offset: 0 },
     { skip: !categoryId },
   );
@@ -57,7 +52,7 @@ export default function EventsBrowsePage() {
 
       {error ? (
         <ErrorMessage
-          message="Δεν ήταν δυνατή η φόρτωση των εκδηλώσεων."
+          message={t('browse.loadError')}
           onRetry={() => void refetch()}
           className="mt-10"
         />
@@ -65,8 +60,8 @@ export default function EventsBrowsePage() {
         <LoadingSpinner className="mt-10" />
       ) : !categoryId ? (
         <EmptyState
-          title="Άγνωστη κατηγορία"
-          description={`Δεν βρέθηκε κατηγορία «${slug}».`}
+          title={t('browse.unknownCategory')}
+          description={t('browse.unknownCategoryBody', { slug: slug ?? '' })}
           className="mt-10"
         />
       ) : events.length > 0 ? (
@@ -77,8 +72,8 @@ export default function EventsBrowsePage() {
         </div>
       ) : (
         <EmptyState
-          title="Καμία εκδήλωση"
-          description={`Δεν υπάρχουν δημοσιευμένες εκδηλώσεις στην κατηγορία ${displayName}.`}
+          title={t('browse.emptyTitle')}
+          description={t('browse.emptyBody', { name: displayName })}
           className="mt-10"
         />
       )}

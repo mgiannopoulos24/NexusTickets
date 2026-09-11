@@ -53,7 +53,9 @@ describe('EventDetailPage (§9)', () => {
     signIn({ role: 'attendee' });
     await renderDetail({ status: 'cancelled' });
     expect(bookingForm()).not.toBeInTheDocument();
-    expect(screen.getByText('Η εκδήλωση έχει ακυρωθεί — δεν γίνονται κρατήσεις.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Η εκδήλωση έχει ακυρωθεί — δεν γίνονται κρατήσεις.'),
+    ).toBeInTheDocument();
   });
 
   it('refuses an event that has not been published', async () => {
@@ -84,6 +86,8 @@ describe('EventDetailPage (§9)', () => {
     signIn({ role: 'attendee' });
     await renderDetail({ ticket_types: [], tickets_remaining: 0 });
     expect(bookingForm()).not.toBeInTheDocument();
-    expect(screen.getAllByText('Δεν υπάρχουν διαθέσιμοι τύποι εισιτηρίων.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Δεν υπάρχουν διαθέσιμοι τύποι εισιτηρίων.').length).toBeGreaterThan(
+      0,
+    );
   });
 });

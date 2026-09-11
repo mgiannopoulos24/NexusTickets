@@ -29,7 +29,14 @@ export function mockFetch(routes: Record<string, unknown> = {}): MockFetch {
     handlers.set(fragment, typeof value === 'function' ? (value as Handler) : () => value);
   }
 
-  const envelope = (data: unknown) => ({ data, error: null, meta: { has_more: false } });
+  // A handler normally returns just the payload. One that needs to control
+  // the envelope's `meta` (pagination totals) returns `{ data, meta }` itself.
+  const isEnvelope = (value: unknown): value is { data: unknown; meta: unknown } =>
+    typeof value === 'object' && value !== null && 'data' in value && 'meta' in value;
+  const envelope = (result: unknown) =>
+    isEnvelope(result)
+      ? { data: result.data, error: null, meta: result.meta }
+      : { data: result, error: null, meta: { has_more: false } };
 
   vi.stubGlobal(
     'fetch',
@@ -62,9 +69,7 @@ export function mockFetch(routes: Record<string, unknown> = {}): MockFetch {
 
       for (const failure of failures) {
         const hit =
-          typeof failure.match === 'string'
-            ? url.includes(failure.match)
-            : failure.match.test(url);
+          typeof failure.match === 'string' ? url.includes(failure.match) : failure.match.test(url);
         if (hit) {
           return new Response(
             JSON.stringify({ data: null, error: { code: 'error', message: failure.message } }),

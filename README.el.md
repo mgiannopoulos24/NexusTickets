@@ -103,8 +103,7 @@ nexustickets/
 | `docs/database.md` | Διάγραμμα οντοτήτων-συσχετίσεων και οδηγός μεταναστεύσεων |
 | `docs/architecture.md` | Επισκόπηση αρχιτεκτονικής συστήματος |
 | `docs/recommendation.md` | Τεχνικές λεπτομέρειες υλοποίησης Biased Matrix Factorization |
-
-Η προδιαγραφή OpenAPI είναι διαθέσιμη στο `docs/swagger.json` και σερβίρεται στο `/api/v1/docs` όταν τρέχει το backend.
+| `docs/events-catalog.dtd` | Το DTD της εκφώνησης· η εξαγωγή XML επικυρώνεται ως προς αυτό |
 
 ---
 
@@ -139,8 +138,8 @@ make certs
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
-Το frontend είναι διαθέσιμο στο `https://localhost:5173`.  
-Το backend API είναι διαθέσιμο στο `https://localhost:8080/api/v1`.
+Η εφαρμογή σερβίρεται στο `https://localhost:5173` (το Vite τερματίζει το TLS με το πιστοποιητικό mkcert και προωθεί `/api`, `/uploads` και το WebSocket στο backend).  
+Το backend API είναι επίσης προσβάσιμο απευθείας στο `https://localhost:8080/api/v1`.
 
 ### Παραγωγική Διάταξη (Built SPA πίσω από nginx)
 
@@ -159,7 +158,7 @@ docker compose up --build
 cd backend && go run ./cmd/seed
 ```
 
-Δημιουργεί 3 χρήστες (`admin`, `organizer`, `attendee` — όλοι με κωδικό `ChangeMe123!`), 6 κατηγορίες και 50 ελληνικές εκδηλώσεις με τύπους εισιτηρίων.
+Ο ενσωματωμένος διαχειριστής δημιουργείται αυτόματα στην πρώτη εκκίνηση του backend (`ADMIN_USERNAME` / `ADMIN_PASSWORD`, προεπιλογή `admin` / `ChangeMe123!`). Ο seeder προσθέτει τους δοκιμαστικούς `organizer` / `attendee` και δέκα ακόμη λογαριασμούς (ίδιος κωδικός), 7 κατηγορίες, 150 εκδηλώσεις με τύπους εισιτηρίων και 5 φωτογραφίες η καθεμία, καθώς και δείγματα κρατήσεων, μηνυμάτων και αιτημάτων υποστήριξης· εκτελείται με `make seed`.
 
 ### Εκτέλεση Χωρίς Docker
 

@@ -3,6 +3,7 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ChevronLeftIcon, ChevronRightIcon, MoreHorizontalIcon } from 'lucide-react';
+import { tr } from '@/lib/i18n';
 
 function Pagination({ className, ...props }: React.ComponentProps<'nav'>) {
   return (
@@ -50,7 +51,7 @@ function PaginationLink({ className, isActive, size = 'icon', ...props }: Pagina
 
 function PaginationPrevious({
   className,
-  text = 'Προηγούμενη',
+  text = tr('pagination.previous'),
   ...props
 }: React.ComponentProps<typeof PaginationLink> & { text?: string }) {
   return (
@@ -68,7 +69,7 @@ function PaginationPrevious({
 
 function PaginationNext({
   className,
-  text = 'Επόμενη',
+  text = tr('pagination.next'),
   ...props
 }: React.ComponentProps<typeof PaginationLink> & { text?: string }) {
   return (

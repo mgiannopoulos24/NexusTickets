@@ -1,6 +1,11 @@
 ### Build stage
 FROM oven/bun:1.2.22-alpine AS builder
 
+# Node runs Vite; Bun stays the package manager. Bun's node:http2 server
+# cannot fall back to HTTP/1.1, so under Bun an https dev server serves pages
+# but never completes a WebSocket upgrade (the realtime messaging socket).
+RUN apk add --no-cache nodejs
+
 WORKDIR /app
 
 COPY package.json bun.lock ./

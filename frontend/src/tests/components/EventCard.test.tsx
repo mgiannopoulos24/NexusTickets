@@ -28,10 +28,7 @@ describe('EventCard', () => {
     renderWithProviders(
       <EventCard
         event={event({
-          ticket_types: [
-            ticketType({ available: 30 }),
-            ticketType({ id: 'tt-2', available: 12 }),
-          ],
+          ticket_types: [ticketType({ available: 30 }), ticketType({ id: 'tt-2', available: 12 })],
         })}
       />,
     );

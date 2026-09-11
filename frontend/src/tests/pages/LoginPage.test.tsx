@@ -64,6 +64,29 @@ describe('LoginPage (§3)', () => {
     await waitFor(() => expect(store.getState().auth.user?.username).toBe('attendee'));
   });
 
+  it('sends the administrator to user management (§3)', async () => {
+    api.on('/users/me', () => ({
+      id: 'a-1',
+      username: 'admin',
+      first_name: 'Admin',
+      last_name: 'User',
+      email: 'admin@example.com',
+      role: 'admin',
+      account_status: 'approved',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }));
+    renderWithProviders(<LoginPage />, { route: '/login', browserRouter: true });
+    await fillAndSubmit('admin', 'ChangeMe123!');
+    await waitFor(() => expect(window.location.pathname).toBe('/admin/users'));
+  });
+
+  it('sends a regular user to the home page (§5)', async () => {
+    renderWithProviders(<LoginPage />, { route: '/login', browserRouter: true });
+    await fillAndSubmit('attendee', 'ChangeMe123!');
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+  });
+
   it('trims a padded username before sending it', async () => {
     renderWithProviders(<LoginPage />, { route: '/login', browserRouter: true });
     await fillAndSubmit('  attendee  ', 'ChangeMe123!');

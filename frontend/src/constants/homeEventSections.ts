@@ -1,15 +1,10 @@
-/** Home page slider / section metadata (Greek UI). */
+/** Home page slider / section metadata. Labels resolve through the locale files. */
+import { tr } from '@/lib/i18n';
 
 export type HomeSliderKey = 'popular' | 'recommended' | 'new' | 'theater' | 'music' | 'cinema';
 
 export type CategoryBrowseSlug =
-  | 'theater'
-  | 'music'
-  | 'cinema'
-  | 'sports'
-  | 'child'
-  | 'museums'
-  | 'dance';
+  'theater' | 'music' | 'cinema' | 'sports' | 'child' | 'museums' | 'dance';
 
 export const HOME_SLIDER_ORDER: HomeSliderKey[] = [
   'popular',
@@ -20,42 +15,17 @@ export const HOME_SLIDER_ORDER: HomeSliderKey[] = [
   'cinema',
 ];
 
-export const HOME_SECTION_LABELS: Record<HomeSliderKey, string> = {
-  popular: 'Δημοφιλή',
-  recommended: 'Προτεινόμενα',
-  new: 'Νέα',
-  theater: 'Θέατρο',
-  music: 'Μουσική',
-  cinema: 'Σινεμά',
-};
+export function homeSectionLabel(key: HomeSliderKey): string {
+  return tr(`home.sections.${key}`);
+}
 
-export const HOME_SECTION_SUBTITLES: Record<HomeSliderKey, string> = {
-  popular: 'Οι πιο πολυζητημένες εκδηλώσεις αυτή την περίοδο',
-  recommended: 'Επιλογές που ίσως σου ταιριάζουν',
-  new: 'Πρόσφατες προσθήκες στην πλατφόρμα',
-  theater: 'Παραστάσεις και δρώμενα σε σκηνές κοντά σου',
-  music: 'Συναυλίες και μουσικές βραδιές',
-  cinema: 'Οι πιο δημοφιλείς κινηματογράφοι',
-};
+export function homeSectionSubtitle(key: HomeSliderKey): string {
+  return tr(`home.subtitles.${key}`);
+}
 
-/** "Δες όλα …" link text per slider (category sliders link to browse by slug). */
+/** "See all …" link text per slider (category sliders link to browse by slug). */
 export function homeViewAllLabel(key: HomeSliderKey): string {
-  switch (key) {
-    case 'popular':
-      return 'Δες όλα τα δημοφιλή';
-    case 'recommended':
-      return 'Δες όλες τις προτάσεις';
-    case 'new':
-      return 'Δες όλες τις νέες';
-    case 'theater':
-      return 'Δες όλα τα θέατρα';
-    case 'music':
-      return 'Δες όλη τη μουσική';
-    case 'cinema':
-      return 'Δες όλα τα σινεμά';
-    default:
-      return 'Δες όλα';
-  }
+  return tr(`home.viewAll.${key}`);
 }
 
 export function homeViewAllHref(key: HomeSliderKey): string {
@@ -72,12 +42,13 @@ export function homeViewAllHref(key: HomeSliderKey): string {
 }
 
 /** Category filter chips (not event sliders) — browse by taxonomy. */
-export const CATEGORY_BROWSE_CHIPS: Array<{
-  slug: CategoryBrowseSlug;
-  label: string;
-}> = [
-  { slug: 'theater', label: 'Θέατρο' },
-  { slug: 'music', label: 'Μουσική' },
-  { slug: 'cinema', label: 'Σινεμά' },
-  { slug: 'sports', label: 'Αθλητικά' },
+export const CATEGORY_BROWSE_CHIPS: ReadonlyArray<CategoryBrowseSlug> = [
+  'theater',
+  'music',
+  'cinema',
+  'sports',
 ];
+
+export function categoryBrowseLabel(slug: CategoryBrowseSlug): string {
+  return tr(`categories.${slug}`);
+}

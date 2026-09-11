@@ -1,3 +1,4 @@
+import { tr } from '@/lib/i18n';
 /**
  * Every endpoint answers with the same envelope: `{ data, error, meta }`.
  * These helpers unwrap it once so each API slice does not repeat the shape.
@@ -11,15 +12,16 @@ export type ApiEnvelope<T> = {
 /** Returns the payload, or throws with the server's message. */
 export function unwrap<T>(response: unknown): T {
   const body = response as ApiEnvelope<T>;
-  if (body?.error) throw new Error(body.error.message || 'Σφάλμα αιτήματος');
-  if (body?.data === null || body?.data === undefined) throw new Error('Άκυρη απάντηση');
+  if (body?.error) throw new Error(body.error.message || tr('errors.request'));
+  if (body?.data === null || body?.data === undefined)
+    throw new Error(tr('errors.invalidResponse'));
   return body.data;
 }
 
 /** Like {@link unwrap}, but an absent payload becomes an empty list. */
 export function unwrapList<T>(response: unknown): T[] {
   const body = response as ApiEnvelope<T[]>;
-  if (body?.error) throw new Error(body.error.message || 'Σφάλμα αιτήματος');
+  if (body?.error) throw new Error(body.error.message || tr('errors.request'));
   return body?.data ?? [];
 }
 
@@ -27,7 +29,7 @@ export function unwrapList<T>(response: unknown): T[] {
  * Pulls a readable message out of whatever RTK Query hands back — the server
  * envelope when there is one, otherwise the transport error.
  */
-export function apiErrorMessage(err: unknown, fallback = 'Προέκυψε σφάλμα.'): string {
+export function apiErrorMessage(err: unknown, fallback = tr('errors.generic')): string {
   if (!err) return fallback;
 
   if (typeof err === 'object' && 'data' in err) {

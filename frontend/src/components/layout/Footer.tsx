@@ -5,6 +5,7 @@ import instagramIcon from '@/assets/icons/instagram.svg';
 import tiktokIcon from '@/assets/icons/tiktok.svg';
 import youtubeIcon from '@/assets/icons/youtube.svg';
 import linkedinIcon from '@/assets/icons/linkedin.svg';
+import { useLang } from '@/contexts/langContext';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/types/enums';
@@ -17,7 +18,7 @@ type FooterLink = { label: string; to: string };
  * page. Sign-in links live under Υποστήριξη for guests, where they are
  * actionable.
  */
-const INFO_LINKS: FooterLink[] = [{ label: 'Αρχική', to: '/' }] as const;
+const INFO_LINKS: FooterLink[] = [{ label: 'footer.home', to: '/' }] as const;
 
 /** Support links, by role. A guest cannot file a request, so they get the
  * routes that let them become someone who can. */
@@ -25,19 +26,19 @@ function supportLinks(role: UserRole | null): FooterLink[] {
   switch (role) {
     case 'admin':
       return [
-        { label: 'Αιτήματα χρηστών', to: '/messages' },
-        { label: 'Νέο μήνυμα', to: '/messages?compose=1' },
+        { label: 'footer.userRequests', to: '/admin/support' },
+        { label: 'footer.closedRequests', to: '/admin/support?status=closed' },
       ];
     case 'organizer':
     case 'attendee':
       return [
-        { label: 'Νέο αίτημα', to: '/messages?compose=1&support=1' },
-        { label: 'Τα αιτήματά μου', to: '/messages' },
+        { label: 'footer.newRequest', to: '/support?new=1' },
+        { label: 'footer.myRequests', to: '/support' },
       ];
     default:
       return [
-        { label: 'Σύνδεση', to: '/login' },
-        { label: 'Εγγραφή', to: '/register' },
+        { label: 'nav.login', to: '/login' },
+        { label: 'nav.register', to: '/register' },
       ];
   }
 }
@@ -47,37 +48,38 @@ function workspaceColumn(role: UserRole | null): { title: string; links: FooterL
   switch (role) {
     case 'admin':
       return {
-        title: 'Διαχείριση',
+        title: 'footer.admin',
         links: [
-          { label: 'Χρήστες', to: '/admin/users' },
-          { label: 'Εκδηλώσεις', to: '/admin/events' },
-          { label: 'Πίνακας ελέγχου', to: '/admin' },
+          { label: 'footer.users', to: '/admin/users' },
+          { label: 'footer.events', to: '/admin/events' },
+          { label: 'footer.dashboard', to: '/admin' },
+          { label: 'footer.myEvents', to: '/organizer/events' },
         ],
       };
     case 'organizer':
       return {
-        title: 'Οι εκδηλώσεις μου',
+        title: 'footer.myEvents',
         links: [
-          { label: 'Επισκόπηση', to: '/organizer' },
-          { label: 'Οι εκδηλώσεις μου', to: '/organizer/events' },
-          { label: 'Νέα εκδήλωση', to: '/organizer/events/new' },
+          { label: 'footer.overview', to: '/organizer' },
+          { label: 'footer.myEvents', to: '/organizer/events' },
+          { label: 'footer.newEvent', to: '/organizer/events/new' },
         ],
       };
     case 'attendee':
       return {
-        title: 'Ο λογαριασμός μου',
+        title: 'footer.myAccount',
         links: [
-          { label: 'Οι κρατήσεις μου', to: '/bookings/me' },
-          { label: 'Τα στοιχεία μου', to: '/account' },
-          { label: 'Ρυθμίσεις', to: '/settings' },
+          { label: 'footer.myBookings', to: '/bookings/me' },
+          { label: 'footer.myDetails', to: '/account' },
+          { label: 'footer.settings', to: '/settings' },
         ],
       };
     default:
       return {
-        title: 'Εξερεύνηση',
+        title: 'footer.explore',
         links: [
-          { label: 'Όλες οι εκδηλώσεις', to: '/events' },
-          { label: 'Αναζήτηση', to: '/events' },
+          { label: 'footer.allEvents', to: '/events' },
+          { label: 'footer.search', to: '/events' },
         ],
       };
   }
@@ -91,10 +93,12 @@ const SOCIALS = [
   { label: 'LinkedIn', href: 'https://www.linkedin.com', icon: linkedinIcon },
 ] as const;
 
+/** `title` and each link `label` are translation keys. */
 function FooterColumn({ title, links }: { title: string; links: FooterLink[] }) {
+  const { t } = useLang();
   return (
     <div>
-      <h3 className="comfortaa-bold text-sm font-semibold text-neutral-800">{title}</h3>
+      <h3 className="comfortaa-bold text-sm font-semibold text-neutral-800">{t(title)}</h3>
       <ul className="mt-3 space-y-2">
         {links.map((l) => (
           <li key={`${title}-${l.label}`}>
@@ -105,7 +109,7 @@ function FooterColumn({ title, links }: { title: string; links: FooterLink[] }) 
                 'hover:text-neutral-900 hover:underline underline-offset-4',
               )}
             >
-              {l.label}
+              {t(l.label)}
             </Link>
           </li>
         ))}
@@ -116,6 +120,7 @@ function FooterColumn({ title, links }: { title: string; links: FooterLink[] }) 
 
 export function Footer() {
   const { user, isAuthenticated } = useAuth();
+  const { t } = useLang();
   const role = isAuthenticated && user ? user.role : null;
 
   const support = supportLinks(role);
@@ -135,16 +140,16 @@ export function Footer() {
               </span>
             </Link>
             <p className="comfortaa-regular mt-4 max-w-sm text-sm text-neutral-500">
-              Ανακάλυψε εκδηλώσεις και κράτησε εισιτήρια εύκολα, γρήγορα και με ασφάλεια.
+              {t('footer.tagline')}
             </p>
           </div>
 
           <div className="order-2 md:order-1">
-            <FooterColumn title="Πληροφορίες" links={INFO_LINKS} />
+            <FooterColumn title="footer.info" links={INFO_LINKS} />
           </div>
 
           <div className="order-3 md:order-2">
-            <FooterColumn title="Υποστήριξη" links={support} />
+            <FooterColumn title="footer.support" links={support} />
           </div>
 
           {workspace && (

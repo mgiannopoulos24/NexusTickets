@@ -184,17 +184,12 @@ func messageModelToDomain(m MessageModel) domain.Message {
 		ID:                 m.ID,
 		SenderID:           m.SenderID,
 		RecipientID:        m.RecipientID,
+		EventID:            m.EventID,
 		Subject:            m.Subject,
 		Body:               m.Body,
-		ImageURL:           m.ImageURL,
-		FileURL:            m.FileURL,
-		FileName:           m.FileName,
-		GifURL:             m.GifURL,
-		ReplyToID:          m.ReplyToID,
 		ReadAt:             m.ReadAt,
 		DeletedBySender:    m.DeletedBySender,
 		DeletedByRecipient: m.DeletedByRecipient,
-		DeletedForEveryone: m.DeletedForEveryone,
 		CreatedAt:          m.CreatedAt,
 	}
 }
@@ -204,17 +199,12 @@ func messageDomainToModel(msg domain.Message) MessageModel {
 		ID:                 msg.ID,
 		SenderID:           msg.SenderID,
 		RecipientID:        msg.RecipientID,
+		EventID:            msg.EventID,
 		Subject:            msg.Subject,
 		Body:               msg.Body,
-		ImageURL:           msg.ImageURL,
-		FileURL:            msg.FileURL,
-		FileName:           msg.FileName,
-		GifURL:             msg.GifURL,
-		ReplyToID:          msg.ReplyToID,
 		ReadAt:             msg.ReadAt,
 		DeletedBySender:    msg.DeletedBySender,
 		DeletedByRecipient: msg.DeletedByRecipient,
-		DeletedForEveryone: msg.DeletedForEveryone,
 		CreatedAt:          msg.CreatedAt,
 	}
 }
@@ -256,92 +246,44 @@ func eventPhotoDomainToModel(p domain.EventPhoto) EventPhotoModel {
 	}
 }
 
-func chatRoomModelToDomain(m ChatRoomModel) domain.ChatRoom {
-	return domain.ChatRoom{
-		ID:          m.ID,
-		IsGroup:     m.IsGroup,
-		Name:        m.Name,
-		CreatedByID: m.CreatedByID,
-		EventID:     m.EventID,
-		IsReadOnly:  m.IsReadOnly,
-		CreatedAt:   m.CreatedAt,
-	}
-}
-
-func chatRoomDomainToModel(r domain.ChatRoom) ChatRoomModel {
-	return ChatRoomModel{
-		ID:          r.ID,
-		IsGroup:     r.IsGroup,
-		Name:        r.Name,
-		CreatedByID: r.CreatedByID,
-		EventID:     r.EventID,
-		IsReadOnly:  r.IsReadOnly,
-		CreatedAt:   r.CreatedAt,
-	}
-}
-
-func chatRoomParticipantModelToDomain(m ChatRoomParticipantModel) domain.ChatRoomParticipant {
-	u := userModelToDomain(m.User)
-	return domain.ChatRoomParticipant{
-		ID:         m.ID,
-		RoomID:     m.RoomID,
-		UserID:     m.UserID,
-		User:       &u,
-		JoinedAt:   m.JoinedAt,
-		LastReadAt: m.LastReadAt,
-	}
-}
-
-func chatMessageModelToDomain(m ChatMessageModel) domain.ChatMessage {
-	u := userModelToDomain(m.Sender)
-	return domain.ChatMessage{
+func supportTicketModelToDomain(m SupportTicketModel) domain.SupportTicket {
+	return domain.SupportTicket{
 		ID:        m.ID,
-		RoomID:    m.RoomID,
-		SenderID:  m.SenderID,
-		Sender:    &u,
-		Content:   m.Content,
-		ImageURL:  m.ImageURL,
-		FileURL:   m.FileURL,
-		FileName:  m.FileName,
-		GifURL:    m.GifURL,
-		ReplyToID: m.ReplyToID,
+		UserID:    m.UserID,
+		Subject:   m.Subject,
+		Status:    domain.SupportTicketStatus(m.Status),
+		CreatedAt: m.CreatedAt,
+		UpdatedAt: m.UpdatedAt,
+	}
+}
+
+func supportTicketDomainToModel(t domain.SupportTicket) SupportTicketModel {
+	return SupportTicketModel{
+		ID:        t.ID,
+		UserID:    t.UserID,
+		Subject:   t.Subject,
+		Status:    string(t.Status),
+		CreatedAt: t.CreatedAt,
+		UpdatedAt: t.UpdatedAt,
+	}
+}
+
+func supportMessageModelToDomain(m SupportMessageModel) domain.SupportMessage {
+	return domain.SupportMessage{
+		ID:        m.ID,
+		TicketID:  m.TicketID,
+		AuthorID:  m.AuthorID,
+		Body:      m.Body,
 		CreatedAt: m.CreatedAt,
 	}
 }
 
-func chatMessageDomainToModel(m domain.ChatMessage) ChatMessageModel {
-	return ChatMessageModel{
+func supportMessageDomainToModel(m domain.SupportMessage) SupportMessageModel {
+	return SupportMessageModel{
 		ID:        m.ID,
-		RoomID:    m.RoomID,
-		SenderID:  m.SenderID,
-		Content:   m.Content,
-		ImageURL:  m.ImageURL,
-		FileURL:   m.FileURL,
-		FileName:  m.FileName,
-		GifURL:    m.GifURL,
-		ReplyToID: m.ReplyToID,
+		TicketID:  m.TicketID,
+		AuthorID:  m.AuthorID,
+		Body:      m.Body,
 		CreatedAt: m.CreatedAt,
-	}
-}
-
-func messageReactionModelToDomain(m MessageReactionModel) domain.MessageReaction {
-	u := userModelToDomain(m.User)
-	return domain.MessageReaction{
-		ID:           m.ID,
-		MessageID:    m.MessageID,
-		UserID:       m.UserID,
-		User:         &u,
-		ReactionType: m.ReactionType,
-		CreatedAt:    m.CreatedAt,
-	}
-}
-
-func messageReactionDomainToModel(r domain.MessageReaction) MessageReactionModel {
-	return MessageReactionModel{
-		ID:           r.ID,
-		MessageID:    r.MessageID,
-		UserID:       r.UserID,
-		ReactionType: r.ReactionType,
-		CreatedAt:    r.CreatedAt,
 	}
 }

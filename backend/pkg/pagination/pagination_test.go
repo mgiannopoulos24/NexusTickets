@@ -85,10 +85,10 @@ func TestFromQuery_InvalidPage(t *testing.T) {
 
 func TestBuildMeta(t *testing.T) {
 	tests := []struct {
-		name       string
-		page, lim  int
-		total      int
-		wantPages  int
+		name      string
+		page, lim int
+		total     int
+		wantPages int
 	}{
 		{"empty", 1, 20, 0, 0},
 		{"one page", 1, 20, 15, 1},

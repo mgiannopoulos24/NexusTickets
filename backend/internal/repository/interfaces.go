@@ -73,6 +73,10 @@ type EventRepository interface {
 
 	// ListForExport returns all events ordered by start_time, id (admin catalogue export).
 	ListForExport(ctx context.Context, limit, offset int) ([]domain.Event, error)
+	// ListAdmin pages every event for the administration, optionally narrowed
+	// by a free-text query (title, venue, city) and a status, most recently
+	// created first. Returns the total matching rows for pagination.
+	ListAdmin(ctx context.Context, q string, status *domain.EventStatus, limit, offset int) ([]domain.Event, int, error)
 	ListTicketTypesByEventIDs(ctx context.Context, eventIDs []uuid.UUID) (map[uuid.UUID][]domain.TicketType, error)
 	ListCategoriesByEventIDs(ctx context.Context, eventIDs []uuid.UUID) (map[uuid.UUID][]domain.Category, error)
 	ListPhotosByEventIDs(ctx context.Context, eventIDs []uuid.UUID) (map[uuid.UUID][]domain.EventPhoto, error)
@@ -116,41 +120,18 @@ type BookingRepository interface {
 type MessageRepository interface {
 	Create(ctx context.Context, message domain.Message) (domain.Message, error)
 	CreateBatch(ctx context.Context, messages []domain.Message) ([]domain.Message, error)
-
-	ListInbox(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Message, error)
-	ListSent(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Message, error)
-
-	// ListThread returns the whole exchange between two users, oldest first,
-	// skipping whatever each side deleted from their own view.
-	ListThread(ctx context.Context, userID, otherID uuid.UUID, limit, offset int) ([]domain.Message, error)
-	// ListCounterpartIDs returns everyone the user has exchanged a message
-	// with, most recently active first.
-	ListCounterpartIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
-	// LastInThread returns the newest message exchanged with `otherID`, or
-	// ErrNotFound when the two have never written to each other.
-	LastInThread(ctx context.Context, userID, otherID uuid.UUID) (domain.Message, error)
-	// UnreadCountsBySender groups the user's unread messages by who sent them.
-	UnreadCountsBySender(ctx context.Context, userID uuid.UUID) (map[uuid.UUID]int, error)
-	// MarkThreadAsRead marks everything `otherID` sent to `userID` as read and
-	// reports how many rows changed.
-	MarkThreadAsRead(ctx context.Context, userID, otherID uuid.UUID) (int, error)
-
-	DeleteForUser(ctx context.Context, messageID uuid.UUID, userID uuid.UUID) error
-	// DeleteForEveryone leaves a tombstone both sides can see and clears the
-	// content. Only the sender may do this.
-	DeleteForEveryone(ctx context.Context, messageID uuid.UUID) error
 	GetByID(ctx context.Context, messageID uuid.UUID) (domain.Message, error)
 
-	// ListPreviews resolves the messages quoted by replies, in one query.
-	ListPreviews(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]domain.MessagePreview, error)
+	// ListInbox and ListSent page one folder newest first, skipping what the
+	// user deleted from it, and report the folder's total for pagination.
+	ListInbox(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Message, int, error)
+	ListSent(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Message, int, error)
 
-	AddReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
-	RemoveReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error
-	// ListReactions groups reactions by the message they belong to.
-	ListReactions(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID][]domain.MailboxReaction, error)
-
-	MarkAsRead(ctx context.Context, userID uuid.UUID) error
-	MarkAsReadByIDs(ctx context.Context, userID uuid.UUID, ids []uuid.UUID) error
+	// MarkAsRead stamps read_at on a message the user received. It reports
+	// whether the row changed, so an already-read message is a no-op.
+	MarkAsRead(ctx context.Context, messageID, userID uuid.UUID) (bool, error)
+	// DeleteForUser hides the message from the caller's own folder only.
+	DeleteForUser(ctx context.Context, messageID, userID uuid.UUID) error
 	GetUnreadCount(ctx context.Context, userID uuid.UUID) (int, error)
 }
 
@@ -175,22 +156,19 @@ type UserEventViewRepository interface {
 	ListAll(ctx context.Context) ([]domain.UserEventView, error)
 }
 
-type ChatRoomRepository interface {
-	CreateRoom(ctx context.Context, room domain.ChatRoom) (domain.ChatRoom, error)
-	GetRoomByID(ctx context.Context, id uuid.UUID) (domain.ChatRoom, error)
-	GetOrCreateDirectRoom(ctx context.Context, user1ID, user2ID uuid.UUID) (domain.ChatRoom, error)
-	GetRoomByEvent(ctx context.Context, eventID uuid.UUID) (domain.ChatRoom, error)
-	ListUserRooms(ctx context.Context, userID uuid.UUID) ([]domain.Conversation, error)
+type SupportRepository interface {
+	// CreateTicket stores the ticket and its opening message atomically.
+	CreateTicket(ctx context.Context, ticket domain.SupportTicket, opening domain.SupportMessage) (domain.SupportTicket, error)
+	GetTicket(ctx context.Context, ticketID uuid.UUID) (domain.SupportTicket, error)
+	// ListTicketsByUser pages one user's tickets, most recently active first.
+	ListTicketsByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.SupportTicket, int, error)
+	// ListTickets pages every ticket (admin view), optionally by status.
+	ListTickets(ctx context.Context, status *domain.SupportTicketStatus, limit, offset int) ([]domain.SupportTicket, int, error)
+	CountTicketsByStatus(ctx context.Context) (map[domain.SupportTicketStatus]int, error)
 
-	AddParticipant(ctx context.Context, p domain.ChatRoomParticipant) error
-	RemoveParticipant(ctx context.Context, roomID, userID uuid.UUID) error
-	GetParticipants(ctx context.Context, roomID uuid.UUID) ([]domain.ChatRoomParticipant, error)
-
-	CreateMessage(ctx context.Context, msg domain.ChatMessage) (domain.ChatMessage, error)
-	GetMessages(ctx context.Context, roomID uuid.UUID, limit, offset int) ([]domain.ChatMessage, error)
-	GetMessageByID(ctx context.Context, id uuid.UUID) (domain.ChatMessage, error)
-
-	AddReaction(ctx context.Context, r domain.MessageReaction) (domain.MessageReaction, error)
-	RemoveReaction(ctx context.Context, messageID, userID uuid.UUID, reactionType string) error
-	GetReactions(ctx context.Context, messageID uuid.UUID) ([]domain.MessageReaction, error)
+	// AddMessage appends to the thread and moves the ticket to `status`,
+	// bumping its updated_at.
+	AddMessage(ctx context.Context, message domain.SupportMessage, status domain.SupportTicketStatus) (domain.SupportMessage, error)
+	ListMessages(ctx context.Context, ticketID uuid.UUID) ([]domain.SupportMessage, error)
+	SetTicketStatus(ctx context.Context, ticketID uuid.UUID, status domain.SupportTicketStatus) error
 }

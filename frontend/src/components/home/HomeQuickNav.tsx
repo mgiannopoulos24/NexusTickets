@@ -34,14 +34,14 @@ export function HomeQuickNav() {
 
   const primaryClass = cn(
     'inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3',
-    'bg-[#6d28d9] text-sm text-white shadow-sm transition comfortaa-regular',
-    'hover:bg-[#5b21b6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6d28d9]/40',
+    'bg-[var(--nexus-purple)] text-sm text-white shadow-sm transition comfortaa-regular',
+    'hover:bg-[var(--nexus-purple-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nexus-purple)]/40',
   );
   const secondaryClass = cn(
     'inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3',
     'border border-neutral-200 bg-white text-sm text-neutral-900 shadow-sm transition comfortaa-regular',
-    'hover:border-[#6d28d9] hover:text-[#6d28d9]',
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6d28d9]/40',
+    'hover:border-[var(--nexus-purple)] hover:text-[var(--nexus-purple)]',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--nexus-purple)]/40',
   );
 
   return (

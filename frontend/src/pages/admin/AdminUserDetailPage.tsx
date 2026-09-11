@@ -12,7 +12,8 @@ import {
   useRejectUserMutation,
 } from '@/app/usersApi';
 import { AssignableRoles, type AssignableRole } from '@/types/enums';
-import { ROLE_LABELS, AccountStatusBadge } from '@/pages/admin/userDisplay';
+import { roleLabel, AccountStatusBadge } from '@/pages/admin/userDisplay';
+import { useLang } from '@/contexts/langContext';
 
 function formatDateTime(value?: string | null): string {
   if (!value) return '—';
@@ -34,6 +35,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 export default function AdminUserDetailPage() {
+  const { t } = useLang();
   const { id = '' } = useParams();
   const navigate = useNavigate();
 
@@ -51,23 +53,22 @@ export default function AdminUserDetailPage() {
     try {
       const updated = await changeRole({ id, role }).unwrap();
       toast.success(
-        `Ο ρόλος του @${updated.username} άλλαξε σε ${ROLE_LABELS[updated.role] ?? updated.role}`,
+        t('adminUser.roleChanged', { username: updated.username, role: roleLabel(updated.role) }),
       );
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Αποτυχία αλλαγής ρόλου';
+      const msg = e instanceof Error ? e.message : t('adminUser.roleChangeFailed');
       setActionError(msg);
       toast.error(msg);
     }
   };
 
-
   const handleApprove = async () => {
     setActionError(null);
     try {
       const updated = await approveUser(id).unwrap();
-      toast.success(`Ο χρήστης @${updated.username} εγκρίθηκε`);
+      toast.success(t('adminUser.approved', { username: updated.username }));
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Αποτυχία έγκρισης';
+      const msg = e instanceof Error ? e.message : t('adminUser.approveFailed');
       setActionError(msg);
       toast.error(msg);
     }
@@ -77,9 +78,9 @@ export default function AdminUserDetailPage() {
     setActionError(null);
     try {
       const updated = await rejectUser(id).unwrap();
-      toast.success(`Η αίτηση του @${updated.username} απορρίφθηκε`);
+      toast.success(t('adminUser.rejected', { username: updated.username }));
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Αποτυχία απόρριψης';
+      const msg = e instanceof Error ? e.message : t('adminUser.rejectFailed');
       setActionError(msg);
       toast.error(msg);
     }
@@ -87,21 +88,21 @@ export default function AdminUserDetailPage() {
 
   return (
     <AdminLayout>
-      <div className="bg-white p-6">
+      <div className="bg-white p-4 sm:p-6">
         <button
           type="button"
           onClick={() => navigate('/admin/users')}
           className="mb-4 inline-flex items-center gap-1.5 text-sm text-neutral-500 transition-colors hover:text-neutral-900 comfortaa-regular"
         >
           <ArrowLeft className="size-4" />
-          Πίσω στους χρήστες
+          {t('adminUser.backToUsers')}
         </button>
 
         {isLoading ? (
-          <p className="text-sm text-neutral-600 comfortaa-regular">Φόρτωση…</p>
+          <p className="text-sm text-neutral-600 comfortaa-regular">{t('adminUser.loading')}</p>
         ) : isError || !user ? (
           <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--nexus-red)]">
-            {(error as { message?: string })?.message ?? 'Ο χρήστης δεν βρέθηκε'}
+            {(error as { message?: string })?.message ?? t('adminUser.notFound')}
           </p>
         ) : (
           <>
@@ -119,7 +120,7 @@ export default function AdminUserDetailPage() {
                   <p className="mt-0.5 flex items-center gap-2 text-sm text-neutral-500 comfortaa-regular">
                     <span>@{user.username}</span>
                     <span aria-hidden>•</span>
-                    <span>{ROLE_LABELS[user.role] ?? user.role}</span>
+                    <span>{roleLabel(user.role)}</span>
                   </p>
                 </div>
               </div>
@@ -130,7 +131,7 @@ export default function AdminUserDetailPage() {
             {user.account_status === 'pending' ? (
               <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <p className="text-sm font-medium text-amber-800 comfortaa-regular">
-                  Η αίτηση εγγραφής εκκρεμεί έγκριση.
+                  {t('adminUser.pendingNotice')}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button
@@ -139,7 +140,7 @@ export default function AdminUserDetailPage() {
                     onClick={() => void handleApprove()}
                     className="bg-emerald-600 text-white hover:bg-emerald-700"
                   >
-                    {approving ? 'Έγκριση…' : 'Έγκριση'}
+                    {approving ? t('adminUser.approving') : t('adminUser.approve')}
                   </Button>
                   <Button
                     size="sm"
@@ -148,7 +149,7 @@ export default function AdminUserDetailPage() {
                     onClick={() => void handleReject()}
                     className="border-red-300 text-[var(--nexus-red)] hover:bg-red-50"
                   >
-                    {rejecting ? 'Απόρριψη…' : 'Απόρριψη'}
+                    {rejecting ? t('adminUser.rejecting') : t('adminUser.reject')}
                   </Button>
                 </div>
                 {actionError && (
@@ -160,7 +161,7 @@ export default function AdminUserDetailPage() {
             ) : user.account_status === 'approved' ? (
               <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-4">
                 <p className="text-sm text-neutral-600 comfortaa-regular">
-                  Ο λογαριασμός είναι ενεργός.
+                  {t('adminUser.activeNotice')}
                 </p>
                 <Button
                   size="sm"
@@ -169,13 +170,13 @@ export default function AdminUserDetailPage() {
                   onClick={() => void handleReject()}
                   className="border-red-300 text-[var(--nexus-red)] hover:bg-red-50"
                 >
-                  {rejecting ? 'Απόρριψη…' : 'Απόρριψη πρόσβασης'}
+                  {rejecting ? t('adminUser.rejecting') : t('adminUser.revoke')}
                 </Button>
               </div>
             ) : (
               <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-4">
                 <p className="text-sm text-neutral-600 comfortaa-regular">
-                  Η αίτηση έχει απορριφθεί.
+                  {t('adminUser.rejectedNotice')}
                 </p>
                 <Button
                   size="sm"
@@ -183,7 +184,7 @@ export default function AdminUserDetailPage() {
                   onClick={() => void handleApprove()}
                   className="bg-emerald-600 text-white hover:bg-emerald-700"
                 >
-                  {approving ? 'Έγκριση…' : 'Έγκριση τώρα'}
+                  {approving ? t('adminUser.approving') : t('adminUser.approveNow')}
                 </Button>
               </div>
             )}
@@ -194,16 +195,14 @@ export default function AdminUserDetailPage() {
             {user.role !== 'admin' && (
               <div className="mt-4 rounded-xl border border-neutral-200 bg-white p-4">
                 <p className="text-sm font-medium text-neutral-900 comfortaa-bold">
-                  Ρόλος λογαριασμού
+                  {t('adminUser.roleTitle')}
                 </p>
                 <p className="mt-1 text-sm text-neutral-600 comfortaa-regular">
-                  Ο διοργανωτής μπορεί να δημιουργεί εκδηλώσεις· ο συμμετέχων μόνο να κάνει
-                  κρατήσεις. Η αλλαγή ισχύει την επόμενη φορά που θα ανανεωθεί η συνεδρία του
-                  χρήστη.
+                  {t('adminUser.roleHint')}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <label htmlFor="user-role" className="sr-only">
-                    Ρόλος
+                    {t('adminUser.role')}
                   </label>
                   <select
                     id="user-role"
@@ -214,12 +213,14 @@ export default function AdminUserDetailPage() {
                   >
                     {AssignableRoles.map((r) => (
                       <option key={r} value={r}>
-                        {ROLE_LABELS[r] ?? r}
+                        {roleLabel(r)}
                       </option>
                     ))}
                   </select>
                   {changingRole && (
-                    <span className="text-sm text-neutral-500 comfortaa-regular">Αποθήκευση…</span>
+                    <span className="text-sm text-neutral-500 comfortaa-regular">
+                      {t('adminUser.saving')}
+                    </span>
                   )}
                 </div>
               </div>
@@ -228,22 +229,22 @@ export default function AdminUserDetailPage() {
             {/* Details */}
             <div className="mt-8">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 comfortaa-regular">
-                Στοιχεία χρήστη
+                {t('adminUser.details')}
               </h2>
               <dl className="mt-2">
                 <Field label="Email">{user.email}</Field>
-                <Field label="Τηλέφωνο">{user.phone}</Field>
-                <Field label="ΑΦΜ">{user.vat_number}</Field>
-                <Field label="Διεύθυνση">{user.address}</Field>
-                <Field label="Πόλη">{user.city}</Field>
-                <Field label="Χώρα">{user.country}</Field>
-                <Field label="Γεωγραφικό στίγμα">
+                <Field label={t('adminUser.phone')}>{user.phone}</Field>
+                <Field label={t('adminUser.vat')}>{user.vat_number}</Field>
+                <Field label={t('adminUser.address')}>{user.address}</Field>
+                <Field label={t('adminUser.city')}>{user.city}</Field>
+                <Field label={t('adminUser.country')}>{user.country}</Field>
+                <Field label={t('adminUser.geo')}>
                   {user.latitude != null && user.longitude != null
                     ? `${user.latitude}, ${user.longitude}`
                     : '—'}
                 </Field>
-                <Field label="Εγγραφή">{formatDateTime(user.created_at)}</Field>
-                <Field label="Τελευταία ενημέρωση">{formatDateTime(user.updated_at)}</Field>
+                <Field label={t('adminUser.registered')}>{formatDateTime(user.created_at)}</Field>
+                <Field label={t('adminUser.updated')}>{formatDateTime(user.updated_at)}</Field>
                 <Field label="ID">
                   <span className="font-mono text-xs text-neutral-500">{user.id}</span>
                 </Field>
@@ -255,7 +256,7 @@ export default function AdminUserDetailPage() {
                 to="/admin/users"
                 className="text-sm text-[var(--nexus-purple)] underline-offset-2 hover:underline comfortaa-regular"
               >
-                ← Επιστροφή στη λίστα χρηστών
+                {t('adminUser.backToList')}
               </Link>
             </div>
           </>

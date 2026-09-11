@@ -4,6 +4,7 @@ import { MapContainer, Marker, TileLayer } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
 import { cn } from '@/lib/utils';
+import { tr } from '@/lib/i18n';
 
 const icon = L.icon({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
@@ -28,7 +29,7 @@ export function EventMapEmbed({ latitude, longitude, className }: EventMapEmbedP
           className,
         )}
       >
-        Δεν υπάρχουν συντεταγμένες χάρτη.
+        {tr('common.noMapCoordinates')}
       </div>
     );
   }

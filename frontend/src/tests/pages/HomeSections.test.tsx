@@ -26,8 +26,20 @@ beforeEach(() => {
  * not just fireEvent.click.
  */
 function realClick(el: HTMLElement) {
-  fireEvent.pointerDown(el, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 10, clientY: 10 });
-  fireEvent.pointerUp(el, { pointerId: 1, pointerType: 'mouse', button: 0, clientX: 10, clientY: 10 });
+  fireEvent.pointerDown(el, {
+    pointerId: 1,
+    pointerType: 'mouse',
+    button: 0,
+    clientX: 10,
+    clientY: 10,
+  });
+  fireEvent.pointerUp(el, {
+    pointerId: 1,
+    pointerType: 'mouse',
+    button: 0,
+    clientX: 10,
+    clientY: 10,
+  });
   fireEvent.click(el);
 }
 
@@ -66,9 +78,26 @@ describe('Home category tabs', () => {
     scroller.releasePointerCapture = vi.fn();
 
     await act(async () => {
-      fireEvent.pointerDown(tab, { pointerId: 2, pointerType: 'mouse', button: 0, clientX: 10, clientY: 10 });
-      fireEvent.pointerMove(scroller, { pointerId: 2, pointerType: 'mouse', clientX: 120, clientY: 10 });
-      fireEvent.pointerUp(scroller, { pointerId: 2, pointerType: 'mouse', button: 0, clientX: 120, clientY: 10 });
+      fireEvent.pointerDown(tab, {
+        pointerId: 2,
+        pointerType: 'mouse',
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+      });
+      fireEvent.pointerMove(scroller, {
+        pointerId: 2,
+        pointerType: 'mouse',
+        clientX: 120,
+        clientY: 10,
+      });
+      fireEvent.pointerUp(scroller, {
+        pointerId: 2,
+        pointerType: 'mouse',
+        button: 0,
+        clientX: 120,
+        clientY: 10,
+      });
       fireEvent.click(tab);
     });
 

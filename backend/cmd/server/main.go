@@ -98,6 +98,23 @@ func main() {
 		log.Fatal("wire init failed", zap.Error(err))
 	}
 
+	// The built-in administrator (assignment §3) must exist from installation.
+	{
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		created, err := service.EnsureAdmin(ctx, deps.Users, service.AdminAccount{
+			Username: cfg.AdminUsername,
+			Password: cfg.AdminPassword,
+			Email:    cfg.AdminEmail,
+		})
+		cancel()
+		if err != nil {
+			log.Fatal("ensure admin failed", zap.Error(err))
+		}
+		if created {
+			log.Info("built-in administrator created", zap.String("username", cfg.AdminUsername))
+		}
+	}
+
 	go deps.Hub.Run()
 	go deps.RecommendationService.StartPeriodicRetraining()
 	go runCompletionSweeper(deps.EventService, log)
@@ -110,8 +127,7 @@ func main() {
 	handler.RegisterBookingRoutes(v1, deps.BookingHandler, cfg.JWTSecret)
 	handler.RegisterMessageRoutes(v1, deps.MessageHandler, cfg.JWTSecret)
 	handler.RegisterAdminExportRoutes(v1, deps.AdminExportHandler, cfg.JWTSecret)
-	handler.RegisterChatRoutes(v1, deps.ChatHandler, cfg.JWTSecret)
-	handler.RegisterChatWebSocketRoutes(app, deps.Hub, cfg.JWTSecret)
+	handler.RegisterSupportRoutes(v1, deps.SupportHandler, cfg.JWTSecret)
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return response.OK(c, fiber.Map{"status": "ok\n"})

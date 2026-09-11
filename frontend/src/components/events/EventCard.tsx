@@ -22,11 +22,13 @@ const EventCard: React.FC<EventCardProps> = memo(({ event, className }) => {
   return (
     <Card
       className={cn(
-        'h-full flex flex-col overflow-hidden transition-all hover:shadow-md group',
+        // The shadcn Card pads and gaps its children; the image must sit flush
+        // with the top edge, so both are zeroed here and the text pads itself.
+        'h-full flex flex-col gap-0 overflow-hidden py-0 transition-all hover:shadow-md group',
         className,
       )}
     >
-      <CardHeader className="p-0">
+      <CardHeader className="gap-0 p-0">
         <Link to={`/events/${event.id}`} className="block relative aspect-[4/3] overflow-hidden">
           {event.featured_image_url ? (
             <img
@@ -43,13 +45,16 @@ const EventCard: React.FC<EventCardProps> = memo(({ event, className }) => {
               <Badge
                 key={cat}
                 variant="secondary"
-                className="bg-white/90 backdrop-blur text-[10px]"
+                className="border-0 bg-nexus-lime text-[10px] text-nexus-navy"
               >
                 {cat}
               </Badge>
             ))}
             {event.categories.length > 2 && (
-              <Badge variant="secondary" className="bg-white/90 backdrop-blur text-[10px]">
+              <Badge
+                variant="secondary"
+                className="border-0 bg-nexus-lime text-[10px] text-nexus-navy"
+              >
                 +{event.categories.length - 2}
               </Badge>
             )}
@@ -59,19 +64,25 @@ const EventCard: React.FC<EventCardProps> = memo(({ event, className }) => {
 
       <CardContent className="p-4 flex-1">
         <Link to={`/events/${event.id}`} className="block mb-2">
-          <h3 className="font-bold text-lg leading-tight hover:text-primary transition-colors line-clamp-2 comfortaa-bold">
+          {/* Always two lines tall, so cards in a row share one height
+              whatever the title length. */}
+          <h3 className="font-bold text-lg leading-tight hover:text-primary transition-colors line-clamp-2 min-h-[2.5em] comfortaa-bold">
             {event.title}
           </h3>
         </Link>
 
         <div className="space-y-2 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-violet-600" />
-            <span className="comfortaa-regular">{formatShortDate(event.start_at)}</span>
+            <Calendar className="w-4 h-4 shrink-0 text-violet-600" aria-hidden />
+            <span className="truncate comfortaa-regular">{formatShortDate(event.start_at)}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-violet-600" />
-            <span className="truncate comfortaa-regular">
+          {/* min-w-0 lets the text truncate instead of squeezing the icon. */}
+          <div className="flex min-w-0 items-center gap-2">
+            <MapPin className="w-4 h-4 shrink-0 text-violet-600" aria-hidden />
+            <span
+              className="min-w-0 truncate comfortaa-regular"
+              title={`${event.venue}, ${event.city}`}
+            >
               {event.venue}, {event.city}
             </span>
           </div>
@@ -83,7 +94,9 @@ const EventCard: React.FC<EventCardProps> = memo(({ event, className }) => {
           <span className="text-[10px] text-muted-foreground tracking-wider font-semibold">
             {t('labels.price')}
           </span>
-          <span className="font-bold text-primary comfortaa-bold">{formatCurrency(minPrice)}</span>
+          <span className="font-bold text-nexus-navy comfortaa-bold">
+            {formatCurrency(minPrice)}
+          </span>
         </div>
 
         <div className="flex flex-col items-end">

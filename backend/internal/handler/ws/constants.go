@@ -1,16 +1,17 @@
 package ws
 
 const (
-	// MaxMessageBytes caps inbound WebSocket frames from clients.
-	MaxMessageBytes = 4096
+	// MaxMessageBytes caps inbound WebSocket frames from clients. The socket is
+	// push-only, so anything a client sends is ignored, but a limit still stops
+	// a misbehaving peer from buffering unbounded data.
+	MaxMessageBytes = 1024
 
-	TypeNewMessage  = "new_message"
+	// TypeNewMessage carries a message that just landed in the user's inbox.
+	TypeNewMessage = "new_message"
+	// TypeUnreadCount carries the user's current unread total, sent whenever it
+	// changes so the navbar badge stays exact.
 	TypeUnreadCount = "unread_count"
-	// TypeTyping travels both ways: a client announces it is typing to one
-	// recipient, and the server relays that to the recipient's connections.
-	TypeTyping = "typing"
-	// TypeMessageDeleted and TypeReactionChanged keep an open thread in step
-	// when the other side withdraws a message or reacts to one.
-	TypeMessageDeleted  = "message_deleted"
-	TypeReactionChanged = "reaction_changed"
+	// TypeSupportUpdate tells the other side of a support ticket that it was
+	// opened, replied to or closed, so queues and threads refresh live.
+	TypeSupportUpdate = "support_update"
 )

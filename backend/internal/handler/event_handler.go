@@ -571,7 +571,12 @@ func (h *EventHandler) AdminListEvents(c *fiber.Ctx) error {
 	if err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, err.Error())
 	}
-	events, cats, err := h.service.AdminList(c.Context(), limit, offset)
+	var status *domain.EventStatus
+	if raw := strings.TrimSpace(c.Query("status")); raw != "" {
+		st := domain.EventStatus(raw)
+		status = &st
+	}
+	events, cats, total, err := h.service.AdminList(c.Context(), c.Query("q"), status, limit, offset)
 	if err != nil {
 		return err
 	}
@@ -579,7 +584,7 @@ func (h *EventHandler) AdminListEvents(c *fiber.Ctx) error {
 	for i := range events {
 		out = append(out, toEventResponse(events[i], cats[i]))
 	}
-	return response.OK(c, out)
+	return response.Paginated(c, out, fiber.Map{"total": total, "limit": limit, "offset": offset})
 }
 
 func (h *EventHandler) AdminGetEvent(c *fiber.Ctx) error {

@@ -4,13 +4,10 @@ import { Link } from 'react-router-dom';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { useListUsersQuery } from '@/app/usersApi';
-import {
-  ACCOUNT_STATUS_META,
-  ROLE_LABELS,
-  AccountStatusBadge,
-} from '@/pages/admin/userDisplay';
+import { accountStatusLabel, roleLabel, AccountStatusBadge } from '@/pages/admin/userDisplay';
 import type { AccountStatus } from '@/types/enums';
 import { cn } from '@/lib/utils';
+import { useLang } from '@/contexts/langContext';
 
 // The DB holds few users (seeded accounts + real registrations), so we fetch a
 // generous page once and filter / paginate on the client. This keeps the
@@ -21,13 +18,14 @@ const PAGE_SIZE = 15;
 type StatusTab = AccountStatus | 'all';
 
 const STATUS_TABS: { value: StatusTab; label: string }[] = [
-  { value: 'all', label: 'Όλοι' },
-  { value: 'pending', label: 'Εκκρεμείς' },
-  { value: 'approved', label: 'Εγκεκριμένοι' },
-  { value: 'rejected', label: 'Απορριφθέντες' },
+  { value: 'all', label: 'adminUsers.all' },
+  { value: 'pending', label: 'adminUsers.pendingTab' },
+  { value: 'approved', label: 'adminUsers.approvedTab' },
+  { value: 'rejected', label: 'adminUsers.rejectedTab' },
 ];
 
 export default function AdminUsersPage() {
+  const { t } = useLang();
   const { data, isLoading, isError, error, refetch, isFetching } = useListUsersQuery({
     limit: FETCH_LIMIT,
     offset: 0,
@@ -49,8 +47,9 @@ export default function AdminUsersPage() {
     return users.filter((u) => {
       if (statusFilter !== 'all' && u.account_status !== statusFilter) return false;
       if (!q) return true;
-      const haystack =
-        `${u.username} ${u.first_name} ${u.last_name} ${u.email}`.toLocaleLowerCase('el-GR');
+      const haystack = `${u.username} ${u.first_name} ${u.last_name} ${u.email}`.toLocaleLowerCase(
+        'el-GR',
+      );
       return haystack.includes(q);
     });
   }, [users, statusFilter, query]);
@@ -66,18 +65,22 @@ export default function AdminUsersPage() {
 
   return (
     <AdminLayout>
-      <div className="bg-white p-6">
+      <div className="bg-white p-4 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-neutral-950 comfortaa-bold">Χρήστες</h1>
+            <h1 className="text-2xl font-bold text-neutral-950 comfortaa-bold">
+              {t('adminUsers.title')}
+            </h1>
             <p className="mt-2 text-sm text-neutral-600 comfortaa-regular">
-              Επισκόπηση χρηστών, έγκριση ή απόρριψη νέων αιτήσεων εγγραφής.
+              {t('adminUsers.subtitle')}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-3">
             {pendingCount > 0 && (
               <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-medium text-amber-700 comfortaa-regular">
-                {pendingCount} εκκρεμ{pendingCount === 1 ? 'εί' : 'ούν'}
+                {t(pendingCount === 1 ? 'adminUsers.pendingOne' : 'adminUsers.pendingMany', {
+                  count: pendingCount,
+                })}
               </span>
             )}
             <Button
@@ -86,7 +89,7 @@ export default function AdminUsersPage() {
               disabled={isFetching}
               onClick={() => void refetch()}
             >
-              {isFetching ? 'Ανανέωση…' : 'Ανανέωση'}
+              {isFetching ? t('adminUsers.refreshing') : t('adminUsers.refresh')}
             </Button>
           </div>
         </div>
@@ -108,7 +111,7 @@ export default function AdminUsersPage() {
                       : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200',
                   )}
                 >
-                  {tab.label}
+                  {t(tab.label)}
                 </button>
               );
             })}
@@ -120,29 +123,31 @@ export default function AdminUsersPage() {
               setQuery(e.target.value);
               setPage(0);
             }}
-            placeholder="Αναζήτηση ονόματος, email…"
+            placeholder={t('adminUsers.searchPlaceholder')}
             className="w-full max-w-xs rounded-lg border border-neutral-300 px-3 py-1.5 text-sm outline-none transition-colors focus:border-[var(--nexus-purple)] comfortaa-regular"
           />
         </div>
 
         {isLoading ? (
-          <p className="mt-6 text-sm text-neutral-600 comfortaa-regular">Φόρτωση…</p>
+          <p className="mt-6 text-sm text-neutral-600 comfortaa-regular">
+            {t('adminUsers.loading')}
+          </p>
         ) : isError ? (
           <p className="mt-6 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--nexus-red)]">
-            {(error as { message?: string })?.message ?? 'Σφάλμα φόρτωσης χρηστών'}
+            {(error as { message?: string })?.message ?? t('adminUsers.loadError')}
           </p>
         ) : filtered.length === 0 ? (
           <p className="mt-6 rounded-lg bg-neutral-50 px-4 py-6 text-center text-sm text-neutral-500 comfortaa-regular">
-            Δεν βρέθηκαν χρήστες.
+            {t('adminUsers.none')}
           </p>
         ) : (
           <>
             <div className="mt-5 overflow-x-auto rounded-xl border border-neutral-200">
               <div className="grid min-w-[720px] grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)_120px_140px] gap-0 bg-neutral-50 px-4 py-3 text-xs font-semibold text-neutral-600 comfortaa-regular">
-                <div>Χρήστης</div>
+                <div>{t('adminUsers.colUser')}</div>
                 <div>Email</div>
-                <div>Ρόλος</div>
-                <div>Κατάσταση</div>
+                <div>{t('adminUsers.colRole')}</div>
+                <div>{t('adminUsers.colStatus')}</div>
               </div>
               <ul className="divide-y divide-neutral-200">
                 {pageItems.map((u) => (
@@ -163,7 +168,7 @@ export default function AdminUsersPage() {
                         {u.email}
                       </div>
                       <div className="text-xs text-neutral-700 comfortaa-regular">
-                        {ROLE_LABELS[u.role] ?? u.role}
+                        {roleLabel(u.role)}
                       </div>
                       <div>
                         <AccountStatusBadge status={u.account_status} />
@@ -177,9 +182,11 @@ export default function AdminUsersPage() {
             {/* Pagination */}
             <div className="mt-4 flex items-center justify-between text-sm text-neutral-600 comfortaa-regular">
               <span>
-                {filtered.length} {filtered.length === 1 ? 'χρήστης' : 'χρήστες'}
+                {t(filtered.length === 1 ? 'adminUsers.countOne' : 'adminUsers.countMany', {
+                  count: filtered.length,
+                })}
                 {statusFilter !== 'all'
-                  ? ` (${ACCOUNT_STATUS_META[statusFilter].label.toLocaleLowerCase('el-GR')})`
+                  ? ` (${accountStatusLabel(statusFilter).toLocaleLowerCase()})`
                   : ''}
               </span>
               <div className="flex items-center gap-2">
@@ -189,7 +196,7 @@ export default function AdminUsersPage() {
                   disabled={safePage <= 0}
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                 >
-                  Προηγούμενη
+                  {t('adminUsers.previous')}
                 </Button>
                 <span className="px-1">
                   {safePage + 1} / {pageCount}
@@ -200,7 +207,7 @@ export default function AdminUsersPage() {
                   disabled={safePage >= pageCount - 1}
                   onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
                 >
-                  Επόμενη
+                  {t('adminUsers.next')}
                 </Button>
               </div>
             </div>

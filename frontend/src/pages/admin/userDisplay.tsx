@@ -1,27 +1,26 @@
 /* eslint-disable react-refresh/only-export-components */
 import type { AccountStatus, UserRole } from '@/types/enums';
 import { cn } from '@/lib/utils';
+import { tr } from '@/lib/i18n';
 
-export const ROLE_LABELS: Record<UserRole, string> = {
-  admin: 'Διαχειριστής',
-  organizer: 'Διοργανωτής',
-  attendee: 'Συμμετέχων',
-  guest: 'Επισκέπτης',
+export function roleLabel(role: UserRole): string {
+  return tr(`role.${role}`);
+}
+
+const ACCOUNT_STATUS_CLASS: Record<AccountStatus, string> = {
+  pending: 'bg-amber-50 text-amber-700',
+  approved: 'bg-emerald-50 text-emerald-700',
+  rejected: 'bg-red-50 text-[var(--nexus-red)]',
 };
 
-export const ACCOUNT_STATUS_META: Record<
-  AccountStatus,
-  { label: string; className: string }
-> = {
-  pending: { label: 'Εκκρεμεί', className: 'bg-amber-50 text-amber-700' },
-  approved: { label: 'Εγκεκριμένος', className: 'bg-emerald-50 text-emerald-700' },
-  rejected: { label: 'Απορρίφθηκε', className: 'bg-red-50 text-[var(--nexus-red)]' },
-};
+export function accountStatusLabel(status: AccountStatus): string {
+  return tr(`status.account.${status}Label`);
+}
 
 export function AccountStatusBadge({ status }: { status: AccountStatus }) {
-  const meta = ACCOUNT_STATUS_META[status] ?? {
-    label: status,
-    className: 'bg-neutral-100 text-neutral-700',
+  const meta = {
+    label: accountStatusLabel(status),
+    className: ACCOUNT_STATUS_CLASS[status] ?? 'bg-neutral-100 text-neutral-700',
   };
   return (
     <span

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -156,6 +157,29 @@ func (m *mockEventRepo) GetTicketTypes(_ context.Context, eid uuid.UUID) ([]doma
 
 func (m *mockEventRepo) GetPhotos(_ context.Context, eid uuid.UUID) ([]domain.EventPhoto, error) {
 	return m.photos[eid], nil
+}
+
+func (m *mockEventRepo) ListAdmin(_ context.Context, q string, status *domain.EventStatus, limit, offset int) ([]domain.Event, int, error) {
+	var all []domain.Event
+	for _, ev := range m.events {
+		if status != nil && ev.Status != *status {
+			continue
+		}
+		if q != "" && !strings.Contains(strings.ToLower(ev.Title+" "+ev.Venue+" "+ev.City), strings.ToLower(q)) {
+			continue
+		}
+		all = append(all, ev)
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].ID.String() < all[j].ID.String() })
+	total := len(all)
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if limit < 1 || end > total {
+		end = total
+	}
+	return all[offset:end], total, nil
 }
 
 func (m *mockEventRepo) ListForExport(_ context.Context, limit, offset int) ([]domain.Event, error) {

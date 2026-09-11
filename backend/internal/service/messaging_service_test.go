@@ -1,7 +1,6 @@
 package service
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"sort"
@@ -10,36 +9,28 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	wshub "nexustickets/internal/handler/ws"
 
 	"nexustickets/internal/domain"
+	wshub "nexustickets/internal/handler/ws"
 )
 
+// mockMessageRepo keeps every message in one map and derives the folders from
+// it, the way the real table does, so per-side deletion behaves like Postgres.
 type mockMessageRepo struct {
-	messages  map[uuid.UUID]domain.Message
-	inbox     map[uuid.UUID][]domain.Message
-	sent      map[uuid.UUID][]domain.Message
-	unreadCnt map[uuid.UUID]int
-	reactions map[uuid.UUID][]domain.MailboxReaction
+	messages map[uuid.UUID]domain.Message
+	seq      int
 }
 
 func newMockMessageRepo() *mockMessageRepo {
-	return &mockMessageRepo{
-		messages:  make(map[uuid.UUID]domain.Message),
-		inbox:     make(map[uuid.UUID][]domain.Message),
-		sent:      make(map[uuid.UUID][]domain.Message),
-		unreadCnt: make(map[uuid.UUID]int),
-		reactions: make(map[uuid.UUID][]domain.MailboxReaction),
-	}
+	return &mockMessageRepo{messages: make(map[uuid.UUID]domain.Message)}
 }
 
 func (m *mockMessageRepo) Create(_ context.Context, msg domain.Message) (domain.Message, error) {
 	msg.ID = uuid.New()
-	msg.CreatedAt = time.Now().UTC()
+	// Strictly increasing timestamps keep "newest first" deterministic.
+	m.seq++
+	msg.CreatedAt = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(m.seq) * time.Second)
 	m.messages[msg.ID] = msg
-	m.inbox[msg.RecipientID] = append(m.inbox[msg.RecipientID], msg)
-	m.sent[msg.SenderID] = append(m.sent[msg.SenderID], msg)
-	m.unreadCnt[msg.RecipientID]++
 	return msg, nil
 }
 
@@ -51,114 +42,6 @@ func (m *mockMessageRepo) CreateBatch(_ context.Context, msgs []domain.Message) 
 	return out, nil
 }
 
-func (m *mockMessageRepo) ListInbox(_ context.Context, uid uuid.UUID, limit, offset int) ([]domain.Message, error) {
-	return m.inbox[uid], nil
-}
-
-func (m *mockMessageRepo) ListSent(_ context.Context, uid uuid.UUID, limit, offset int) ([]domain.Message, error) {
-	return m.sent[uid], nil
-}
-
-func (m *mockMessageRepo) threadBetween(a, b uuid.UUID) []domain.Message {
-	out := make([]domain.Message, 0)
-	for _, msg := range m.messages {
-		mine := msg.SenderID == a && msg.RecipientID == b && !msg.DeletedBySender
-		theirs := msg.SenderID == b && msg.RecipientID == a && !msg.DeletedByRecipient
-		if mine || theirs {
-			out = append(out, msg)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
-	return out
-}
-
-func (m *mockMessageRepo) ListThread(_ context.Context, uid, other uuid.UUID, limit, offset int) ([]domain.Message, error) {
-	thread := m.threadBetween(uid, other)
-	if offset >= len(thread) {
-		return []domain.Message{}, nil
-	}
-	thread = thread[offset:]
-	if limit > 0 && limit < len(thread) {
-		thread = thread[:limit]
-	}
-	return thread, nil
-}
-
-func (m *mockMessageRepo) LastInThread(_ context.Context, uid, other uuid.UUID) (domain.Message, error) {
-	thread := m.threadBetween(uid, other)
-	if len(thread) == 0 {
-		return domain.Message{}, domain.ErrNotFound
-	}
-	return thread[len(thread)-1], nil
-}
-
-func (m *mockMessageRepo) ListCounterpartIDs(_ context.Context, uid uuid.UUID) ([]uuid.UUID, error) {
-	latest := make(map[uuid.UUID]time.Time)
-	for _, msg := range m.messages {
-		var other uuid.UUID
-		switch {
-		case msg.SenderID == uid && !msg.DeletedBySender:
-			other = msg.RecipientID
-		case msg.RecipientID == uid && !msg.DeletedByRecipient:
-			other = msg.SenderID
-		default:
-			continue
-		}
-		if msg.CreatedAt.After(latest[other]) {
-			latest[other] = msg.CreatedAt
-		}
-	}
-	out := make([]uuid.UUID, 0, len(latest))
-	for id := range latest {
-		out = append(out, id)
-	}
-	sort.Slice(out, func(i, j int) bool { return latest[out[i]].After(latest[out[j]]) })
-	return out, nil
-}
-
-func (m *mockMessageRepo) UnreadCountsBySender(_ context.Context, uid uuid.UUID) (map[uuid.UUID]int, error) {
-	out := make(map[uuid.UUID]int)
-	for _, msg := range m.messages {
-		if msg.RecipientID == uid && msg.ReadAt == nil && !msg.DeletedByRecipient {
-			out[msg.SenderID]++
-		}
-	}
-	return out, nil
-}
-
-func (m *mockMessageRepo) MarkThreadAsRead(_ context.Context, uid, other uuid.UUID) (int, error) {
-	now := time.Now().UTC()
-	changed := 0
-	for id, msg := range m.messages {
-		if msg.RecipientID == uid && msg.SenderID == other && msg.ReadAt == nil && !msg.DeletedByRecipient {
-			readAt := now
-			msg.ReadAt = &readAt
-			m.messages[id] = msg
-			changed++
-			if m.unreadCnt[uid] > 0 {
-				m.unreadCnt[uid]--
-			}
-		}
-	}
-	return changed, nil
-}
-
-func (m *mockMessageRepo) DeleteForUser(_ context.Context, mid, uid uuid.UUID) error {
-	msg, ok := m.messages[mid]
-	if !ok {
-		return domain.ErrNotFound
-	}
-	if msg.SenderID == uid {
-		msg.DeletedBySender = true
-	} else if msg.RecipientID == uid {
-		msg.DeletedByRecipient = true
-	} else {
-		return domain.ErrForbidden
-	}
-	m.messages[mid] = msg
-	return nil
-}
-
 func (m *mockMessageRepo) GetByID(_ context.Context, mid uuid.UUID) (domain.Message, error) {
 	msg, ok := m.messages[mid]
 	if !ok {
@@ -167,750 +50,460 @@ func (m *mockMessageRepo) GetByID(_ context.Context, mid uuid.UUID) (domain.Mess
 	return msg, nil
 }
 
-func (m *mockMessageRepo) DeleteForEveryone(_ context.Context, mid uuid.UUID) error {
+func (m *mockMessageRepo) folder(keep func(domain.Message) bool, limit, offset int) ([]domain.Message, int, error) {
+	var all []domain.Message
+	for _, msg := range m.messages {
+		if keep(msg) {
+			all = append(all, msg)
+		}
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].CreatedAt.After(all[j].CreatedAt) })
+	total := len(all)
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if limit < 1 || end > total {
+		end = total
+	}
+	return all[offset:end], total, nil
+}
+
+func (m *mockMessageRepo) ListInbox(_ context.Context, uid uuid.UUID, limit, offset int) ([]domain.Message, int, error) {
+	return m.folder(func(msg domain.Message) bool {
+		return msg.RecipientID == uid && !msg.DeletedByRecipient
+	}, limit, offset)
+}
+
+func (m *mockMessageRepo) ListSent(_ context.Context, uid uuid.UUID, limit, offset int) ([]domain.Message, int, error) {
+	return m.folder(func(msg domain.Message) bool {
+		return msg.SenderID == uid && !msg.DeletedBySender
+	}, limit, offset)
+}
+
+func (m *mockMessageRepo) MarkAsRead(_ context.Context, mid, uid uuid.UUID) (bool, error) {
+	msg, ok := m.messages[mid]
+	if !ok || msg.RecipientID != uid || msg.ReadAt != nil {
+		return false, nil
+	}
+	now := time.Now().UTC()
+	msg.ReadAt = &now
+	m.messages[mid] = msg
+	return true, nil
+}
+
+func (m *mockMessageRepo) DeleteForUser(_ context.Context, mid, uid uuid.UUID) error {
 	msg, ok := m.messages[mid]
 	if !ok {
 		return domain.ErrNotFound
 	}
-	msg.DeletedForEveryone = true
-	msg.Body = ""
-	msg.ImageURL = ""
-	msg.FileURL = ""
-	msg.FileName = ""
-	msg.GifURL = ""
+	switch uid {
+	case msg.SenderID:
+		msg.DeletedBySender = true
+	case msg.RecipientID:
+		msg.DeletedByRecipient = true
+	default:
+		return domain.ErrForbidden
+	}
 	m.messages[mid] = msg
 	return nil
 }
 
-func (m *mockMessageRepo) ListPreviews(_ context.Context, ids []uuid.UUID) (map[uuid.UUID]domain.MessagePreview, error) {
-	out := make(map[uuid.UUID]domain.MessagePreview, len(ids))
-	for _, id := range ids {
-		msg, ok := m.messages[id]
-		if !ok {
-			continue
-		}
-		out[id] = domain.MessagePreview{
-			ID:       msg.ID.String(),
-			SenderID: msg.SenderID,
-			Body:     msg.Body,
-			Deleted:  msg.DeletedForEveryone,
-		}
-	}
-	return out, nil
-}
-
-func (m *mockMessageRepo) AddReaction(_ context.Context, mid, uid uuid.UUID, emoji string) error {
-	for _, r := range m.reactions[mid] {
-		if r.UserID == uid && r.Emoji == emoji {
-			return nil
-		}
-	}
-	m.reactions[mid] = append(m.reactions[mid], domain.MailboxReaction{
-		ID: uuid.New(), MessageID: mid, UserID: uid, Emoji: emoji, CreatedAt: time.Now().UTC(),
-	})
-	return nil
-}
-
-func (m *mockMessageRepo) RemoveReaction(_ context.Context, mid, uid uuid.UUID, emoji string) error {
-	kept := make([]domain.MailboxReaction, 0, len(m.reactions[mid]))
-	for _, r := range m.reactions[mid] {
-		if r.UserID == uid && r.Emoji == emoji {
-			continue
-		}
-		kept = append(kept, r)
-	}
-	m.reactions[mid] = kept
-	return nil
-}
-
-func (m *mockMessageRepo) ListReactions(_ context.Context, ids []uuid.UUID) (map[uuid.UUID][]domain.MailboxReaction, error) {
-	out := make(map[uuid.UUID][]domain.MailboxReaction, len(ids))
-	for _, id := range ids {
-		if rs := m.reactions[id]; len(rs) > 0 {
-			out[id] = rs
-		}
-	}
-	return out, nil
-}
-
-func (m *mockMessageRepo) MarkAsRead(_ context.Context, uid uuid.UUID) error {
-	m.unreadCnt[uid] = 0
-	return nil
-}
-
-func (m *mockMessageRepo) MarkAsReadByIDs(_ context.Context, uid uuid.UUID, ids []uuid.UUID) error {
-	want := make(map[uuid.UUID]struct{}, len(ids))
-	for _, id := range ids {
-		want[id] = struct{}{}
-	}
-	now := time.Now().UTC()
-	for id, msg := range m.messages {
-		if msg.RecipientID != uid || msg.ReadAt != nil {
-			continue
-		}
-		if _, ok := want[id]; !ok {
-			continue
-		}
-		readAt := now
-		msg.ReadAt = &readAt
-		m.messages[id] = msg
-		if m.unreadCnt[uid] > 0 {
-			m.unreadCnt[uid]--
-		}
-	}
-	for uidKey, list := range m.inbox {
-		for i := range list {
-			if _, ok := want[list[i].ID]; ok && list[i].ReadAt == nil {
-				readAt := now
-				list[i].ReadAt = &readAt
-			}
-		}
-		m.inbox[uidKey] = list
-	}
-	return nil
-}
-
 func (m *mockMessageRepo) GetUnreadCount(_ context.Context, uid uuid.UUID) (int, error) {
-	return m.unreadCnt[uid], nil
+	n := 0
+	for _, msg := range m.messages {
+		if msg.RecipientID == uid && msg.ReadAt == nil && !msg.DeletedByRecipient {
+			n++
+		}
+	}
+	return n, nil
 }
 
-func msgSvc(t *testing.T) *MessagingService {
+// mailboxFixture is two users who share a booking, so they may write to each
+// other, plus the repos behind the service.
+type mailboxFixture struct {
+	svc      *MessagingService
+	msgs     *mockMessageRepo
+	users    *mockUserRepo
+	bookings *mockBookingRepo
+	events   *mockEventRepo
+	attendee domain.User
+	org      domain.User
+}
+
+func newMailboxFixture(t *testing.T) mailboxFixture {
 	t.Helper()
-	return NewMessagingService(
-		newMockMessageRepo(),
-		newMockUserRepo(),
-		newMockBookingRepo(),
-		newMockEventRepo(),
-		newTestRedis(),
-		wshub.NewHub(),
-	)
+	msgs := newMockMessageRepo()
+	users := newMockUserRepo()
+	bookings := newMockBookingRepo()
+	events := newMockEventRepo()
+	svc := NewMessagingService(msgs, users, bookings, events, newTestRedis(), wshub.NewHub())
+
+	attendee := mustUser(t, users, domain.UserRoleAttendee)
+	org := mustUser(t, users, domain.UserRoleOrganizer)
+	bookings.correspondents[[2]uuid.UUID{attendee.ID, org.ID}] = true
+
+	return mailboxFixture{svc: svc, msgs: msgs, users: users, bookings: bookings, events: events, attendee: attendee, org: org}
+}
+
+func (f mailboxFixture) send(t *testing.T, from, to uuid.UUID, subject string) domain.Message {
+	t.Helper()
+	msg, err := f.svc.SendMessage(context.Background(), SendMessageInput{
+		SenderID: from, RecipientID: to, Subject: subject, Body: "body of " + subject,
+	})
+	if err != nil {
+		t.Fatalf("send %q: %v", subject, err)
+	}
+	return msg
 }
 
 func TestMessagingService_SendMessageValidation(t *testing.T) {
-	msgs := newMockMessageRepo()
-	users := newMockUserRepo()
-	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), newTestRedis(), wshub.NewHub())
+	f := newMailboxFixture(t)
+	ctx := context.Background()
 
-	senderID := uuid.New()
-	recipientID := uuid.New()
-	users.add(domain.User{ID: senderID, Username: "sender", Email: "s@s.com"})
-	users.add(domain.User{ID: recipientID, Username: "recipient", Email: "r@r.com"})
-
-	t.Run("empty subject", func(t *testing.T) {
-		_, err := svc.SendMessage(context.Background(), SendMessageInput{
-			SenderID: senderID, RecipientID: recipientID,
-			Subject: "", Body: "body",
+	cases := []struct {
+		name string
+		in   SendMessageInput
+		want error
+	}{
+		{"empty subject", SendMessageInput{SenderID: f.attendee.ID, RecipientID: f.org.ID, Body: "b"}, ErrMessageSubjectBodyRequired},
+		{"empty body", SendMessageInput{SenderID: f.attendee.ID, RecipientID: f.org.ID, Subject: "s"}, ErrMessageSubjectBodyRequired},
+		{"whitespace only", SendMessageInput{SenderID: f.attendee.ID, RecipientID: f.org.ID, Subject: "  ", Body: "\n"}, ErrMessageSubjectBodyRequired},
+		{"subject too long", SendMessageInput{SenderID: f.attendee.ID, RecipientID: f.org.ID, Subject: strings.Repeat("x", maxSubjectLength+1), Body: "b"}, ErrMessageTooLong},
+		{"self recipient", SendMessageInput{SenderID: f.attendee.ID, RecipientID: f.attendee.ID, Subject: "s", Body: "b"}, ErrMessageSelfRecipient},
+		{"unknown recipient", SendMessageInput{SenderID: f.attendee.ID, RecipientID: uuid.New(), Subject: "s", Body: "b"}, domain.ErrNotFound},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := f.svc.SendMessage(ctx, tc.in)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("expected %v, got %v", tc.want, err)
+			}
 		})
-		if !errors.Is(err, ErrMessageSubjectBodyRequired) {
-			t.Fatalf("expected ErrMessageSubjectBodyRequired, got %v", err)
-		}
-	})
+	}
 
-	t.Run("empty body", func(t *testing.T) {
-		_, err := svc.SendMessage(context.Background(), SendMessageInput{
-			SenderID: senderID, RecipientID: recipientID,
-			Subject: "subj", Body: "",
-		})
-		if !errors.Is(err, ErrMessageSubjectBodyRequired) {
-			t.Fatalf("expected ErrMessageSubjectBodyRequired, got %v", err)
-		}
-	})
-
-	t.Run("self recipient", func(t *testing.T) {
-		_, err := svc.SendMessage(context.Background(), SendMessageInput{
-			SenderID: senderID, RecipientID: senderID,
-			Subject: "subj", Body: "body",
-		})
-		if !errors.Is(err, ErrMessageSelfRecipient) {
-			t.Fatalf("expected ErrMessageSelfRecipient, got %v", err)
-		}
-	})
-
-	t.Run("unknown recipient", func(t *testing.T) {
-		_, err := svc.SendMessage(context.Background(), SendMessageInput{
-			SenderID: senderID, RecipientID: uuid.New(),
-			Subject: "subj", Body: "body",
+	t.Run("unknown event reference", func(t *testing.T) {
+		bogus := uuid.New()
+		_, err := f.svc.SendMessage(ctx, SendMessageInput{
+			SenderID: f.attendee.ID, RecipientID: f.org.ID, EventID: &bogus, Subject: "s", Body: "b",
 		})
 		if !errors.Is(err, domain.ErrNotFound) {
-			t.Fatalf("expected ErrNotFound, got %v", err)
+			t.Fatalf("expected ErrNotFound for bogus event, got %v", err)
 		}
 	})
 }
 
-func TestMessagingService_GetSent(t *testing.T) {
-	msgs := newMockMessageRepo()
-	users := newMockUserRepo()
-	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), newTestRedis(), wshub.NewHub())
+func TestMessagingService_SendFilesUnderBothFolders(t *testing.T) {
+	f := newMailboxFixture(t)
+	ctx := context.Background()
 
-	userID := uuid.New()
-	users.add(domain.User{ID: userID, Username: "u", Email: "u@u.com"})
-	users.add(domain.User{ID: uuid.New(), Username: "r", Email: "r@r.com"})
+	eventID := uuid.New()
+	f.events.events[eventID] = domain.Event{ID: eventID, OrganizerID: f.org.ID, Title: "Concert"}
 
-	msgs.Create(context.Background(), domain.Message{SenderID: userID, RecipientID: uuid.New(), Subject: "S1", Body: "B1"})
-	msgs.Create(context.Background(), domain.Message{SenderID: userID, RecipientID: uuid.New(), Subject: "S2", Body: "B2"})
-
-	sent, err := svc.GetSent(context.Background(), userID, 10, 0)
+	msg, err := f.svc.SendMessage(ctx, SendMessageInput{
+		SenderID: f.attendee.ID, RecipientID: f.org.ID, EventID: &eventID,
+		Subject: "  Question  ", Body: "  Is parking available?  ",
+	})
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("send: %v", err)
 	}
-	if len(sent) != 2 {
-		t.Fatalf("expected 2 sent messages, got %d", len(sent))
+	if msg.Subject != "Question" || msg.Body != "Is parking available?" {
+		t.Fatalf("expected trimmed subject/body, got %q / %q", msg.Subject, msg.Body)
+	}
+	if msg.EventID == nil || *msg.EventID != eventID {
+		t.Fatalf("expected event reference to be kept")
+	}
+	if msg.ReadAt != nil {
+		t.Fatalf("a fresh message must be unread")
+	}
+
+	inbox, err := f.svc.GetInbox(ctx, f.org.ID, 20, 0)
+	if err != nil {
+		t.Fatalf("inbox: %v", err)
+	}
+	if inbox.Total != 1 || len(inbox.Messages) != 1 || inbox.Messages[0].ID != msg.ID {
+		t.Fatalf("expected the message in the recipient's inbox, got %+v", inbox)
+	}
+
+	sent, err := f.svc.GetSent(ctx, f.attendee.ID, 20, 0)
+	if err != nil {
+		t.Fatalf("sent: %v", err)
+	}
+	if sent.Total != 1 || len(sent.Messages) != 1 || sent.Messages[0].ID != msg.ID {
+		t.Fatalf("expected the message in the sender's sent folder, got %+v", sent)
+	}
+
+	// The sender's inbox and the recipient's sent folder stay empty.
+	if box, _ := f.svc.GetInbox(ctx, f.attendee.ID, 20, 0); box.Total != 0 {
+		t.Fatalf("sender's inbox should be empty, got %d", box.Total)
+	}
+	if box, _ := f.svc.GetSent(ctx, f.org.ID, 20, 0); box.Total != 0 {
+		t.Fatalf("recipient's sent folder should be empty, got %d", box.Total)
 	}
 }
 
-func TestMessagingService_GetInbox(t *testing.T) {
-	msgs := newMockMessageRepo()
-	users := newMockUserRepo()
-	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), newTestRedis(), wshub.NewHub())
+func TestMessagingService_FoldersPaginateNewestFirst(t *testing.T) {
+	f := newMailboxFixture(t)
+	ctx := context.Background()
 
-	recipientID := uuid.New()
-	users.add(domain.User{ID: recipientID, Username: "r", Email: "r@r.com"})
-
-	msgs.Create(context.Background(), domain.Message{SenderID: uuid.New(), RecipientID: recipientID, Subject: "S1", Body: "B1"})
-	msgs.Create(context.Background(), domain.Message{SenderID: uuid.New(), RecipientID: recipientID, Subject: "S2", Body: "B2"})
-
-	// Two unread before reading the inbox.
-	if got := msgs.unreadCnt[recipientID]; got != 2 {
-		t.Fatalf("precondition: unread = %d, want 2", got)
+	var ids []uuid.UUID
+	for i := 0; i < 5; i++ {
+		ids = append(ids, f.send(t, f.org.ID, f.attendee.ID, "n"+string(rune('0'+i))).ID)
 	}
 
-	inbox, err := svc.GetInbox(context.Background(), recipientID, 10, 0)
+	page1, err := f.svc.GetInbox(ctx, f.attendee.ID, 2, 0)
 	if err != nil {
-		t.Fatalf("GetInbox: %v", err)
+		t.Fatalf("page 1: %v", err)
 	}
-	if len(inbox) != 2 {
-		t.Fatalf("expected 2 inbox messages, got %d", len(inbox))
+	if page1.Total != 5 || len(page1.Messages) != 2 {
+		t.Fatalf("expected total 5 and 2 rows, got total %d rows %d", page1.Total, len(page1.Messages))
 	}
-	// Opening the inbox marks everything read.
-	if got := msgs.unreadCnt[recipientID]; got != 0 {
-		t.Fatalf("unread after GetInbox = %d, want 0", got)
+	if page1.Messages[0].ID != ids[4] || page1.Messages[1].ID != ids[3] {
+		t.Fatalf("expected newest first")
+	}
+
+	page3, err := f.svc.GetInbox(ctx, f.attendee.ID, 2, 4)
+	if err != nil {
+		t.Fatalf("page 3: %v", err)
+	}
+	if len(page3.Messages) != 1 || page3.Messages[0].ID != ids[0] {
+		t.Fatalf("expected the oldest message alone on the last page")
 	}
 }
 
-func TestMessagingService_GetUnreadCount(t *testing.T) {
-	msgs := newMockMessageRepo()
-	users := newMockUserRepo()
-	rdb := newTestRedis()
-	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), rdb, wshub.NewHub())
+func TestMessagingService_ListingDoesNotMarkRead(t *testing.T) {
+	f := newMailboxFixture(t)
+	ctx := context.Background()
 
-	recipientID := uuid.New()
-	// Ensure no stale Redis cache from a previous run.
-	rdb.Del(context.Background(), unreadRedisKey(recipientID))
+	f.send(t, f.org.ID, f.attendee.ID, "one")
+	f.send(t, f.org.ID, f.attendee.ID, "two")
 
-	msgs.Create(context.Background(), domain.Message{SenderID: uuid.New(), RecipientID: recipientID, Subject: "S", Body: "B"})
-
-	n, err := svc.GetUnreadCount(context.Background(), recipientID)
-	if err != nil {
-		t.Fatalf("GetUnreadCount: %v", err)
+	if _, err := f.svc.GetInbox(ctx, f.attendee.ID, 20, 0); err != nil {
+		t.Fatalf("inbox: %v", err)
 	}
-	if n != 1 {
-		t.Fatalf("unread count = %d, want 1", n)
+	n, err := f.svc.GetUnreadCount(ctx, f.attendee.ID)
+	if err != nil {
+		t.Fatalf("unread: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("listing the inbox must not mark anything read; unread = %d", n)
 	}
 }
 
-func TestMessagingService_DeleteForUser(t *testing.T) {
-	msgs := newMockMessageRepo()
-	users := newMockUserRepo()
-	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), newTestRedis(), wshub.NewHub())
+func TestMessagingService_OpeningMarksReadForRecipientOnly(t *testing.T) {
+	f := newMailboxFixture(t)
+	ctx := context.Background()
 
-	senderID := uuid.New()
-	recipientID := uuid.New()
-	created, _ := msgs.Create(context.Background(), domain.Message{SenderID: senderID, RecipientID: recipientID, Subject: "S", Body: "B"})
+	msg := f.send(t, f.org.ID, f.attendee.ID, "hello")
 
-	// Recipient deletes their copy -> flagged deleted for recipient.
-	if err := svc.DeleteForUser(context.Background(), created.ID, recipientID); err != nil {
-		t.Fatalf("DeleteForUser: %v", err)
+	// The sender re-reading their own sent message changes nothing.
+	got, err := f.svc.GetMessage(ctx, msg.ID, f.org.ID)
+	if err != nil {
+		t.Fatalf("sender open: %v", err)
 	}
-	if !msgs.messages[created.ID].DeletedByRecipient {
-		t.Errorf("message not flagged DeletedByRecipient")
+	if got.ReadAt != nil {
+		t.Fatalf("sender opening must not mark the message read")
 	}
-
-	// A user who is neither sender nor recipient cannot delete it.
-	stranger := uuid.New()
-	if err := svc.DeleteForUser(context.Background(), created.ID, stranger); !errors.Is(err, domain.ErrForbidden) {
-		t.Errorf("stranger delete: expected ErrForbidden, got %v", err)
+	if n, _ := f.svc.GetUnreadCount(ctx, f.attendee.ID); n != 1 {
+		t.Fatalf("expected 1 unread before the recipient opens it, got %d", n)
 	}
 
-	// Deleting a non-existent message returns ErrNotFound.
-	if err := svc.DeleteForUser(context.Background(), uuid.New(), recipientID); !errors.Is(err, domain.ErrNotFound) {
-		t.Errorf("missing message: expected ErrNotFound, got %v", err)
+	got, err = f.svc.GetMessage(ctx, msg.ID, f.attendee.ID)
+	if err != nil {
+		t.Fatalf("recipient open: %v", err)
+	}
+	if got.ReadAt == nil {
+		t.Fatalf("recipient opening must mark the message read")
+	}
+	if n, _ := f.svc.GetUnreadCount(ctx, f.attendee.ID); n != 0 {
+		t.Fatalf("expected 0 unread after opening, got %d", n)
+	}
+
+	// Opening again is idempotent.
+	again, err := f.svc.GetMessage(ctx, msg.ID, f.attendee.ID)
+	if err != nil {
+		t.Fatalf("second open: %v", err)
+	}
+	if again.ReadAt == nil {
+		t.Fatalf("read_at must persist")
+	}
+
+	// A third party may not read it at all.
+	stranger := mustUser(t, f.users, domain.UserRoleAttendee)
+	if _, err := f.svc.GetMessage(ctx, msg.ID, stranger.ID); !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden for a third party, got %v", err)
+	}
+}
+
+func TestMessagingService_DeleteIsPerFolder(t *testing.T) {
+	f := newMailboxFixture(t)
+	ctx := context.Background()
+
+	msg := f.send(t, f.org.ID, f.attendee.ID, "notice")
+
+	// Recipient drops it from the inbox: gone for them, still in the
+	// organizer's sent folder, and off the unread badge.
+	if err := f.svc.DeleteForUser(ctx, msg.ID, f.attendee.ID); err != nil {
+		t.Fatalf("recipient delete: %v", err)
+	}
+	if box, _ := f.svc.GetInbox(ctx, f.attendee.ID, 20, 0); box.Total != 0 {
+		t.Fatalf("expected empty inbox after delete, got %d", box.Total)
+	}
+	if box, _ := f.svc.GetSent(ctx, f.org.ID, 20, 0); box.Total != 1 {
+		t.Fatalf("sender's copy must survive the recipient's delete, got %d", box.Total)
+	}
+	if n, _ := f.svc.GetUnreadCount(ctx, f.attendee.ID); n != 0 {
+		t.Fatalf("deleting an unread message must clear it from the badge, got %d", n)
+	}
+	if _, err := f.svc.GetMessage(ctx, msg.ID, f.attendee.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("a deleted message must not open from that side, got %v", err)
+	}
+
+	// The sender can still open it, and can drop their own copy too.
+	if _, err := f.svc.GetMessage(ctx, msg.ID, f.org.ID); err != nil {
+		t.Fatalf("sender open after recipient delete: %v", err)
+	}
+	if err := f.svc.DeleteForUser(ctx, msg.ID, f.org.ID); err != nil {
+		t.Fatalf("sender delete: %v", err)
+	}
+	if box, _ := f.svc.GetSent(ctx, f.org.ID, 20, 0); box.Total != 0 {
+		t.Fatalf("expected empty sent folder after sender delete, got %d", box.Total)
+	}
+
+	// Nobody else may delete it.
+	stranger := mustUser(t, f.users, domain.UserRoleAttendee)
+	if err := f.svc.DeleteForUser(ctx, msg.ID, stranger.ID); !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+	if err := f.svc.DeleteForUser(ctx, uuid.New(), f.org.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound for unknown message, got %v", err)
+	}
+}
+
+func TestMessagingService_UnreadCountFallsBackToDatabase(t *testing.T) {
+	f := newMailboxFixture(t)
+	ctx := context.Background()
+
+	f.send(t, f.org.ID, f.attendee.ID, "a")
+	f.send(t, f.org.ID, f.attendee.ID, "b")
+
+	// Wipe the cached value: the next read must recompute from the repo.
+	if err := f.svc.redis.Del(ctx, unreadRedisKey(f.attendee.ID)).Err(); err != nil {
+		t.Fatalf("redis del: %v", err)
+	}
+	n, err := f.svc.GetUnreadCount(ctx, f.attendee.ID)
+	if err != nil {
+		t.Fatalf("unread: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("expected 2 from the database fallback, got %d", n)
+	}
+}
+
+func TestMessagingService_ListRecipients(t *testing.T) {
+	f := newMailboxFixture(t)
+	mustUser(t, f.users, domain.UserRoleAdmin)
+	mustUser(t, f.users, domain.UserRoleOrganizer)
+
+	people, err := f.svc.ListRecipients(context.Background(), f.attendee.ID)
+	if err != nil {
+		t.Fatalf("recipients: %v", err)
+	}
+	// Only the organizer they booked with: neither the unrelated organizer nor
+	// the administrator (support goes through tickets, not messages).
+	if len(people) != 1 || people[0].ID != f.org.ID {
+		t.Fatalf("expected exactly the booked organizer, got %+v", people)
 	}
 }
 
 func TestMessagingService_NotifyEventCancellation(t *testing.T) {
-	msgs := newMockMessageRepo()
-	users := newMockUserRepo()
-	events := newMockEventRepo()
-	bookings := newMockBookingRepo()
+	f := newMailboxFixture(t)
+	ctx := context.Background()
 
-	svc := NewMessagingService(msgs, users, bookings, events, newTestRedis(), wshub.NewHub())
-
-	orgID := uuid.New()
-	attendee1 := uuid.New()
-	attendee2 := uuid.New()
+	attendee2 := mustUser(t, f.users, domain.UserRoleAttendee)
 	eventID := uuid.New()
+	f.events.events[eventID] = domain.Event{
+		ID: eventID, OrganizerID: f.org.ID, Title: "Cancelled Event",
+		StartAt: time.Date(2026, 7, 12, 20, 30, 0, 0, time.UTC),
+		Status:  domain.EventStatusCancelled,
+	}
+	f.bookings.add(domain.Booking{UserID: f.attendee.ID, EventID: eventID, Status: domain.BookingStatusConfirmed})
+	f.bookings.add(domain.Booking{UserID: f.attendee.ID, EventID: eventID, Status: domain.BookingStatusConfirmed})
+	f.bookings.add(domain.Booking{UserID: attendee2.ID, EventID: eventID, Status: domain.BookingStatusConfirmed})
+	// The organizer's own booking must not notify themselves.
+	f.bookings.add(domain.Booking{UserID: f.org.ID, EventID: eventID, Status: domain.BookingStatusConfirmed})
 
-	users.add(domain.User{ID: orgID, Username: "org", Email: "o@o.com"})
-	users.add(domain.User{ID: attendee1, Username: "a1", Email: "a1@a.com"})
-	users.add(domain.User{ID: attendee2, Username: "a2", Email: "a2@a.com"})
-
-	events.events[eventID] = domain.Event{
-		ID: eventID, OrganizerID: orgID, Title: "Cancelled Event",
-		Status: domain.EventStatusPublished,
+	if err := f.svc.NotifyEventCancellation(ctx, eventID); err != nil {
+		t.Fatalf("notify: %v", err)
 	}
 
-	bookings.add(domain.Booking{UserID: attendee1, EventID: eventID, Status: domain.BookingStatusConfirmed})
-	bookings.add(domain.Booking{UserID: attendee2, EventID: eventID, Status: domain.BookingStatusConfirmed})
-
-	err := svc.NotifyEventCancellation(context.Background(), eventID)
-	// Redis is required for full success; this test verifies messages are created
-	// in the repo even if Redis broadcast fails.
-	if err != nil {
-		// Messages may still be created even if Redis fails (depends on order)
-		_ = err
+	sent, _ := f.svc.GetSent(ctx, f.org.ID, 20, 0)
+	if sent.Total != 2 {
+		t.Fatalf("expected one notice per distinct booker (2), got %d", sent.Total)
 	}
-
-	if len(msgs.sent[orgID]) != 2 {
-		t.Fatalf("expected 2 cancellation notifications sent, got %d", len(msgs.sent[orgID]))
+	for _, uid := range []uuid.UUID{f.attendee.ID, attendee2.ID} {
+		box, _ := f.svc.GetInbox(ctx, uid, 20, 0)
+		if box.Total != 1 {
+			t.Fatalf("expected exactly one notice for %s, got %d", uid, box.Total)
+		}
+		msg := box.Messages[0]
+		if msg.EventID == nil || *msg.EventID != eventID {
+			t.Fatalf("notice must reference the event")
+		}
+		if !strings.Contains(msg.Subject, "Cancelled Event") || !strings.Contains(msg.Body, "ακυρώθηκε") {
+			t.Fatalf("unexpected notice text: %q / %q", msg.Subject, msg.Body)
+		}
+		if n, _ := f.svc.GetUnreadCount(ctx, uid); n != 1 {
+			t.Fatalf("notice must count as unread, got %d", n)
+		}
+	}
+	if box, _ := f.svc.GetInbox(ctx, f.org.ID, 20, 0); box.Total != 0 {
+		t.Fatalf("the organizer must not receive their own notice")
 	}
 }
 
-func TestMessagingService_ListConversations(t *testing.T) {
-	msgs := newMockMessageRepo()
-	users := newMockUserRepo()
-	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), newTestRedis(), wshub.NewHub())
-
-	me := uuid.New()
-	organizer := uuid.New()
-	admin := uuid.New()
-	users.add(domain.User{ID: me, Username: "me", Email: "me@x.com", Role: domain.UserRoleAttendee})
-	users.add(domain.User{ID: organizer, Username: "org", Email: "o@x.com", Role: domain.UserRoleOrganizer})
-	users.add(domain.User{ID: admin, Username: "admin", Email: "a@x.com", Role: domain.UserRoleAdmin})
-
-	ctx := context.Background()
-	msgs.Create(ctx, domain.Message{SenderID: organizer, RecipientID: me, Subject: "S1", Body: "first"})
-	msgs.Create(ctx, domain.Message{SenderID: me, RecipientID: organizer, Subject: "S2", Body: "reply"})
-	msgs.Create(ctx, domain.Message{SenderID: admin, RecipientID: me, Subject: "S3", Body: "support"})
-
-	convos, err := svc.ListConversations(ctx, me)
-	if err != nil {
-		t.Fatalf("ListConversations: %v", err)
-	}
-	if len(convos) != 2 {
-		t.Fatalf("expected 2 threads, got %d", len(convos))
-	}
-
-	byUser := map[uuid.UUID]Conversation{}
-	for _, c := range convos {
-		byUser[c.User.ID] = c
-	}
-
-	org, ok := byUser[organizer]
-	if !ok {
-		t.Fatal("organizer thread missing")
-	}
-	// The preview is the newest message either way, not the oldest.
-	if org.LastMessage.Body != "reply" {
-		t.Fatalf("organizer preview = %q, want %q", org.LastMessage.Body, "reply")
-	}
-	// Our own reply is not unread.
-	if org.UnreadCount != 1 {
-		t.Fatalf("organizer unread = %d, want 1", org.UnreadCount)
-	}
-
-	sup, ok := byUser[admin]
-	if !ok {
-		t.Fatal("support thread missing")
-	}
-	if !sup.Support {
-		t.Fatal("admin thread should be flagged as support")
-	}
-
-	// Listing threads must not mark anything read.
-	if got := msgs.unreadCnt[me]; got != 2 {
-		t.Fatalf("unread after ListConversations = %d, want 2", got)
-	}
-}
-
-func TestMessagingService_GetThread(t *testing.T) {
-	msgs := newMockMessageRepo()
-	users := newMockUserRepo()
-	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), newTestRedis(), wshub.NewHub())
-
-	me := uuid.New()
-	other := uuid.New()
-	stranger := uuid.New()
-	users.add(domain.User{ID: me, Username: "me", Email: "me@x.com"})
-	users.add(domain.User{ID: other, Username: "other", Email: "o@x.com"})
-
-	ctx := context.Background()
-	msgs.Create(ctx, domain.Message{SenderID: other, RecipientID: me, Subject: "S1", Body: "one"})
-	msgs.Create(ctx, domain.Message{SenderID: me, RecipientID: other, Subject: "S2", Body: "two"})
-	msgs.Create(ctx, domain.Message{SenderID: stranger, RecipientID: me, Subject: "S3", Body: "unrelated"})
-
-	thread, err := svc.GetThread(ctx, me, other, 50, 0)
-	if err != nil {
-		t.Fatalf("GetThread: %v", err)
-	}
-	if len(thread) != 2 {
-		t.Fatalf("expected 2 messages in the thread, got %d", len(thread))
-	}
-	// Oldest first, so the transcript reads top to bottom.
-	if thread[0].Body != "one" || thread[1].Body != "two" {
-		t.Fatalf("thread order = %q, %q", thread[0].Body, thread[1].Body)
-	}
-	// Opening the thread marks what they sent as read, and nothing else.
-	if thread[0].ReadAt == nil {
-		t.Fatal("incoming message should be marked read")
-	}
-	for _, m := range msgs.messages {
-		if m.SenderID == stranger && m.ReadAt != nil {
-			t.Fatal("an unrelated thread was marked read")
-		}
-	}
-
-	if _, err := svc.GetThread(ctx, me, me, 50, 0); !errors.Is(err, ErrMessageSelfRecipient) {
-		t.Fatalf("self thread: expected ErrMessageSelfRecipient, got %v", err)
-	}
-}
-
-func TestMessagingService_SendMessageWithAttachment(t *testing.T) {
-	msgs := newMockMessageRepo()
-	users := newMockUserRepo()
-	bookings := newMockBookingRepo()
-	svc := NewMessagingService(msgs, users, bookings, newMockEventRepo(), newTestRedis(), wshub.NewHub())
-
-	attendee := uuid.New()
-	admin := uuid.New()
-	users.add(domain.User{ID: attendee, Username: "a", Email: "a@x.com", Role: domain.UserRoleAttendee})
-	users.add(domain.User{ID: admin, Username: "adm", Email: "adm@x.com", Role: domain.UserRoleAdmin})
-
+func TestMessagingService_NotifyEventAttendees(t *testing.T) {
+	f := newMailboxFixture(t)
 	ctx := context.Background()
 
-	t.Run("an image needs no body", func(t *testing.T) {
-		got, err := svc.SendMessage(ctx, SendMessageInput{
-			SenderID:    attendee,
-			RecipientID: admin,
-			Subject:     "Φωτογραφία",
-			ImageURL:    "/uploads/media/messages/x/y.png",
-		})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got.ImageURL != "/uploads/media/messages/x/y.png" {
-			t.Fatalf("image url = %q", got.ImageURL)
-		}
-		if !got.HasAttachment() {
-			t.Fatal("expected HasAttachment to be true")
+	eventID := uuid.New()
+	f.events.events[eventID] = domain.Event{ID: eventID, OrganizerID: f.org.ID, Title: "Workshop"}
+
+	t.Run("nobody booked yet", func(t *testing.T) {
+		_, err := f.svc.NotifyEventAttendees(ctx, f.org.ID, eventID, "Update", "Doors open at 19:00")
+		if !errors.Is(err, ErrMessageNoRecipients) {
+			t.Fatalf("expected ErrMessageNoRecipients, got %v", err)
 		}
 	})
 
-	t.Run("a gif needs no body", func(t *testing.T) {
-		got, err := svc.SendMessage(ctx, SendMessageInput{
-			SenderID:    attendee,
-			RecipientID: admin,
-			Subject:     "GIF",
-			GifURL:      "https://media.giphy.com/x.gif",
-		})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got.GifURL == "" {
-			t.Fatal("gif url was dropped")
+	f.bookings.add(domain.Booking{UserID: f.attendee.ID, EventID: eventID, Status: domain.BookingStatusConfirmed})
+
+	t.Run("only the organizer of the event", func(t *testing.T) {
+		other := mustUser(t, f.users, domain.UserRoleOrganizer)
+		_, err := f.svc.NotifyEventAttendees(ctx, other.ID, eventID, "Update", "…")
+		if !errors.Is(err, domain.ErrForbidden) {
+			t.Fatalf("expected ErrForbidden, got %v", err)
 		}
 	})
 
-	t.Run("a file needs a name", func(t *testing.T) {
-		_, err := svc.SendMessage(ctx, SendMessageInput{
-			SenderID:    attendee,
-			RecipientID: admin,
-			Subject:     "Αρχείο",
-			FileURL:     "/uploads/media/messages/x/y.pdf",
-		})
-		if !errors.Is(err, ErrMessageAttachmentNameRequired) {
-			t.Fatalf("expected ErrMessageAttachmentNameRequired, got %v", err)
-		}
-	})
-
-	t.Run("plain text still needs a body", func(t *testing.T) {
-		_, err := svc.SendMessage(ctx, SendMessageInput{
-			SenderID:    attendee,
-			RecipientID: admin,
-			Subject:     "Κενό",
-		})
+	t.Run("validation", func(t *testing.T) {
+		_, err := f.svc.NotifyEventAttendees(ctx, f.org.ID, eventID, "", "…")
 		if !errors.Is(err, ErrMessageSubjectBodyRequired) {
 			t.Fatalf("expected ErrMessageSubjectBodyRequired, got %v", err)
 		}
 	})
 
-	t.Run("a subject is still required", func(t *testing.T) {
-		_, err := svc.SendMessage(ctx, SendMessageInput{
-			SenderID:    attendee,
-			RecipientID: admin,
-			ImageURL:    "/uploads/media/messages/x/y.png",
-		})
-		if !errors.Is(err, ErrMessageSubjectBodyRequired) {
-			t.Fatalf("expected ErrMessageSubjectBodyRequired, got %v", err)
-		}
-	})
-}
-
-func TestMessagingService_StoreAttachment(t *testing.T) {
-	svc := NewMessagingService(
-		newMockMessageRepo(), newMockUserRepo(), newMockBookingRepo(),
-		newMockEventRepo(), newTestRedis(), wshub.NewHub(),
-	)
-	svc.SetMediaRoot(t.TempDir())
-
-	sender := uuid.New()
-
-	t.Run("stores a png as an image", func(t *testing.T) {
-		png := append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 64)...)
-		got, err := svc.StoreAttachment(sender, "shot.png", int64(len(png)), bytes.NewReader(png))
+	t.Run("delivers to every booker", func(t *testing.T) {
+		n, err := f.svc.NotifyEventAttendees(ctx, f.org.ID, eventID, "Update", "Doors open at 19:00")
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatalf("notify: %v", err)
 		}
-		if got.Kind != AttachmentKindImage {
-			t.Fatalf("kind = %q, want image", got.Kind)
+		if n != 1 {
+			t.Fatalf("expected 1 recipient, got %d", n)
 		}
-		if !strings.HasPrefix(got.URL, "/uploads/media/messages/"+sender.String()+"/") {
-			t.Fatalf("url = %q", got.URL)
-		}
-		if got.Size != int64(len(png)) {
-			t.Fatalf("size = %d, want %d", got.Size, len(png))
+		box, _ := f.svc.GetInbox(ctx, f.attendee.ID, 20, 0)
+		if box.Total != 1 || box.Messages[0].Subject != "Update" || box.Messages[0].SenderID != f.org.ID {
+			t.Fatalf("expected the organizer's notice in the attendee's inbox, got %+v", box)
 		}
 	})
-
-	t.Run("stores anything else as a file, keeping the name", func(t *testing.T) {
-		data := []byte("ticket,quantity\nA,2\n")
-		got, err := svc.StoreAttachment(sender, "report.csv", int64(len(data)), bytes.NewReader(data))
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got.Kind != AttachmentKindFile {
-			t.Fatalf("kind = %q, want file", got.Kind)
-		}
-		if got.Name != "report.csv" {
-			t.Fatalf("name = %q", got.Name)
-		}
-	})
-
-	t.Run("a traversal attempt cannot escape the directory", func(t *testing.T) {
-		data := []byte("x")
-		got, err := svc.StoreAttachment(sender, "../../etc/passwd", int64(len(data)), bytes.NewReader(data))
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if strings.Contains(got.URL, "..") {
-			t.Fatalf("url escaped the directory: %q", got.URL)
-		}
-		if got.Name != "passwd" {
-			t.Fatalf("name = %q, want passwd", got.Name)
-		}
-	})
-
-	t.Run("rejects an oversized upload", func(t *testing.T) {
-		_, err := svc.StoreAttachment(sender, "big.bin", maxAttachmentBytes+1, bytes.NewReader([]byte("x")))
-		if !errors.Is(err, ErrAttachmentTooLarge) {
-			t.Fatalf("expected ErrAttachmentTooLarge, got %v", err)
-		}
-	})
-}
-
-func TestMessagingService_DeleteLeavesTombstoneForBothSides(t *testing.T) {
-	msgs := newMockMessageRepo()
-	users := newMockUserRepo()
-	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), newTestRedis(), wshub.NewHub())
-
-	sender := uuid.New()
-	recipient := uuid.New()
-	stranger := uuid.New()
-	users.add(domain.User{ID: sender, Username: "s", Email: "s@x.com"})
-	users.add(domain.User{ID: recipient, Username: "r", Email: "r@x.com"})
-
-	ctx := context.Background()
-	created, _ := msgs.Create(ctx, domain.Message{
-		SenderID: sender, RecipientID: recipient,
-		Subject: "S", Body: "μυστικό", ImageURL: "/uploads/media/x.png",
-	})
-
-	t.Run("a stranger cannot delete it", func(t *testing.T) {
-		if err := svc.DeleteForUser(ctx, created.ID, stranger); !errors.Is(err, domain.ErrForbidden) {
-			t.Fatalf("expected ErrForbidden, got %v", err)
-		}
-	})
-
-	t.Run("the sender withdraws it for everyone", func(t *testing.T) {
-		if err := svc.DeleteForUser(ctx, created.ID, sender); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		got := msgs.messages[created.ID]
-		if !got.DeletedForEveryone {
-			t.Fatal("expected a tombstone both sides can see")
-		}
-		// The content must not survive the withdrawal.
-		if got.Body != "" || got.ImageURL != "" {
-			t.Fatalf("content survived deletion: body=%q image=%q", got.Body, got.ImageURL)
-		}
-		// The row stays, so both sides still see that something was deleted.
-		if got.DeletedBySender || got.DeletedByRecipient {
-			t.Fatal("a withdrawal should not hide the row from either mailbox")
-		}
-	})
-
-	t.Run("the recipient only hides it from their own mailbox", func(t *testing.T) {
-		other, _ := msgs.Create(ctx, domain.Message{
-			SenderID: sender, RecipientID: recipient, Subject: "S2", Body: "κείμενο",
-		})
-		if err := svc.DeleteForUser(ctx, other.ID, recipient); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		got := msgs.messages[other.ID]
-		if got.DeletedForEveryone {
-			t.Fatal("deleting a received message must not withdraw it from the sender")
-		}
-		if !got.DeletedByRecipient {
-			t.Fatal("expected the recipient's own copy to be hidden")
-		}
-		if got.Body != "κείμενο" {
-			t.Fatal("the sender's copy should keep its content")
-		}
-	})
-}
-
-func TestMessagingService_Reactions(t *testing.T) {
-	msgs := newMockMessageRepo()
-	users := newMockUserRepo()
-	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), newTestRedis(), wshub.NewHub())
-
-	sender := uuid.New()
-	recipient := uuid.New()
-	stranger := uuid.New()
-	users.add(domain.User{ID: sender, Username: "s", Email: "s@x.com"})
-	users.add(domain.User{ID: recipient, Username: "r", Email: "r@x.com"})
-
-	ctx := context.Background()
-	created, _ := msgs.Create(ctx, domain.Message{
-		SenderID: sender, RecipientID: recipient, Subject: "S", Body: "γεια",
-	})
-
-	count := func() int { return len(msgs.reactions[created.ID]) }
-
-	t.Run("adds a reaction", func(t *testing.T) {
-		if err := svc.ToggleReaction(ctx, created.ID, recipient, "👍"); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if count() != 1 {
-			t.Fatalf("reactions = %d, want 1", count())
-		}
-	})
-
-	t.Run("reacting again with the same emoji removes it", func(t *testing.T) {
-		if err := svc.ToggleReaction(ctx, created.ID, recipient, "👍"); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if count() != 0 {
-			t.Fatalf("reactions = %d, want 0", count())
-		}
-	})
-
-	t.Run("both sides may react, with different emoji", func(t *testing.T) {
-		_ = svc.ToggleReaction(ctx, created.ID, recipient, "❤️")
-		_ = svc.ToggleReaction(ctx, created.ID, sender, "🎉")
-		if count() != 2 {
-			t.Fatalf("reactions = %d, want 2", count())
-		}
-	})
-
-	t.Run("an outsider cannot react", func(t *testing.T) {
-		if err := svc.ToggleReaction(ctx, created.ID, stranger, "👍"); !errors.Is(err, domain.ErrForbidden) {
-			t.Fatalf("expected ErrForbidden, got %v", err)
-		}
-	})
-
-	t.Run("rejects a non-emoji blob", func(t *testing.T) {
-		err := svc.ToggleReaction(ctx, created.ID, recipient, "this is not an emoji")
-		if !errors.Is(err, ErrInvalidReaction) {
-			t.Fatalf("expected ErrInvalidReaction, got %v", err)
-		}
-		if err := svc.ToggleReaction(ctx, created.ID, recipient, "  "); !errors.Is(err, ErrInvalidReaction) {
-			t.Fatalf("expected ErrInvalidReaction for blank, got %v", err)
-		}
-	})
-
-	t.Run("cannot react to a withdrawn message", func(t *testing.T) {
-		_ = svc.DeleteForUser(ctx, created.ID, sender)
-		if err := svc.ToggleReaction(ctx, created.ID, recipient, "👍"); !errors.Is(err, ErrMessageDeleted) {
-			t.Fatalf("expected ErrMessageDeleted, got %v", err)
-		}
-	})
-}
-
-func TestMessagingService_HydrateThreadAttachesQuotesAndReactions(t *testing.T) {
-	msgs := newMockMessageRepo()
-	users := newMockUserRepo()
-	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), newTestRedis(), wshub.NewHub())
-
-	sender := uuid.New()
-	recipient := uuid.New()
-	users.add(domain.User{ID: sender, Username: "s", Email: "s@x.com"})
-	users.add(domain.User{ID: recipient, Username: "r", Email: "r@x.com"})
-
-	ctx := context.Background()
-	first, _ := msgs.Create(ctx, domain.Message{
-		SenderID: sender, RecipientID: recipient, Subject: "S", Body: "η ερώτηση",
-	})
-	reply, _ := msgs.Create(ctx, domain.Message{
-		SenderID: recipient, RecipientID: sender, Subject: "Απ: S", Body: "η απάντηση",
-		ReplyToID: &first.ID,
-	})
-	_ = svc.ToggleReaction(ctx, first.ID, recipient, "👍")
-
-	hydrated, err := svc.HydrateThread(ctx, []domain.Message{first, reply})
-	if err != nil {
-		t.Fatalf("HydrateThread: %v", err)
-	}
-
-	if len(hydrated[0].Reactions) != 1 || hydrated[0].Reactions[0].Emoji != "👍" {
-		t.Fatalf("reactions not attached: %#v", hydrated[0].Reactions)
-	}
-	if hydrated[0].ReplyTo != nil {
-		t.Fatal("a message that is not a reply should carry no quote")
-	}
-	if hydrated[1].ReplyTo == nil {
-		t.Fatal("the reply should quote the first message")
-	}
-	if hydrated[1].ReplyTo.Body != "η ερώτηση" {
-		t.Fatalf("quote body = %q", hydrated[1].ReplyTo.Body)
-	}
-}
-
-func TestMessagingService_TombstoneCarriesNoReactions(t *testing.T) {
-	msgs := newMockMessageRepo()
-	users := newMockUserRepo()
-	svc := NewMessagingService(msgs, users, newMockBookingRepo(), newMockEventRepo(), newTestRedis(), wshub.NewHub())
-
-	sender := uuid.New()
-	recipient := uuid.New()
-	users.add(domain.User{ID: sender, Username: "s", Email: "s@x.com"})
-	users.add(domain.User{ID: recipient, Username: "r", Email: "r@x.com"})
-
-	ctx := context.Background()
-	created, _ := msgs.Create(ctx, domain.Message{
-		SenderID: sender, RecipientID: recipient, Subject: "S", Body: "γεια",
-	})
-	if err := svc.ToggleReaction(ctx, created.ID, recipient, "👍"); err != nil {
-		t.Fatalf("ToggleReaction: %v", err)
-	}
-	if err := svc.DeleteForUser(ctx, created.ID, sender); err != nil {
-		t.Fatalf("DeleteForUser: %v", err)
-	}
-
-	hydrated, err := svc.HydrateThread(ctx, []domain.Message{msgs.messages[created.ID]})
-	if err != nil {
-		t.Fatalf("HydrateThread: %v", err)
-	}
-	if len(hydrated[0].Reactions) != 0 {
-		t.Fatalf("a tombstone should carry no reactions, got %#v", hydrated[0].Reactions)
-	}
 }

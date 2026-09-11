@@ -338,7 +338,7 @@ func TestMessagingService_RequiresBookingRelationship(t *testing.T) {
 	}
 }
 
-func TestMessagingService_AdminAlwaysReachable(t *testing.T) {
+func TestMessagingService_AdminIsNotAShortcut(t *testing.T) {
 	users := newMockUserRepo()
 	bookings := newMockBookingRepo()
 	svc := newMessagingForTest(users, bookings)
@@ -346,16 +346,17 @@ func TestMessagingService_AdminAlwaysReachable(t *testing.T) {
 	attendee := mustUser(t, users, domain.UserRoleAttendee)
 	admin := mustUser(t, users, domain.UserRoleAdmin)
 
-	// Support requests must not depend on having booked something.
+	// Requests to the administration are support tickets; the mailbox stays
+	// strictly booking-based in both directions.
 	if _, err := svc.SendMessage(context.Background(), SendMessageInput{
 		SenderID: attendee.ID, RecipientID: admin.ID, Subject: "Help", Body: "Please",
-	}); err != nil {
-		t.Fatalf("attendee -> admin: %v", err)
+	}); !errors.Is(err, domain.ErrMessagingNotAllowed) {
+		t.Fatalf("attendee -> admin without a booking: expected ErrMessagingNotAllowed, got %v", err)
 	}
 	if _, err := svc.SendMessage(context.Background(), SendMessageInput{
 		SenderID: admin.ID, RecipientID: attendee.ID, Subject: "Re", Body: "Sure",
-	}); err != nil {
-		t.Fatalf("admin -> attendee: %v", err)
+	}); !errors.Is(err, domain.ErrMessagingNotAllowed) {
+		t.Fatalf("admin -> attendee without a booking: expected ErrMessagingNotAllowed, got %v", err)
 	}
 }
 

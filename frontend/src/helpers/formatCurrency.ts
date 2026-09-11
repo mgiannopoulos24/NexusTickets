@@ -1,5 +1,7 @@
+import { INTL_LOCALE, getLocale } from '@/lib/i18n';
+
 export function formatCurrency(value: number, currency = 'EUR'): string {
-  return new Intl.NumberFormat('el-GR', {
+  return new Intl.NumberFormat(INTL_LOCALE[getLocale()], {
     style: 'currency',
     currency,
     minimumFractionDigits: 2,
@@ -8,5 +10,5 @@ export function formatCurrency(value: number, currency = 'EUR'): string {
 }
 
 export function formatNumber(value: number): string {
-  return new Intl.NumberFormat('el-GR').format(value);
+  return new Intl.NumberFormat(INTL_LOCALE[getLocale()]).format(value);
 }

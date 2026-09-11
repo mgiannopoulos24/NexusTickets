@@ -13,6 +13,7 @@ import (
 	"nexustickets/internal/config"
 	"nexustickets/internal/handler"
 	"nexustickets/internal/handler/ws"
+	"nexustickets/internal/repository"
 	"nexustickets/internal/repository/postgres"
 	"nexustickets/internal/service"
 )
@@ -41,9 +42,9 @@ func InitializeApp(db *gorm.DB, redisClient *redis.Client, cfg config.Config) (*
 	bookingService := service.NewBookingService(eventRepository, ticketTypeRepository, bookingRepository, userRepository)
 	bookingHandler := handler.NewBookingHandler(bookingService)
 	messageHandler := handler.NewMessageHandler(messagingService, hub)
-	chatRoomRepository := postgres.NewChatRoomRepository(db)
-	chatService := service.NewChatService(chatRoomRepository)
-	chatHandler := handler.NewChatHandler(chatService)
+	supportRepository := postgres.NewSupportRepositoryPostgres(db)
+	supportService := service.NewSupportService(supportRepository, userRepository, hub)
+	supportHandler := handler.NewSupportHandler(supportService)
 	catalogExportService := service.NewCatalogExportService(eventRepository, bookingRepository, userRepository)
 	adminExportHandler := handler.NewAdminExportHandler(catalogExportService)
 	appDependencies := &AppDependencies{
@@ -54,10 +55,11 @@ func InitializeApp(db *gorm.DB, redisClient *redis.Client, cfg config.Config) (*
 		CategoryHandler:       categoryHandler,
 		BookingHandler:        bookingHandler,
 		MessageHandler:        messageHandler,
-		ChatHandler:           chatHandler,
+		SupportHandler:        supportHandler,
 		AdminExportHandler:    adminExportHandler,
 		RecommendationService: recommendationService,
 		EventService:          eventService,
+		Users:                 userRepository,
 	}
 	return appDependencies, nil
 }
@@ -72,17 +74,20 @@ type AppDependencies struct {
 	CategoryHandler       *handler.CategoryHandler
 	BookingHandler        *handler.BookingHandler
 	MessageHandler        *handler.MessageHandler
-	ChatHandler           *handler.ChatHandler
+	SupportHandler        *handler.SupportHandler
 	AdminExportHandler    *handler.AdminExportHandler
 	RecommendationService *service.RecommendationService
 	// EventService is exposed so main can run the COMPLETED sweeper.
 	EventService *service.EventService
+	// Users is exposed so main can make sure the built-in admin exists.
+	Users repository.UserRepository
 }
 
-var RepositorySet = wire.NewSet(postgres.NewUserRepositoryPostgres, postgres.NewEventRepositoryPostgres, postgres.NewTicketTypeRepositoryPostgres, postgres.NewBookingRepositoryPostgres, postgres.NewMessageRepositoryPostgres, postgres.NewCategoryRepositoryPostgres, postgres.NewEventPhotoRepositoryPostgres, postgres.NewUserEventViewRepositoryPostgres, postgres.NewChatRoomRepository)
+var RepositorySet = wire.NewSet(postgres.NewUserRepositoryPostgres, postgres.NewEventRepositoryPostgres, postgres.NewTicketTypeRepositoryPostgres, postgres.NewBookingRepositoryPostgres, postgres.NewMessageRepositoryPostgres, postgres.NewCategoryRepositoryPostgres, postgres.NewEventPhotoRepositoryPostgres, postgres.NewUserEventViewRepositoryPostgres, postgres.NewSupportRepositoryPostgres)
 
 var ServiceSet = wire.NewSet(
-	provideAuthService, service.NewUserService, service.NewChatService, provideMessagingService, provideEventService, service.NewBookingService, service.NewCatalogExportService, provideRecommendationService,
+	provideAuthService, service.NewUserService, provideMessagingService,
+	provideEventService, service.NewBookingService, service.NewCatalogExportService, service.NewSupportService, provideRecommendationService,
 )
 
-var HandlerSet = wire.NewSet(handler.NewAuthHandler, handler.NewUserHandler, handler.NewEventHandler, handler.NewCategoryHandler, handler.NewBookingHandler, handler.NewMessageHandler, handler.NewChatHandler, handler.NewAdminExportHandler)
+var HandlerSet = wire.NewSet(handler.NewAuthHandler, handler.NewUserHandler, handler.NewEventHandler, handler.NewCategoryHandler, handler.NewBookingHandler, handler.NewMessageHandler, handler.NewAdminExportHandler, handler.NewSupportHandler)

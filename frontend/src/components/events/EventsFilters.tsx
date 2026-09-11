@@ -48,7 +48,9 @@ export function EventsFilters({ className }: EventsFiltersProps) {
   };
 
   const handleDateSelect = (range: { from?: Date; to?: Date }) => {
-    dispatch(setFilter({ key: 'start_at', value: range?.from ? range.from.toISOString() : undefined }));
+    dispatch(
+      setFilter({ key: 'start_at', value: range?.from ? range.from.toISOString() : undefined }),
+    );
     dispatch(setFilter({ key: 'end_at', value: range?.to ? range.to.toISOString() : undefined }));
   };
 
@@ -59,8 +61,9 @@ export function EventsFilters({ className }: EventsFiltersProps) {
     dispatch(setFilter({ key: 'category_ids', value: next.length > 0 ? next : undefined }));
   };
 
-  const hasActiveFilters =
-    Object.values(filters).some((v) => v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0));
+  const hasActiveFilters = Object.values(filters).some(
+    (v) => v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0),
+  );
 
   return (
     <div className={cn('flex flex-col gap-6', className)}>
@@ -74,7 +77,7 @@ export function EventsFilters({ className }: EventsFiltersProps) {
           className="h-8 px-2 text-xs"
         >
           <X className="mr-1 h-3 w-3" />
-          Καθαρισμός
+          {t('filters.clear')}
         </Button>
       </div>
 
@@ -100,10 +103,10 @@ export function EventsFilters({ className }: EventsFiltersProps) {
 
         {/* Title only. */}
         <div className="space-y-2">
-          <Label htmlFor="filter-title">Τίτλος</Label>
+          <Label htmlFor="filter-title">{t('filters.title')}</Label>
           <Input
             id="filter-title"
-            placeholder="π.χ. Συναυλία"
+            placeholder={t('filters.titlePlaceholder')}
             value={filters.title ?? ''}
             onChange={(e) =>
               dispatch(setFilter({ key: 'title', value: e.target.value || undefined }))
@@ -113,7 +116,7 @@ export function EventsFilters({ className }: EventsFiltersProps) {
 
         {/* Category. */}
         <div className="space-y-2">
-          <Label>Κατηγορία</Label>
+          <Label>{t('filters.category')}</Label>
           <div className="space-y-2">
             {(categories ?? []).map((c) => (
               <label
@@ -128,7 +131,9 @@ export function EventsFilters({ className }: EventsFiltersProps) {
               </label>
             ))}
             {!categories && (
-              <p className="comfortaa-regular text-xs text-muted-foreground">Φόρτωση…</p>
+              <p className="comfortaa-regular text-xs text-muted-foreground">
+                {t('filters.loading')}
+              </p>
             )}
           </div>
         </div>

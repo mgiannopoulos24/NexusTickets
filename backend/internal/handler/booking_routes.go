@@ -13,6 +13,6 @@ func RegisterBookingRoutes(router fiber.Router, bookingHandler *BookingHandler, 
 
 	bookings.Post("/", middleware.RequireRole(domain.UserRoleAttendee, domain.UserRoleOrganizer, domain.UserRoleAdmin), bookingHandler.Create)
 	bookings.Get("/me", middleware.RequireRole(domain.UserRoleAttendee, domain.UserRoleOrganizer, domain.UserRoleAdmin), bookingHandler.GetMyBookings)
-	bookings.Get("/organizer/events/:eventId", middleware.RequireRole(domain.UserRoleOrganizer), bookingHandler.GetEventBookings)
-	bookings.Get("/:id", middleware.RequireRole(domain.UserRoleAttendee, domain.UserRoleOrganizer), bookingHandler.Get)
+	bookings.Get("/organizer/events/:eventId", middleware.RequireRole(domain.UserRoleOrganizer, domain.UserRoleAdmin), bookingHandler.GetEventBookings)
+	bookings.Get("/:id", middleware.RequireRole(domain.UserRoleAttendee, domain.UserRoleOrganizer, domain.UserRoleAdmin), bookingHandler.Get)
 }

@@ -12,6 +12,7 @@ import { EventMapEmbed } from '@/components/events/EventMapEmbed';
 import { ErrorMessage } from '@/components/shared/ErrorMessage';
 import { SkeletonList } from '@/components/shared/SkeletonList';
 import type { User } from '@/types/models';
+import { useLang } from '@/contexts/langContext';
 
 function coordToNull(v: string): number | null {
   const t = v.trim().replace(',', '.');
@@ -50,6 +51,7 @@ function formFromUser(u: User | undefined): ProfileForm {
 }
 
 export default function AccountPage() {
+  const { t } = useLang();
   const { setUser } = useAuth();
   const { data: user, isLoading, error, refetch } = useGetMeQuery();
   const [updateMe, { isLoading: saving }] = useUpdateMeMutation();
@@ -82,9 +84,9 @@ export default function AccountPage() {
 
       setUser(updated);
       setEdits({}); // the query result is now the source of truth again
-      toast.success('Τα στοιχεία ενημερώθηκαν');
+      toast.success(t('account.saved'));
     } catch (err: unknown) {
-      toast.error(apiErrorMessage(err, 'Η αποθήκευση απέτυχε'));
+      toast.error(apiErrorMessage(err, t('account.saveFailed')));
     }
   };
 
@@ -114,7 +116,7 @@ export default function AccountPage() {
       <div className="min-h-screen bg-neutral-50 py-8">
         <div className="mx-auto max-w-2xl px-4">
           <ErrorMessage
-            message={apiErrorMessage(error, 'Δεν ήταν δυνατή η φόρτωση του λογαριασμού.')}
+            message={apiErrorMessage(error, t('account.loadError'))}
             onRetry={() => void refetch()}
           />
         </div>
@@ -127,16 +129,18 @@ export default function AccountPage() {
       <div className="mx-auto max-w-2xl px-4">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-neutral-900 comfortaa-bold">Ο λογαριασμός μου</h1>
+            <h1 className="text-2xl font-bold text-neutral-900 comfortaa-bold">
+              {t('account.title')}
+            </h1>
             <p className="mt-1 text-sm text-neutral-600 comfortaa-regular">
-              Διαχειριστείτε τα προσωπικά σας στοιχεία
+              {t('account.subtitle')}
             </p>
           </div>
           <Link
             to="/settings"
-            className="inline-flex shrink-0 items-center justify-center rounded-none border-2 border-[#6d28d9] bg-[#6d28d9] px-4 py-2 text-sm text-white hover:bg-[#5b21b6] comfortaa-regular"
+            className="inline-flex shrink-0 items-center justify-center rounded-none border-2 border-[var(--nexus-purple)] bg-[var(--nexus-purple)] px-4 py-2 text-sm text-white hover:bg-[var(--nexus-purple-dark)] comfortaa-regular"
           >
-            Ρυθμίσεις
+            {t('account.settings')}
           </Link>
         </div>
 
@@ -151,7 +155,7 @@ export default function AccountPage() {
               </p>
               <p className="text-sm text-neutral-500 comfortaa-regular">@{user?.username}</p>
               <p className="text-xs text-neutral-400 comfortaa-regular">
-                Ρόλος: {user?.role === 'admin' ? 'Διαχειριστής' : user?.role === 'organizer' ? 'Διοργανωτής' : 'Συμμετέχων'}
+                {t('account.role', { role: t(`role.${user?.role ?? 'attendee'}`) })}
               </p>
             </div>
           </div>
@@ -159,7 +163,9 @@ export default function AccountPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="first_name" className="comfortaa-regular">Όνομα</Label>
+                <Label htmlFor="first_name" className="comfortaa-regular">
+                  {t('account.firstName')}
+                </Label>
                 <Input
                   id="first_name"
                   value={form.first_name}
@@ -168,7 +174,9 @@ export default function AccountPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="last_name" className="comfortaa-regular">Επώνυμο</Label>
+                <Label htmlFor="last_name" className="comfortaa-regular">
+                  {t('account.lastName')}
+                </Label>
                 <Input
                   id="last_name"
                   value={form.last_name}
@@ -179,7 +187,9 @@ export default function AccountPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email" className="comfortaa-regular">Email</Label>
+              <Label htmlFor="email" className="comfortaa-regular">
+                Email
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -190,7 +200,9 @@ export default function AccountPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="phone" className="comfortaa-regular">Τηλέφωνο</Label>
+              <Label htmlFor="phone" className="comfortaa-regular">
+                {t('account.phone')}
+              </Label>
               <Input
                 id="phone"
                 value={form.phone}
@@ -200,7 +212,9 @@ export default function AccountPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="address" className="comfortaa-regular">Διεύθυνση</Label>
+              <Label htmlFor="address" className="comfortaa-regular">
+                {t('account.address')}
+              </Label>
               <Input
                 id="address"
                 value={form.address}
@@ -211,7 +225,9 @@ export default function AccountPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="city" className="comfortaa-regular">Πόλη</Label>
+                <Label htmlFor="city" className="comfortaa-regular">
+                  {t('account.city')}
+                </Label>
                 <Input
                   id="city"
                   value={form.city}
@@ -220,7 +236,9 @@ export default function AccountPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="country" className="comfortaa-regular">Χώρα</Label>
+                <Label htmlFor="country" className="comfortaa-regular">
+                  {t('account.country')}
+                </Label>
                 <Input
                   id="country"
                   value={form.country}
@@ -232,22 +250,26 @@ export default function AccountPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="latitude" className="comfortaa-regular">Γεωγρ. πλάτος</Label>
+                <Label htmlFor="latitude" className="comfortaa-regular">
+                  {t('account.latitude')}
+                </Label>
                 <Input
                   id="latitude"
                   inputMode="decimal"
-                  placeholder="π.χ. 37.9838"
+                  placeholder={t('register.latPlaceholder')}
                   value={form.latitude}
                   onChange={(e) => setField('latitude', e.target.value)}
                   className="comfortaa-regular"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="longitude" className="comfortaa-regular">Γεωγρ. μήκος</Label>
+                <Label htmlFor="longitude" className="comfortaa-regular">
+                  {t('account.longitude')}
+                </Label>
                 <Input
                   id="longitude"
                   inputMode="decimal"
-                  placeholder="π.χ. 23.7275"
+                  placeholder={t('register.lngPlaceholder')}
                   value={form.longitude}
                   onChange={(e) => setField('longitude', e.target.value)}
                   className="comfortaa-regular"
@@ -266,7 +288,9 @@ export default function AccountPage() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="vat_number" className="comfortaa-regular">ΑΦΜ</Label>
+              <Label htmlFor="vat_number" className="comfortaa-regular">
+                {t('account.vat')}
+              </Label>
               <Input
                 id="vat_number"
                 value={form.vat_number}
@@ -278,9 +302,9 @@ export default function AccountPage() {
             <Button
               type="submit"
               disabled={saving}
-              className="w-full bg-[#6d28d9] text-white hover:bg-[#5b21b6] comfortaa-regular"
+              className="w-full bg-[var(--nexus-purple)] text-white hover:bg-[var(--nexus-purple-dark)] comfortaa-regular"
             >
-              {saving ? 'Αποθήκευση...' : 'Αποθήκευση αλλαγών'}
+              {saving ? t('account.saving') : t('account.save')}
             </Button>
           </form>
         </div>

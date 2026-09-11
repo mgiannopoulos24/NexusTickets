@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	"nexustickets/internal/domain"
 	repo "nexustickets/internal/repository"
@@ -377,6 +377,41 @@ func (r *eventRepositoryPostgres) Search(ctx context.Context, params repo.Search
 		out = append(out, eventModelToDomain(m))
 	}
 	return out, hasMore, nil
+}
+
+func (r *eventRepositoryPostgres) ListAdmin(ctx context.Context, q string, status *domain.EventStatus, limit, offset int) ([]domain.Event, int, error) {
+	if limit < 1 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	scope := r.db.WithContext(ctx).Model(&EventModel{})
+	if q = strings.TrimSpace(q); q != "" {
+		like := "%" + q + "%"
+		scope = scope.Where("title ILIKE ? OR venue ILIKE ? OR city ILIKE ?", like, like, like)
+	}
+	if status != nil {
+		scope = scope.Where("status = ?", string(*status))
+	}
+	var total int64
+	if err := scope.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count admin events: %w", err)
+	}
+	var models []EventModel
+	err := scope.
+		Order("created_at DESC, id ASC").
+		Limit(limit).
+		Offset(offset).
+		Find(&models).Error
+	if err != nil {
+		return nil, 0, fmt.Errorf("list admin events: %w", err)
+	}
+	out := make([]domain.Event, 0, len(models))
+	for _, m := range models {
+		out = append(out, eventModelToDomain(m))
+	}
+	return out, int(total), nil
 }
 
 func (r *eventRepositoryPostgres) ListForExport(ctx context.Context, limit, offset int) ([]domain.Event, error) {
@@ -1049,12 +1084,10 @@ func (r *messageRepositoryPostgres) CreateBatch(ctx context.Context, messages []
 	if len(messages) == 0 {
 		return nil, nil
 	}
+	models := make([]MessageModel, len(messages))
 	for i := range messages {
 		messages[i].ID = ensureID(messages[i].ID)
 		messages[i].CreatedAt = nowUTC()
-	}
-	models := make([]MessageModel, len(messages))
-	for i := range messages {
 		models[i] = messageDomainToModel(messages[i])
 	}
 	if err := r.db.WithContext(ctx).Create(&models).Error; err != nil {
@@ -1065,195 +1098,6 @@ func (r *messageRepositoryPostgres) CreateBatch(ctx context.Context, messages []
 		out[i] = messageModelToDomain(models[i])
 	}
 	return out, nil
-}
-
-func (r *messageRepositoryPostgres) ListInbox(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Message, error) {
-	if limit < 1 {
-		limit = 20
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	var models []MessageModel
-	err := r.db.WithContext(ctx).
-		Where("recipient_id = ? AND deleted_by_recipient = ?", userID, false).
-		Limit(limit).
-		Offset(offset).
-		Order("created_at DESC").
-		Find(&models).Error
-	if err != nil {
-		return nil, fmt.Errorf("list inbox: %w", err)
-	}
-	out := make([]domain.Message, 0, len(models))
-	for _, m := range models {
-		out = append(out, messageModelToDomain(m))
-	}
-	return out, nil
-}
-
-func (r *messageRepositoryPostgres) ListSent(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Message, error) {
-	if limit < 1 {
-		limit = 20
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	var models []MessageModel
-	err := r.db.WithContext(ctx).
-		Where("sender_id = ? AND deleted_by_sender = ?", userID, false).
-		Limit(limit).
-		Offset(offset).
-		Order("created_at DESC").
-		Find(&models).Error
-	if err != nil {
-		return nil, fmt.Errorf("list sent: %w", err)
-	}
-	out := make([]domain.Message, 0, len(models))
-	for _, m := range models {
-		out = append(out, messageModelToDomain(m))
-	}
-	return out, nil
-}
-
-func (r *messageRepositoryPostgres) ListThread(ctx context.Context, userID, otherID uuid.UUID, limit, offset int) ([]domain.Message, error) {
-	if limit < 1 {
-		limit = 50
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	var models []MessageModel
-	err := r.db.WithContext(ctx).
-		Where(
-			"((sender_id = ? AND recipient_id = ? AND deleted_by_sender = ?) OR (sender_id = ? AND recipient_id = ? AND deleted_by_recipient = ?))",
-			userID, otherID, false,
-			otherID, userID, false,
-		).
-		Limit(limit).
-		Offset(offset).
-		Order("created_at ASC, id ASC").
-		Find(&models).Error
-	if err != nil {
-		return nil, fmt.Errorf("list thread: %w", err)
-	}
-	out := make([]domain.Message, 0, len(models))
-	for _, m := range models {
-		out = append(out, messageModelToDomain(m))
-	}
-	return out, nil
-}
-
-func (r *messageRepositoryPostgres) ListCounterpartIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
-	type row struct {
-		OtherID uuid.UUID `gorm:"column:other_id"`
-	}
-	var rows []row
-	err := r.db.WithContext(ctx).
-		Model(&MessageModel{}).
-		Select("CASE WHEN sender_id = ? THEN recipient_id ELSE sender_id END AS other_id, MAX(created_at) AS last_at", userID).
-		Where(
-			"(sender_id = ? AND deleted_by_sender = ?) OR (recipient_id = ? AND deleted_by_recipient = ?)",
-			userID, false, userID, false,
-		).
-		Group("other_id").
-		Order("MAX(created_at) DESC").
-		Scan(&rows).Error
-	if err != nil {
-		return nil, fmt.Errorf("list counterpart ids: %w", err)
-	}
-	out := make([]uuid.UUID, 0, len(rows))
-	for _, r := range rows {
-		if r.OtherID != userID {
-			out = append(out, r.OtherID)
-		}
-	}
-	return out, nil
-}
-
-func (r *messageRepositoryPostgres) LastInThread(ctx context.Context, userID, otherID uuid.UUID) (domain.Message, error) {
-	var m MessageModel
-	err := r.db.WithContext(ctx).
-		Where(
-			"((sender_id = ? AND recipient_id = ? AND deleted_by_sender = ?) OR (sender_id = ? AND recipient_id = ? AND deleted_by_recipient = ?))",
-			userID, otherID, false,
-			otherID, userID, false,
-		).
-		Order("created_at DESC, id DESC").
-		First(&m).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return domain.Message{}, domain.ErrNotFound
-		}
-		return domain.Message{}, fmt.Errorf("last in thread: %w", err)
-	}
-	return messageModelToDomain(m), nil
-}
-
-func (r *messageRepositoryPostgres) UnreadCountsBySender(ctx context.Context, userID uuid.UUID) (map[uuid.UUID]int, error) {
-	type row struct {
-		SenderID uuid.UUID `gorm:"column:sender_id"`
-		Total    int       `gorm:"column:total"`
-	}
-	var rows []row
-	err := r.db.WithContext(ctx).
-		Model(&MessageModel{}).
-		Select("sender_id, COUNT(*) AS total").
-		Where("recipient_id = ? AND read_at IS NULL AND deleted_by_recipient = ?", userID, false).
-		Group("sender_id").
-		Scan(&rows).Error
-	if err != nil {
-		return nil, fmt.Errorf("unread counts by sender: %w", err)
-	}
-	out := make(map[uuid.UUID]int, len(rows))
-	for _, r := range rows {
-		out[r.SenderID] = r.Total
-	}
-	return out, nil
-}
-
-func (r *messageRepositoryPostgres) MarkThreadAsRead(ctx context.Context, userID, otherID uuid.UUID) (int, error) {
-	res := r.db.WithContext(ctx).Model(&MessageModel{}).
-		Where(
-			"recipient_id = ? AND sender_id = ? AND read_at IS NULL AND deleted_by_recipient = ?",
-			userID, otherID, false,
-		).
-		Update("read_at", nowUTC())
-	if res.Error != nil {
-		return 0, fmt.Errorf("mark thread as read: %w", res.Error)
-	}
-	return int(res.RowsAffected), nil
-}
-
-func (r *messageRepositoryPostgres) DeleteForUser(ctx context.Context, messageID uuid.UUID, userID uuid.UUID) error {
-	var m MessageModel
-	err := r.db.WithContext(ctx).First(&m, "id = ?", messageID).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return domain.ErrNotFound
-		}
-		return fmt.Errorf("delete message for user: fetch message: %w", err)
-	}
-
-	if m.SenderID == userID {
-		m.DeletedBySender = true
-	} else if m.RecipientID == userID {
-		m.DeletedByRecipient = true
-	} else {
-		return domain.ErrForbidden
-	}
-
-	if err := r.db.WithContext(ctx).Model(&MessageModel{}).
-		Where("id = ?", messageID).
-		Updates(map[string]interface{}{
-			"deleted_by_sender":    m.DeletedBySender,
-			"deleted_by_recipient": m.DeletedByRecipient,
-		}).Error; err != nil {
-		return fmt.Errorf("delete message for user: update: %w", err)
-	}
-	return nil
 }
 
 func (r *messageRepositoryPostgres) GetByID(ctx context.Context, messageID uuid.UUID) (domain.Message, error) {
@@ -1267,135 +1111,80 @@ func (r *messageRepositoryPostgres) GetByID(ctx context.Context, messageID uuid.
 	return messageModelToDomain(m), nil
 }
 
-func (r *messageRepositoryPostgres) DeleteForEveryone(ctx context.Context, messageID uuid.UUID) error {
-	// The row stays so the tombstone renders in order, but nothing of the
-	// content survives.
-	res := r.db.WithContext(ctx).Model(&MessageModel{}).
-		Where("id = ?", messageID).
-		Updates(map[string]any{
-			"deleted_for_everyone": true,
-			"body":                 "",
-			"image_url":            "",
-			"file_url":             "",
-			"file_name":            "",
-			"gif_url":              "",
-		})
-	if res.Error != nil {
-		return fmt.Errorf("delete message for everyone: %w", res.Error)
+// listFolder pages the rows matching `where`, newest first, and counts them.
+func (r *messageRepositoryPostgres) listFolder(ctx context.Context, folder string, where string, userID uuid.UUID, limit, offset int) ([]domain.Message, int, error) {
+	if limit < 1 {
+		limit = 20
 	}
-	if res.RowsAffected == 0 {
-		return domain.ErrNotFound
+	if offset < 0 {
+		offset = 0
 	}
-	return nil
-}
 
-func (r *messageRepositoryPostgres) ListPreviews(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]domain.MessagePreview, error) {
-	out := make(map[uuid.UUID]domain.MessagePreview, len(ids))
-	if len(ids) == 0 {
-		return out, nil
+	base := r.db.WithContext(ctx).Model(&MessageModel{}).Where(where, userID)
+
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count %s: %w", folder, err)
 	}
+
 	var models []MessageModel
-	if err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&models).Error; err != nil {
-		return nil, fmt.Errorf("list message previews: %w", err)
-	}
-	for _, m := range models {
-		body := m.Body
-		switch {
-		case m.DeletedForEveryone:
-			body = ""
-		case body == "" && m.ImageURL != "":
-			body = "📷 Φωτογραφία"
-		case body == "" && m.GifURL != "":
-			body = "GIF"
-		case body == "" && m.FileURL != "":
-			body = "📎 " + m.FileName
-		}
-		out[m.ID] = domain.MessagePreview{
-			ID:       m.ID.String(),
-			SenderID: m.SenderID,
-			Body:     body,
-			Deleted:  m.DeletedForEveryone,
-		}
-	}
-	return out, nil
-}
-
-func (r *messageRepositoryPostgres) AddReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error {
-	reaction := MailboxReactionModel{
-		ID:        uuid.New(),
-		MessageID: messageID,
-		UserID:    userID,
-		Emoji:     emoji,
-		CreatedAt: nowUTC(),
-	}
-	// Reacting twice with the same emoji is a no-op, not an error.
-	err := r.db.WithContext(ctx).
-		Clauses(clause.OnConflict{Columns: []clause.Column{
-			{Name: "message_id"}, {Name: "user_id"}, {Name: "emoji"},
-		}, DoNothing: true}).
-		Create(&reaction).Error
-	if err != nil {
-		return fmt.Errorf("add reaction: %w", err)
-	}
-	return nil
-}
-
-func (r *messageRepositoryPostgres) RemoveReaction(ctx context.Context, messageID, userID uuid.UUID, emoji string) error {
-	err := r.db.WithContext(ctx).
-		Where("message_id = ? AND user_id = ? AND emoji = ?", messageID, userID, emoji).
-		Delete(&MailboxReactionModel{}).Error
-	if err != nil {
-		return fmt.Errorf("remove reaction: %w", err)
-	}
-	return nil
-}
-
-func (r *messageRepositoryPostgres) ListReactions(ctx context.Context, messageIDs []uuid.UUID) (map[uuid.UUID][]domain.MailboxReaction, error) {
-	out := make(map[uuid.UUID][]domain.MailboxReaction, len(messageIDs))
-	if len(messageIDs) == 0 {
-		return out, nil
-	}
-	var models []MailboxReactionModel
-	err := r.db.WithContext(ctx).
-		Where("message_id IN ?", messageIDs).
-		Order("created_at ASC").
+	err := base.
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
 		Find(&models).Error
 	if err != nil {
-		return nil, fmt.Errorf("list reactions: %w", err)
+		return nil, 0, fmt.Errorf("list %s: %w", folder, err)
 	}
+	out := make([]domain.Message, 0, len(models))
 	for _, m := range models {
-		out[m.MessageID] = append(out[m.MessageID], domain.MailboxReaction{
-			ID:        m.ID,
-			MessageID: m.MessageID,
-			UserID:    m.UserID,
-			Emoji:     m.Emoji,
-			CreatedAt: m.CreatedAt,
-		})
+		out = append(out, messageModelToDomain(m))
 	}
-	return out, nil
+	return out, int(total), nil
 }
 
-func (r *messageRepositoryPostgres) MarkAsRead(ctx context.Context, userID uuid.UUID) error {
-	res := r.db.WithContext(ctx).Model(&MessageModel{}).
-		Where("recipient_id = ? AND read_at IS NULL AND deleted_by_recipient = ?", userID, false).
-		Update("read_at", nowUTC())
-	if res.Error != nil {
-		return fmt.Errorf("mark messages as read: %w", res.Error)
-	}
-	return nil
+func (r *messageRepositoryPostgres) ListInbox(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Message, int, error) {
+	return r.listFolder(ctx, "inbox", "recipient_id = ? AND deleted_by_recipient = false", userID, limit, offset)
 }
 
-// MarkAsReadByIDs marks only the given messages read. Listing the inbox marks
-// the page the caller actually received, rather than the entire mailbox.
-func (r *messageRepositoryPostgres) MarkAsReadByIDs(ctx context.Context, userID uuid.UUID, ids []uuid.UUID) error {
-	if len(ids) == 0 {
-		return nil
-	}
+func (r *messageRepositoryPostgres) ListSent(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Message, int, error) {
+	return r.listFolder(ctx, "sent", "sender_id = ? AND deleted_by_sender = false", userID, limit, offset)
+}
+
+func (r *messageRepositoryPostgres) MarkAsRead(ctx context.Context, messageID, userID uuid.UUID) (bool, error) {
 	res := r.db.WithContext(ctx).Model(&MessageModel{}).
-		Where("recipient_id = ? AND id IN ? AND read_at IS NULL AND deleted_by_recipient = ?", userID, ids, false).
+		Where("id = ? AND recipient_id = ? AND read_at IS NULL", messageID, userID).
 		Update("read_at", nowUTC())
 	if res.Error != nil {
-		return fmt.Errorf("mark messages as read by ids: %w", res.Error)
+		return false, fmt.Errorf("mark message as read: %w", res.Error)
+	}
+	return res.RowsAffected > 0, nil
+}
+
+func (r *messageRepositoryPostgres) DeleteForUser(ctx context.Context, messageID, userID uuid.UUID) error {
+	var m MessageModel
+	err := r.db.WithContext(ctx).First(&m, "id = ?", messageID).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.ErrNotFound
+		}
+		return fmt.Errorf("delete message for user: fetch message: %w", err)
+	}
+
+	var column string
+	switch userID {
+	case m.SenderID:
+		column = "deleted_by_sender"
+	case m.RecipientID:
+		column = "deleted_by_recipient"
+	default:
+		return domain.ErrForbidden
+	}
+
+	if err := r.db.WithContext(ctx).Model(&MessageModel{}).
+		Where("id = ?", messageID).
+		Update(column, true).Error; err != nil {
+		return fmt.Errorf("delete message for user: update: %w", err)
 	}
 	return nil
 }
@@ -1404,7 +1193,7 @@ func (r *messageRepositoryPostgres) GetUnreadCount(ctx context.Context, userID u
 	var count int64
 	err := r.db.WithContext(ctx).
 		Model(&MessageModel{}).
-		Where("recipient_id = ? AND read_at IS NULL AND deleted_by_recipient = ?", userID, false).
+		Where("recipient_id = ? AND read_at IS NULL AND deleted_by_recipient = false", userID).
 		Count(&count).Error
 	if err != nil {
 		return 0, fmt.Errorf("get unread count: %w", err)

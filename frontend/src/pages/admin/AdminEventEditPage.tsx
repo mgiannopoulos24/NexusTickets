@@ -44,10 +44,12 @@ import {
 import { ErrorMessage } from '@/components/shared/ErrorMessage';
 import { SkeletonList } from '@/components/shared/SkeletonList';
 
-import { DEFAULT_EVENT_TYPE, EVENT_TYPES } from '@/constants/eventTypes';
+import { DEFAULT_EVENT_TYPE, eventTypeOptions } from '@/constants/eventTypes';
 import TimePicker from 'react-time-picker';
 import 'react-time-picker/dist/TimePicker.css';
 import 'react-clock/dist/Clock.css';
+import { useLang } from '@/contexts/langContext';
+import { tr } from '@/lib/i18n';
 
 function isUUID(raw: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw);
@@ -163,8 +165,8 @@ function AdminTimePicker({
         format="HH:mm"
         locale="el-GR"
         maxDetail="minute"
-        clockAriaLabel="Αναλογικό ρολόι"
-        clearAriaLabel="Καθαρισμός ώρας"
+        clockAriaLabel={tr('eventForm.clock')}
+        clearAriaLabel={tr('eventForm.clearTime')}
         disabled={disabled}
         clockProps={{
           size: 200,
@@ -225,7 +227,7 @@ function DateTimeDialogField({
           size="sm"
           className="h-7 w-7 cursor-pointer px-0 text-sm text-neutral-700 hover:bg-neutral-100 hover:text-neutral-900 comfortaa-regular"
           onClick={() => handleOpen(true)}
-          aria-label={`${label} επεξεργασία`}
+          aria-label={tr('eventForm.editField', { label })}
         >
           <PencilIcon className="size-4" />
         </Button>
@@ -242,7 +244,7 @@ function DateTimeDialogField({
           <DialogHeader>
             <DialogTitle className="comfortaa-bold">{label}</DialogTitle>
             <DialogDescription className="comfortaa-regular">
-              {step === 'date' ? 'Επιλέξτε ημερομηνία' : 'Επιλέξτε ώρα'}
+              {step === 'date' ? tr('eventForm.pickDate') : tr('eventForm.pickTime')}
             </DialogDescription>
           </DialogHeader>
 
@@ -262,7 +264,7 @@ function DateTimeDialogField({
                   disabled={!tempDate}
                   className="comfortaa-regular"
                 >
-                  Επόμενο →
+                  {tr('eventForm.next')}
                 </Button>
               </div>
             </div>
@@ -276,14 +278,14 @@ function DateTimeDialogField({
                   onClick={() => setStep('date')}
                   className="comfortaa-regular"
                 >
-                  ← Πίσω
+                  {tr('eventForm.back')}
                 </Button>
                 <Button
                   type="button"
                   onClick={handleConfirm}
-                  className="bg-[#6d28d9] text-white hover:bg-[#5b21b6] comfortaa-regular"
+                  className="bg-[var(--nexus-purple)] text-white hover:bg-[var(--nexus-purple-dark)] comfortaa-regular"
                 >
-                  Επιβεβαίωση
+                  {tr('eventForm.confirm')}
                 </Button>
               </div>
             </div>
@@ -320,6 +322,7 @@ function formFromEvent(ev: Event): FormState {
  * in from an effect.
  */
 export default function AdminEventEditPage() {
+  const { t } = useLang();
   const { id = '' } = useParams();
 
   const validId = isUUID(id);
@@ -331,7 +334,7 @@ export default function AdminEventEditPage() {
     return (
       <AdminLayout>
         <div className="p-6">
-          <ErrorMessage message="Μη έγκυρο αναγνωριστικό εκδήλωσης." />
+          <ErrorMessage message={t('eventForm.invalidId')} />
         </div>
       </AdminLayout>
     );
@@ -352,7 +355,7 @@ export default function AdminEventEditPage() {
       <AdminLayout>
         <div className="p-6">
           <ErrorMessage
-            message={apiErrorMessage(eventQuery.error, 'Δεν ήταν δυνατή η φόρτωση της εκδήλωσης.')}
+            message={apiErrorMessage(eventQuery.error, t('eventForm.loadError'))}
             onRetry={() => void eventQuery.refetch()}
           />
         </div>
@@ -370,6 +373,7 @@ function AdminEventEditForm({
   initialEvent: Event;
   categories: Category[];
 }) {
+  const { t } = useLang();
   const eventId = initialEvent.id;
 
   const [adminUpdateEvent] = useAdminUpdateEventMutation();
@@ -378,7 +382,9 @@ function AdminEventEditForm({
   const [event, setEvent] = useState<Event>(initialEvent);
   const [form, setForm] = useState<FormState>(() => formFromEvent(initialEvent));
 
-  const initialStart = initialEvent.start_at ? fromRfc3339ToDateAndTime(initialEvent.start_at) : null;
+  const initialStart = initialEvent.start_at
+    ? fromRfc3339ToDateAndTime(initialEvent.start_at)
+    : null;
   const initialEnd = initialEvent.end_at ? fromRfc3339ToDateAndTime(initialEvent.end_at) : null;
 
   const [startDate, setStartDate] = useState<Date | undefined>(initialStart?.date);
@@ -468,9 +474,9 @@ function AdminEventEditForm({
       setForm((prev) => ({ ...prev, featured_image_url: next }));
       setEvent(saved);
       if (next) setFeaturedPreview(next);
-      setSaveOk('Αποθηκεύτηκε');
+      setSaveOk(t('eventForm.saved'));
     } catch (e: unknown) {
-      setSaveError(apiErrorMessage(e, 'Αποτυχία μεταφόρτωσης εικόνας'));
+      setSaveError(apiErrorMessage(e, t('eventForm.imageUploadFailed')));
       if (featuredObjectUrlRef.current) {
         URL.revokeObjectURL(featuredObjectUrlRef.current);
         featuredObjectUrlRef.current = null;
@@ -522,9 +528,9 @@ function AdminEventEditForm({
         ...prev,
         status: normalizeAdminEventStatus(saved.status as EventStatus),
       }));
-      setSaveOk('Αποθηκεύτηκε');
+      setSaveOk(t('eventForm.saved'));
     } catch (e: unknown) {
-      setSaveError(apiErrorMessage(e, 'Αποτυχία αποθήκευσης'));
+      setSaveError(apiErrorMessage(e, t('eventForm.saveFailed')));
     } finally {
       setSaving(false);
     }
@@ -532,26 +538,26 @@ function AdminEventEditForm({
 
   return (
     <AdminLayout>
-      <div className="bg-white p-6">
+      <div className="bg-white p-4 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="text-xs text-neutral-500 comfortaa-regular">
               <Link to="/admin/events" className="hover:underline">
-                Εκδηλώσεις
+                {t('eventForm.events')}
               </Link>{' '}
-              / Επεξεργασία
+              / {t('eventForm.editCrumb')}
             </p>
             <h1 className="mt-1 truncate text-2xl font-bold text-neutral-950 comfortaa-bold">
-              {event?.title ?? 'Εκδήλωση'}
+              {event?.title ?? t('eventForm.event')}
             </h1>
           </div>
           <Button
             type="button"
             onClick={() => void onSave()}
             disabled={saving}
-            className="rounded-none border-2 border-[#6d28d9] bg-transparent px-4 py-1.5 text-sm text-[#6d28d9] hover:bg-[#6d28d9] hover:text-white comfortaa-regular"
+            className="rounded-none border-2 border-[var(--nexus-purple)] bg-transparent px-4 py-1.5 text-sm text-[var(--nexus-purple)] hover:bg-[var(--nexus-purple)] hover:text-white comfortaa-regular"
           >
-            {saving ? 'Αποθήκευση…' : 'Αποθήκευση'}
+            {saving ? t('eventForm.saving') : t('eventForm.save')}
           </Button>
         </div>
 
@@ -567,246 +573,247 @@ function AdminEventEditForm({
         )}
 
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="space-y-5">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-neutral-800 comfortaa-regular">
-                  Τίτλος
-                </label>
-                <Input
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                />
+          <div className="space-y-5">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-neutral-800 comfortaa-regular">
+                {t('eventForm.title')}
+              </label>
+              <Input
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-neutral-800 comfortaa-regular">
+                {t('eventForm.description')}
+              </label>
+              <Textarea
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                className="min-h-32"
+              />
+            </div>
+            {mapPreviewCoords && (
+              <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+                <p className="border-b border-neutral-100 bg-neutral-50 px-4 py-2 text-sm font-medium text-neutral-800 comfortaa-bold">
+                  {t('eventForm.map')}
+                </p>
+                <div className="p-2">
+                  <EventMapEmbed
+                    latitude={mapPreviewCoords.lat}
+                    longitude={mapPreviewCoords.lon}
+                    className="min-h-[280px] rounded-lg"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-neutral-800 comfortaa-regular">
-                  Περιγραφή
-                </label>
-                <Textarea
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="min-h-32"
-                />
-              </div>
-              {mapPreviewCoords && (
-                <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-                  <p className="border-b border-neutral-100 bg-neutral-50 px-4 py-2 text-sm font-medium text-neutral-800 comfortaa-bold">
-                    Χάρτης τοποθεσίας
+            )}
+            <EventDetailTemplateForm value={detail} onChange={setDetail} disabled={saving} />
+          </div>
+
+          <aside className="space-y-5">
+            <div className="rounded-2xl border border-neutral-200 p-4">
+              <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
+                {t('eventForm.details')}
+              </p>
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                    {t('eventForm.status')}
+                  </label>
+                  <select
+                    value={form.status}
+                    disabled={saving}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        status: e.target.value as AdminEventStatus,
+                      })
+                    }
+                    className={cn(
+                      'flex h-9 w-full rounded-md border border-neutral-200 bg-white px-3 text-sm comfortaa-regular',
+                      saving && 'opacity-50',
+                    )}
+                  >
+                    <option value="draft">{t('status.event.draft')}</option>
+                    <option value="published">{t('status.event.published')}</option>
+                    <option value="completed">{t('status.event.completed')}</option>
+                    <option value="cancelled">{t('status.event.cancelled')}</option>
+                  </select>
+                  <p className="mt-1 text-[10px] text-neutral-500 comfortaa-regular">
+                    {t('eventForm.statusHintAdmin')}
                   </p>
-                  <div className="p-2">
-                    <EventMapEmbed
-                      latitude={mapPreviewCoords.lat}
-                      longitude={mapPreviewCoords.lon}
-                      className="min-h-[280px] rounded-lg"
+                </div>
+                <div>
+                  <label
+                    htmlFor="admin-event-type"
+                    className="mb-1 block text-xs text-neutral-600 comfortaa-regular"
+                  >
+                    {t('eventForm.eventType')}
+                  </label>
+                  <select
+                    id="admin-event-type"
+                    value={form.event_type}
+                    disabled={saving}
+                    onChange={(e) => setForm({ ...form, event_type: e.target.value })}
+                    className={cn(
+                      'flex h-9 w-full rounded-md border border-neutral-200 bg-white px-3 text-sm comfortaa-regular',
+                      saving && 'opacity-50',
+                    )}
+                  >
+                    {eventTypeOptions().map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                    {t('eventForm.venue')}
+                  </label>
+                  <Input
+                    value={form.venue}
+                    onChange={(e) => setForm({ ...form, venue: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                    {t('eventForm.city')}
+                  </label>
+                  <Input
+                    value={form.city}
+                    onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                    {t('eventForm.country')}
+                  </label>
+                  <Input
+                    value={form.country}
+                    onChange={(e) => setForm({ ...form, country: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                    {t('eventForm.street')}
+                  </label>
+                  <Input
+                    value={form.address}
+                    onChange={(e) => setForm({ ...form, address: e.target.value })}
+                    placeholder={t('eventForm.streetPlaceholder')}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                      {t('eventForm.latitudeLong')}
+                    </label>
+                    <Input
+                      value={form.latitude}
+                      onChange={(e) => setForm({ ...form, latitude: e.target.value })}
+                      placeholder={t('eventForm.latPlaceholder')}
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                      {t('eventForm.longitudeLong')}
+                    </label>
+                    <Input
+                      value={form.longitude}
+                      onChange={(e) => setForm({ ...form, longitude: e.target.value })}
+                      placeholder={t('eventForm.lngPlaceholder')}
+                      inputMode="decimal"
                     />
                   </div>
                 </div>
-              )}
-              <EventDetailTemplateForm value={detail} onChange={setDetail} disabled={saving} />
-            </div>
-
-            <aside className="space-y-5">
-              <div className="rounded-2xl border border-neutral-200 p-4">
-                <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
-                  Λεπτομέρειες
-                </p>
-                <div className="mt-4 space-y-3">
-                  <div>
-                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                      Κατάσταση
-                    </label>
-                    <select
-                      value={form.status}
-                      disabled={saving}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          status: e.target.value as AdminEventStatus,
-                        })
-                      }
-                      className={cn(
-                        'flex h-9 w-full rounded-md border border-neutral-200 bg-white px-3 text-sm comfortaa-regular',
-                        saving && 'opacity-50',
-                      )}
-                    >
-                      <option value="draft">Πρόχειρο (draft)</option>
-                      <option value="published">Δημοσιευμένο</option>
-                      <option value="completed">Ολοκληρωμένο</option>
-                      <option value="cancelled">Ακυρωμένο</option>
-                    </select>
-                    <p className="mt-1 text-[10px] text-neutral-500 comfortaa-regular">
-                      Πρόχειρο: δεν φαίνεται στη δημόσια λίστα. Δημοσιευμένο: ορατό σε όλους.
-                      Ολοκληρωμένο ορίζεται αυτόματα όταν περάσει η ώρα λήξης.
-                    </p>
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="admin-event-type"
-                      className="mb-1 block text-xs text-neutral-600 comfortaa-regular"
-                    >
-                      Τύπος εκδήλωσης
-                    </label>
-                    <select
-                      id="admin-event-type"
-                      value={form.event_type}
-                      disabled={saving}
-                      onChange={(e) => setForm({ ...form, event_type: e.target.value })}
-                      className={cn(
-                        'flex h-9 w-full rounded-md border border-neutral-200 bg-white px-3 text-sm comfortaa-regular',
-                        saving && 'opacity-50',
-                      )}
-                    >
-                      {EVENT_TYPES.map((t) => (
-                        <option key={t.value} value={t.value}>
-                          {t.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                      Χώρος
-                    </label>
-                    <Input
-                      value={form.venue}
-                      onChange={(e) => setForm({ ...form, venue: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                      Πόλη
-                    </label>
-                    <Input
-                      value={form.city}
-                      onChange={(e) => setForm({ ...form, city: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                      Χώρα
-                    </label>
-                    <Input
-                      value={form.country}
-                      onChange={(e) => setForm({ ...form, country: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                      Διεύθυνση (οδός)
-                    </label>
-                    <Input
-                      value={form.address}
-                      onChange={(e) => setForm({ ...form, address: e.target.value })}
-                      placeholder="π.χ. Ιπποκράτους 7"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                        Γεωγρ. πλάτος (latitude)
-                      </label>
-                      <Input
-                        value={form.latitude}
-                        onChange={(e) => setForm({ ...form, latitude: e.target.value })}
-                        placeholder="π.χ. 37.9838"
-                        inputMode="decimal"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                        Γεωγρ. μήκος (longitude)
-                      </label>
-                      <Input
-                        value={form.longitude}
-                        onChange={(e) => setForm({ ...form, longitude: e.target.value })}
-                        placeholder="π.χ. 23.7275"
-                        inputMode="decimal"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <DateTimeDialogField
-                      label="Έναρξη"
-                      date={startDate}
-                      timeHHMM={startTime}
-                      onChange={(d, t) => syncStart(d, t)}
-                    />
-                  </div>
-                  <div>
-                    <DateTimeDialogField
-                      label="Λήξη"
-                      date={endDate}
-                      timeHHMM={endTime}
-                      onChange={(d, t) => syncEnd(d, t)}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                      Featured image
-                    </label>
-                    <div className="rounded-xl border border-neutral-200 bg-white p-3">
-                      <div className="flex flex-col gap-3">
-                        <div className="h-32 w-full overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50">
-                          {featuredPreview ? (
-                            <img
-                              src={featuredPreview}
-                              alt="Featured preview"
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-[11px] text-neutral-500 comfortaa-regular">
-                              No image
-                            </div>
-                          )}
-                        </div>
-
-                        <div>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            disabled={uploadingFeatured}
-                            onChange={(e) => {
-                              const f = e.currentTarget.files?.[0];
-                              if (f) void onUploadFeatured(f);
-                              e.currentTarget.value = '';
-                            }}
-                            className={cn(
-                              'block w-full text-sm text-neutral-700 file:mr-2 file:rounded-none',
-                              'file:bg-transparent file:border-2 file:border-[#6d28d9] file:px-2 file:py-1 file:text-xs file:text-[#6d28d9] file:hover:bg-[#6d28d9] file:hover:text-white',
-                              'comfortaa-regular',
-                            )}
+                <div>
+                  <DateTimeDialogField
+                    label={t('eventForm.start')}
+                    date={startDate}
+                    timeHHMM={startTime}
+                    onChange={(d, t) => syncStart(d, t)}
+                  />
+                </div>
+                <div>
+                  <DateTimeDialogField
+                    label={t('eventForm.end')}
+                    date={endDate}
+                    timeHHMM={endTime}
+                    onChange={(d, t) => syncEnd(d, t)}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+                    Featured image
+                  </label>
+                  <div className="rounded-xl border border-neutral-200 bg-white p-3">
+                    <div className="flex flex-col gap-3">
+                      <div className="h-32 w-full overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50">
+                        {featuredPreview ? (
+                          <img
+                            src={featuredPreview}
+                            alt="Featured preview"
+                            className="h-full w-full object-cover"
                           />
-                          <p className="mt-2 text-[11px] text-neutral-500 comfortaa-regular">
-                            {uploadingFeatured
-                              ? 'Μεταφόρτωση…'
-                              : form.featured_image_url
-                                ? form.featured_image_url
-                                : ''}
-                          </p>
-                        </div>
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[11px] text-neutral-500 comfortaa-regular">
+                            No image
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={uploadingFeatured}
+                          onChange={(e) => {
+                            const f = e.currentTarget.files?.[0];
+                            if (f) void onUploadFeatured(f);
+                            e.currentTarget.value = '';
+                          }}
+                          className={cn(
+                            'block w-full text-sm text-neutral-700 file:mr-2 file:rounded-none',
+                            'file:bg-transparent file:border-2 file:border-[var(--nexus-purple)] file:px-2 file:py-1 file:text-xs file:text-[var(--nexus-purple)] file:hover:bg-[var(--nexus-purple)] file:hover:text-white',
+                            'comfortaa-regular',
+                          )}
+                        />
+                        <p className="mt-2 text-[11px] text-neutral-500 comfortaa-regular">
+                          {uploadingFeatured
+                            ? t('eventForm.uploading')
+                            : form.featured_image_url
+                              ? form.featured_image_url
+                              : ''}
+                        </p>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div className="rounded-2xl border border-neutral-200 p-4">
-                <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">Κατηγορίες</p>
-                <div className="mt-4 space-y-2">
-                  {categoryNames.map((name) => {
-                    const checked = form.categories.has(name);
-                    return (
-                      <label
-                        key={name}
-                        className="flex items-center gap-2 text-sm text-neutral-700 comfortaa-regular"
-                      >
-                        <Checkbox checked={checked} onCheckedChange={() => toggleCategory(name)} />
-                        {name}
-                      </label>
-                    );
-                  })}
-                </div>
+            <div className="rounded-2xl border border-neutral-200 p-4">
+              <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
+                {t('eventForm.categories')}
+              </p>
+              <div className="mt-4 space-y-2">
+                {categoryNames.map((name) => {
+                  const checked = form.categories.has(name);
+                  return (
+                    <label
+                      key={name}
+                      className="flex items-center gap-2 text-sm text-neutral-700 comfortaa-regular"
+                    >
+                      <Checkbox checked={checked} onCheckedChange={() => toggleCategory(name)} />
+                      {name}
+                    </label>
+                  );
+                })}
               </div>
-            </aside>
+            </div>
+          </aside>
         </div>
       </div>
     </AdminLayout>

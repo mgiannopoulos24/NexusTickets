@@ -595,12 +595,21 @@ func (s *EventService) mergeTicketTypes(
 	return out, nil
 }
 
-func (s *EventService) AdminList(ctx context.Context, limit, offset int) ([]domain.Event, [][]domain.Category, error) {
-	events, err := s.events.ListForExport(ctx, limit, offset)
-	if err != nil {
-		return nil, nil, err
+// AdminList pages every event for the administration, with an optional
+// free-text query and status filter; total is the number of matching rows.
+func (s *EventService) AdminList(ctx context.Context, q string, status *domain.EventStatus, limit, offset int) ([]domain.Event, [][]domain.Category, int, error) {
+	if status != nil && !domain.ValidEventStatus(*status) {
+		return nil, nil, 0, domain.Invalid("unknown event status")
 	}
-	return s.hydrateMany(ctx, events)
+	events, total, err := s.events.ListAdmin(ctx, q, status, limit, offset)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	hydrated, cats, err := s.hydrateMany(ctx, events)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	return hydrated, cats, total, nil
 }
 
 func (s *EventService) AdminGet(ctx context.Context, eventID uuid.UUID) (domain.Event, []domain.Category, error) {

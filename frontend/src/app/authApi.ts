@@ -9,6 +9,7 @@ import {
   getRefreshToken,
   setTokens,
 } from '@/utils/api';
+import { tr } from '@/lib/i18n';
 
 type ApiEnvelope<T> = {
   data: T | null;
@@ -17,10 +18,10 @@ type ApiEnvelope<T> = {
 
 function assertEnvelopeData<T>(body: ApiEnvelope<T>): T {
   if (body.error) {
-    throw new Error(body.error.message ?? 'Σφάλμα αιτήματος');
+    throw new Error(body.error.message ?? tr('errors.request'));
   }
   if (body.data === null || body.data === undefined) {
-    throw new Error('Άκυρη απάντηση');
+    throw new Error(tr('errors.invalidResponse'));
   }
   return body.data;
 }

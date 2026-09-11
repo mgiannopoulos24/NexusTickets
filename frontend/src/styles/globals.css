@@ -54,7 +54,8 @@
   --chart-3: oklch(0.546 0.245 262.881);
   --chart-4: oklch(0.488 0.243 264.376);
   --chart-5: oklch(0.424 0.199 265.638);
-  --radius: 0.625rem;
+  /* Tighter than the shadcn default: cards and inputs read crisper. */
+  --radius: 0.375rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -64,9 +65,16 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
-  /* Nexus colors */
+  /* Nexus colors: purple for navigation and identity, coral for the one
+     action that matters on a page (book, send), lime for highlights, navy
+     for headings on light ground. */
   --nexus-darkgray: #475353;
-  --nexus-purple: #703eff;
+  --nexus-purple: #6d28d9;
+  --nexus-purple-dark: #5b21b6;
+  --nexus-coral: #ff5c35;
+  --nexus-coral-dark: #e6461f;
+  --nexus-lime: #d4f040;
+  --nexus-navy: #000020;
   --nexus-lightgray: #f0f0f0;
   --nexus-red: #da2424;
 }
@@ -135,6 +143,12 @@ body {
 }
 
 @theme inline {
+  --color-nexus-purple: var(--nexus-purple);
+  --color-nexus-purple-dark: var(--nexus-purple-dark);
+  --color-nexus-coral: var(--nexus-coral);
+  --color-nexus-coral-dark: var(--nexus-coral-dark);
+  --color-nexus-lime: var(--nexus-lime);
+  --color-nexus-navy: var(--nexus-navy);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -232,13 +246,9 @@ body {
 }
 
 @layer components {
-  /* Home hero split: left column width (md+); larger = narrower lime panel */
-  .home-hero {
-    --hero-left-col: 600px;
-  }
-  @media (min-width: 1440px) {
-    .home-hero {
-      --hero-left-col: 850px;
-    }
+  /* Awesomplete wraps the search input in an inline-block; let it fill the row. */
+  .home-search .awesomplete {
+    display: block;
+    width: 100%;
   }
 }

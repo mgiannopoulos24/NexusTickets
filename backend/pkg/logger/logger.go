@@ -20,4 +20,3 @@ func New(appEnv string) (*zap.Logger, error) {
 		return nil, fmt.Errorf("invalid APP_ENV: %q", appEnv)
 	}
 }
-

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import type { EventDetail } from '@/types/eventDetail';
 import { cn } from '@/lib/utils';
+import { useLang } from '@/contexts/langContext';
 
 type Props = {
   value: EventDetail;
@@ -24,6 +25,7 @@ function stringToTri(raw: string): boolean | null {
 }
 
 export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
+  const { t } = useLang();
   const useful = value.useful ?? {
     duration_minutes: null,
     intermission_minutes: null,
@@ -58,24 +60,23 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
     <div className="space-y-8 rounded-2xl border border-neutral-200 bg-neutral-50/50 p-4 sm:p-6">
       <div>
         <h2 className="text-lg font-semibold text-neutral-950 comfortaa-bold">
-          Πρότυπο σελίδας εκδήλωσης
+          {t('template.title')}
         </h2>
-        <p className="mt-1 text-sm text-neutral-600 comfortaa-regular">
-          Συμπλήρωσε τα πεδία για τις καρτέλες της δημόσιας σελίδας (περιγραφή, χρήσιμα,
-          διοργανωτής, ημερομηνίες, καλλιτέχνες).
-        </p>
+        <p className="mt-1 text-sm text-neutral-600 comfortaa-regular">{t('template.hint')}</p>
       </div>
 
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-neutral-900 comfortaa-bold">Συντελεστές</h3>
+        <h3 className="text-sm font-semibold text-neutral-900 comfortaa-bold">
+          {t('template.contributors')}
+        </h3>
         <p className="text-xs text-neutral-500 comfortaa-regular">
-          Ζεύγη ρόλος / όνομα (εμφανίζονται δίπλα στην περιγραφή).
+          {t('template.contributorsHint')}
         </p>
         <ul className="space-y-2">
           {value.contributors.map((row, i) => (
             <li key={`c-${i}`} className="flex flex-wrap gap-2 sm:flex-nowrap">
               <Input
-                placeholder="Ρόλος"
+                placeholder={t('template.role')}
                 value={row.role}
                 disabled={disabled}
                 onChange={(e) => {
@@ -86,7 +87,7 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
                 className="sm:max-w-[200px]"
               />
               <Input
-                placeholder="Όνομα"
+                placeholder={t('template.name')}
                 value={row.name}
                 disabled={disabled}
                 onChange={(e) => {
@@ -106,7 +107,7 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
                   const next = value.contributors.filter((_, j) => j !== i);
                   onChange({ ...value, contributors: next });
                 }}
-                aria-label="Αφαίρεση"
+                aria-label={t('template.remove')}
               >
                 <Trash2 className="size-4" />
               </Button>
@@ -124,17 +125,19 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
           }
         >
           <Plus className="mr-1 size-4" />
-          Προσθήκη συντελεστή
+          {t('template.addContributor')}
         </Button>
       </section>
 
       <section className="space-y-3">
-        <h3 className="text-sm font-semibold text-neutral-900 comfortaa-bold">Καλλιτέχνες</h3>
+        <h3 className="text-sm font-semibold text-neutral-900 comfortaa-bold">
+          {t('template.artists')}
+        </h3>
         <ul className="space-y-2">
           {value.artists.map((row, i) => (
             <li key={`a-${i}`} className="flex flex-wrap gap-2 sm:flex-nowrap">
               <Input
-                placeholder="Όνομα"
+                placeholder={t('template.name')}
                 value={row.name}
                 disabled={disabled}
                 onChange={(e) => {
@@ -145,7 +148,7 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
                 className="min-w-0 flex-1"
               />
               <Input
-                placeholder="Σημείωση (προαιρετικό)"
+                placeholder={t('template.note')}
                 value={row.role ?? ''}
                 disabled={disabled}
                 onChange={(e) => {
@@ -165,7 +168,7 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
                   const next = value.artists.filter((_, j) => j !== i);
                   onChange({ ...value, artists: next });
                 }}
-                aria-label="Αφαίρεση"
+                aria-label={t('template.remove')}
               >
                 <Trash2 className="size-4" />
               </Button>
@@ -181,18 +184,18 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
           onClick={() => onChange({ ...value, artists: [...value.artists, { name: '' }] })}
         >
           <Plus className="mr-1 size-4" />
-          Προσθήκη καλλιτέχνη
+          {t('template.addArtist')}
         </Button>
       </section>
 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-neutral-900 comfortaa-bold">
-          Χρήσιμες πληροφορίες
+          {t('template.useful')}
         </h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-              Διάρκεια (λεπτά)
+              {t('template.duration')}
             </label>
             <Input
               type="number"
@@ -207,7 +210,7 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
           </div>
           <div>
             <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-              Διάλειμμα (λεπτά)
+              {t('template.intermission')}
             </label>
             <Input
               type="number"
@@ -222,7 +225,7 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
           </div>
           <div>
             <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-              Θέσεις καθήμενων
+              {t('template.seated')}
             </label>
             <select
               className={cn(
@@ -234,8 +237,8 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
               onChange={(e) => setUseful({ seated_only: stringToTri(e.target.value) })}
             >
               <option value="">—</option>
-              <option value="yes">Ναι</option>
-              <option value="no">Όχι</option>
+              <option value="yes">{t('template.yes')}</option>
+              <option value="no">{t('template.no')}</option>
             </select>
           </div>
           <div>
@@ -250,14 +253,14 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
               onChange={(e) => setUseful({ parking_available: stringToTri(e.target.value) })}
             >
               <option value="">—</option>
-              <option value="yes">Ναι</option>
-              <option value="no">Όχι</option>
+              <option value="yes">{t('template.yes')}</option>
+              <option value="no">{t('template.no')}</option>
             </select>
           </div>
         </div>
         <div>
           <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-            Πολιτική αλλαγών / ακυρώσεων
+            {t('template.policy')}
           </label>
           <Textarea
             value={useful.cancellation_policy}
@@ -270,16 +273,13 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-neutral-900 comfortaa-bold">
-          Στοιχεία διοργανωτή (δημόσια)
+          {t('template.organizer')}
         </h3>
-        <p className="text-xs text-neutral-500 comfortaa-regular">
-          Εμφανίζονται στην καρτέλα «Διοργανωτής». Αν μείνουν κενά, μπορείς να συμπληρώσεις μόνο όσα
-          χρειάζεσαι.
-        </p>
+        <p className="text-xs text-neutral-500 comfortaa-regular">{t('template.organizerHint')}</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-              Επωνυμία
+              {t('template.legalName')}
             </label>
             <Input
               value={org.legal_name}
@@ -288,7 +288,9 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
             />
           </div>
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">Έδρα</label>
+            <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+              {t('template.headquarters')}
+            </label>
             <Input
               value={org.headquarters}
               disabled={disabled}
@@ -296,7 +298,9 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">ΑΦΜ</label>
+            <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+              {t('template.vat')}
+            </label>
             <Input
               value={org.vat_number}
               disabled={disabled}
@@ -304,7 +308,9 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">ΔΟΥ</label>
+            <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+              {t('template.taxOffice')}
+            </label>
             <Input
               value={org.tax_office}
               disabled={disabled}
@@ -322,7 +328,7 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
           </div>
           <div>
             <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-              Τηλέφωνο
+              {t('template.phone')}
             </label>
             <Input
               value={org.phone}
@@ -335,18 +341,15 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-neutral-900 comfortaa-bold">
-          Επιπλέον ημερομηνίες / παραστάσεις
+          {t('template.dates')}
         </h3>
-        <p className="text-xs text-neutral-500 comfortaa-regular">
-          Προαιρετική λίστα εμφανίσεων. Αν είναι κενή, η δημόσια σελίδα χρησιμοποιεί την έναρξη/λήξη
-          της εκδήλωσης.
-        </p>
+        <p className="text-xs text-neutral-500 comfortaa-regular">{t('template.datesHint')}</p>
         <ul className="space-y-2">
           {value.occurrences.map((row, i) => (
             <li key={`o-${i}`} className="flex flex-col gap-2 sm:flex-row sm:items-end">
               <div className="min-w-0 flex-1">
                 <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                  Έναρξη (τοπική ώρα)
+                  {t('template.startLocal')}
                 </label>
                 <Input
                   type="datetime-local"
@@ -362,7 +365,7 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
               </div>
               <div className="min-w-0 flex-1">
                 <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                  Ετικέτα (προαιρετικό)
+                  {t('template.label')}
                 </label>
                 <Input
                   value={row.label ?? ''}
@@ -384,7 +387,7 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
                   const next = value.occurrences.filter((_, j) => j !== i);
                   onChange({ ...value, occurrences: next });
                 }}
-                aria-label="Αφαίρεση"
+                aria-label={t('template.remove')}
               >
                 <Trash2 className="size-4" />
               </Button>
@@ -408,7 +411,7 @@ export function EventDetailTemplateForm({ value, onChange, disabled }: Props) {
           }
         >
           <Plus className="mr-1 size-4" />
-          Προσθήκη ημερομηνίας
+          {t('template.addDate')}
         </Button>
       </section>
     </div>

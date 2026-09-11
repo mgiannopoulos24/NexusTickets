@@ -44,6 +44,7 @@ The platform supports four distinct roles: Administrator, Organizer, Attendee, a
 - **Styling**: Tailwind CSS v4
 - **UI Components**: shadcn/ui (Radix primitives + Tailwind)
 - **Icons**: Lucide React
+- **i18n**: Greek / English, YAML locale files (`src/locales`), no library
 - **Routing**: React Router v7
 - **State Management**: Redux Toolkit + RTK Query
 - **Forms**: React Hook Form + Zod
@@ -103,8 +104,7 @@ All technical documentation is located in the `./docs/` directory:
 | `docs/database.md` | Entity-relationship diagram and migration guide |
 | `docs/architecture.md` | System architecture overview |
 | `docs/recommendation.md` | Biased Matrix Factorization implementation details |
-
-The OpenAPI specification is available at `docs/swagger.json` and served at `/api/v1/docs` when the backend is running.
+| `docs/events-catalog.dtd` | The assignment's DTD; the XML export validates against it |
 
 ---
 
@@ -123,7 +123,6 @@ It covers the architecture decisions, database design, implementation details fo
 - Docker and Docker Compose
 - Go 1.22+
 - Bun 1.x
-- Node.js (for initial Angular CLI scaffolding only)
 - Make
 
 ### Prerequisites
@@ -143,8 +142,8 @@ make certs
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
-The frontend is available at `https://localhost:5173`.  
-The backend API is available at `https://localhost:8080/api/v1`.
+The app is served at `https://localhost:5173` (Vite terminates TLS with the mkcert cert and proxies `/api`, `/uploads` and the WebSocket to the backend).  
+The backend API is also reachable directly at `https://localhost:8080/api/v1`.
 
 ### Production-Like Stack (Built SPA behind nginx)
 
@@ -169,7 +168,7 @@ cd backend && go run ./cmd/seed
 # Or start a standalone seed container by building just the seed binary.
 ```
 
-This seeds 3 users (`admin`, `organizer`, `attendee` — all with password `ChangeMe123!`), 6 event categories, and 50 Greek events with ticket types.
+The built-in administrator is created automatically on the first backend start (`ADMIN_USERNAME` / `ADMIN_PASSWORD`, default `admin` / `ChangeMe123!`). The seeder adds the demo `organizer` / `attendee` and ten more accounts (same password), 7 categories, 150 events with ticket types and 5 photos each, plus sample bookings, messages and support tickets; run it with `make seed`.
 
 ### Running Without Docker
 

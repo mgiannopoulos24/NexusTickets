@@ -1,9 +1,41 @@
 services:
   postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nexustickets}
+      POSTGRES_USER: ${POSTGRES_USER:-nexus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexus_dev_password_change_me}
+      POSTGRES_APP_DB: ${POSTGRES_APP_DB:-nexustickets}
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-nexustickets_app}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:-nexus_app_dev_password_change_me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Provisions the dedicated app role (nexustickets_app) on first init.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     ports:
       - "${POSTGRES_EXPOSED_PORT:-5432}:5432"
 
   redis:
+    image: redis:7-alpine
+    command:
+      - sh
+      - -c
+      - >
+        exec redis-server
+        --appendonly yes
+        --requirepass "$${REDIS_PASSWORD}"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password_change_me}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $$REDIS_PASSWORD ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     ports:
       - "${REDIS_EXPOSED_PORT:-6379}:6379"
 
@@ -16,13 +48,33 @@ services:
     environment:
       TLS_CERT_FILE: ${TLS_CERT_FILE:-/etc/tls/cert.pem}
       TLS_KEY_FILE: ${TLS_KEY_FILE:-/etc/tls/key.pem}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-${POSTGRES_DB:-nexustickets}}
+      DB_USER: ${DB_USER:-${POSTGRES_APP_USER:-nexustickets_app}}
+      DB_PASSWORD: ${DB_PASSWORD:-${POSTGRES_APP_PASSWORD:-nexus_app_dev_password_change_me}}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password_change_me}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ChangeMe123!}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@nexustickets.local}
     volumes:
       - ./backend:/app
       - ./docker/tls/local:/etc/tls:ro
       - backend_go_cache:/go/pkg/mod
       - backend_go_build_cache:/root/.cache/go-build
-    ports:
-      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
+    ports: !override
+      - "${APP_PORT:-8080}:8080"
+    # The builder image has busybox at the usual path (no /busybox as in the
+    # scratch image) and the dev server speaks TLS with the local cert.
+    healthcheck:
+      test:
+        ["CMD", "wget", "--no-check-certificate", "-qO-", "https://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 60s
     command:
       - sh
       - -c
@@ -35,25 +87,27 @@ services:
       context: ./frontend
       target: builder
     environment:
+      # Vite terminates TLS itself with the local mkcert cert, so the browser
+      # opens https://localhost:5173 and everything (REST, uploads, the realtime
+      # WebSocket) rides Vite's proxy to the TLS backend on the same origin.
+      VITE_TLS_CERT_FILE: /etc/tls/cert.pem
+      VITE_TLS_KEY_FILE: /etc/tls/key.pem
       VITE_API_PROXY_TARGET: https://backend:8080
       VITE_HMR_CLIENT_PORT: ${FRONTEND_PORT:-5173}
-      # The dev server negotiates HTTP/2, over which the classic
-      # Connection: Upgrade handshake cannot run, so a proxied WebSocket never
-      # completes. Point the browser straight at the backend instead; its CORS
-      # allowlist already covers the dev origins. In production nginx proxies
-      # the upgrade properly and this stays empty (see docker-compose.yml).
-      VITE_WS_URL: wss://localhost:${APP_PORT:-8080}/api/v1/ws/messages
+      # Empty = same-origin wss://localhost:5173/api/v1/ws/messages.
+      VITE_WS_URL: ""
     volumes:
       - ./frontend:/app
+      - ./docker/tls/local:/etc/tls:ro
       - frontend_bun_cache:/root/.bun
-    ports:
+    ports: !override
       - "${FRONTEND_PORT:-5173}:5173"
     command:
       - sh
       - -c
       - >
         bun install &&
-        bun run dev --host 0.0.0.0 --port 5173
+        node node_modules/vite/bin/vite.js --host 0.0.0.0 --port 5173
 
   seed:
     build:
@@ -82,6 +136,7 @@ services:
       - go run ./cmd/seed
 
 volumes:
+  postgres_data:
   backend_go_cache:
   backend_go_build_cache:
   frontend_bun_cache:

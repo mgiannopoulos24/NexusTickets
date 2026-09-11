@@ -16,6 +16,7 @@ import type { RegisterRequest } from '@/types/auth';
 import type { User } from '@/types/models';
 import { getAccessToken } from '@/utils/api';
 import { wsClient } from '@/utils/wsClient';
+import { tr } from '@/lib/i18n';
 
 type LocationState = {
   from?: { pathname?: string };
@@ -38,12 +39,16 @@ export function useAuth() {
     async (username: string, password: string) => {
       const me = await loginMutation({ username, password }).unwrap();
       const token = getAccessToken();
-      if (!token) throw new Error('Άκυρη συνεδρία');
+      if (!token) throw new Error(tr('errors.invalidSession'));
       dispatch(setSession({ user: me, accessToken: token }));
-      toast.success(`Καλώς ήρθες, ${me.username}`);
+      toast.success(tr('auth.welcome', { name: me.username }));
 
       const from = (location.state as LocationState | null)?.from?.pathname;
-      const target = from && from !== '/login' ? from : '/';
+      // A redirect back to the page that required login wins; otherwise the
+      // administrator lands on user management (assignment §3) and everyone
+      // else on the home page (§5).
+      const home = me.role === 'admin' ? '/admin/users' : '/';
+      const target = from && from !== '/login' ? from : home;
       navigate(target, { replace: true });
     },
     [dispatch, loginMutation, navigate, location.state],

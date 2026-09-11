@@ -35,6 +35,26 @@ func AutoMigrate(db *gorm.DB) error {
 	// v2 one below can take its place on existing databases.
 	_ = db.Exec(`ALTER TABLE events DROP CONSTRAINT IF EXISTS events_status_chk`).Error
 
+	// The messaging subsystem was reduced to the mailbox the assignment asks
+	// for (§10: inbox / sent, unread indicator, delete). Drop the leftovers of
+	// the earlier chat-room implementation and the attachment / reaction /
+	// tombstone columns on messages. GORM never drops on its own.
+	for _, stmt := range []string{
+		`DROP TABLE IF EXISTS message_reactions`,
+		`DROP TABLE IF EXISTS chat_messages`,
+		`DROP TABLE IF EXISTS chat_room_participants`,
+		`DROP TABLE IF EXISTS chat_rooms`,
+		`DROP TABLE IF EXISTS mailbox_message_reactions`,
+		`ALTER TABLE messages DROP COLUMN IF EXISTS image_url`,
+		`ALTER TABLE messages DROP COLUMN IF EXISTS file_url`,
+		`ALTER TABLE messages DROP COLUMN IF EXISTS file_name`,
+		`ALTER TABLE messages DROP COLUMN IF EXISTS gif_url`,
+		`ALTER TABLE messages DROP COLUMN IF EXISTS reply_to_id`,
+		`ALTER TABLE messages DROP COLUMN IF EXISTS deleted_for_everyone`,
+	} {
+		_ = db.Exec(stmt).Error
+	}
+
 	models := []interface{}{
 		&postgres.UserModel{},
 		&postgres.CategoryModel{},
@@ -43,13 +63,10 @@ func AutoMigrate(db *gorm.DB) error {
 		&postgres.TicketTypeModel{},
 		&postgres.BookingModel{},
 		&postgres.MessageModel{},
-		&postgres.MailboxReactionModel{},
 		&postgres.EventPhotoModel{},
 		&postgres.UserEventViewModel{},
-		&postgres.ChatRoomModel{},
-		&postgres.ChatRoomParticipantModel{},
-		&postgres.ChatMessageModel{},
-		&postgres.MailboxReactionModel{},
+		&postgres.SupportTicketModel{},
+		&postgres.SupportMessageModel{},
 	}
 
 	if err := db.AutoMigrate(models...); err != nil {
@@ -70,6 +87,7 @@ func AutoMigrate(db *gorm.DB) error {
 		{"bookings_total_cost_chk", "bookings", "CHECK (total_cost >= 0)"},
 		{"bookings_status_chk", "bookings", "CHECK (status IN ('pending', 'confirmed', 'cancelled'))"},
 		{"event_photos_position_chk", "event_photos", "CHECK (position >= 0)"},
+		{"support_tickets_status_chk", "support_tickets", "CHECK (status IN ('open', 'answered', 'closed'))"},
 	} {
 		if err := addConstraint(db, c.name, c.table, c.def); err != nil {
 			return fmt.Errorf("constraint %s: %w", c.name, err)
@@ -87,18 +105,13 @@ func AutoMigrate(db *gorm.DB) error {
 		{"fk_bookings_ticket_type", "bookings", "FOREIGN KEY (ticket_type_id) REFERENCES ticket_types(id) ON DELETE RESTRICT"},
 		{"fk_messages_sender", "messages", "FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE RESTRICT"},
 		{"fk_messages_recipient", "messages", "FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE RESTRICT"},
+		{"fk_messages_event", "messages", "FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE SET NULL"},
 		{"fk_event_photos_event", "event_photos", "FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE"},
 		{"fk_uev_user", "user_event_views", "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"},
 		{"fk_uev_event", "user_event_views", "FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE"},
-		{"fk_chat_rooms_created_by", "chat_rooms", "FOREIGN KEY (created_by_id) REFERENCES users(id) ON DELETE SET NULL"},
-		{"fk_chat_rooms_event", "chat_rooms", "FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE SET NULL"},
-		{"fk_crp_room", "chat_room_participants", "FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE"},
-		{"fk_crp_user", "chat_room_participants", "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"},
-		{"fk_cm_room", "chat_messages", "FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE"},
-		{"fk_cm_sender", "chat_messages", "FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE RESTRICT"},
-		{"fk_cm_reply_to", "chat_messages", "FOREIGN KEY (reply_to_id) REFERENCES chat_messages(id) ON DELETE SET NULL"},
-		{"fk_mr_message", "message_reactions", "FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE"},
-		{"fk_mr_user", "message_reactions", "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"},
+		{"fk_support_tickets_user", "support_tickets", "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT"},
+		{"fk_support_messages_ticket", "support_ticket_messages", "FOREIGN KEY (ticket_id) REFERENCES support_tickets(id) ON DELETE CASCADE"},
+		{"fk_support_messages_author", "support_ticket_messages", "FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE RESTRICT"},
 	} {
 		if err := addConstraint(db, c.name, c.table, c.def); err != nil {
 			return fmt.Errorf("constraint %s: %w", c.name, err)
@@ -112,7 +125,6 @@ func AutoMigrate(db *gorm.DB) error {
 		// Composite unique indexes
 		`CREATE UNIQUE INDEX IF NOT EXISTS ticket_types_event_name_uq ON ticket_types (event_id, name)`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS event_photos_event_position_uq ON event_photos (event_id, position)`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS chat_messages_no_duplicate_reaction ON message_reactions (message_id, user_id, reaction_type)`,
 
 		// Additional indexes
 		`CREATE INDEX IF NOT EXISTS events_search_vector_gin_idx ON events USING GIN (search_vector)`,
@@ -127,15 +139,13 @@ func AutoMigrate(db *gorm.DB) error {
 		`CREATE INDEX IF NOT EXISTS messages_sender_created_at_idx ON messages (sender_id, created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS messages_recipient_created_at_idx ON messages (recipient_id, created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS messages_recipient_unread_idx ON messages (recipient_id) WHERE read_at IS NULL`,
+		`CREATE INDEX IF NOT EXISTS messages_event_id_idx ON messages (event_id) WHERE event_id IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS support_tickets_user_updated_idx ON support_tickets (user_id, updated_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS support_tickets_status_updated_idx ON support_tickets (status, updated_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS support_messages_ticket_created_idx ON support_ticket_messages (ticket_id, created_at)`,
 		`CREATE INDEX IF NOT EXISTS event_photos_event_id_idx ON event_photos (event_id)`,
 		`CREATE INDEX IF NOT EXISTS user_event_views_user_viewed_at_idx ON user_event_views (user_id, viewed_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS user_event_views_event_viewed_at_idx ON user_event_views (event_id, viewed_at DESC)`,
-		`CREATE INDEX IF NOT EXISTS chat_rooms_event_idx ON chat_rooms (event_id) WHERE event_id IS NOT NULL`,
-		`CREATE INDEX IF NOT EXISTS chat_room_participants_user_idx ON chat_room_participants (user_id)`,
-		`CREATE INDEX IF NOT EXISTS chat_messages_room_created_idx ON chat_messages (room_id, created_at DESC)`,
-		`CREATE INDEX IF NOT EXISTS chat_messages_sender_idx ON chat_messages (sender_id)`,
-		`CREATE INDEX IF NOT EXISTS message_reactions_message_idx ON message_reactions (message_id)`,
-		`CREATE INDEX IF NOT EXISTS message_reactions_user_idx ON message_reactions (user_id)`,
 	}
 
 	for _, stmt := range schemaSQL {

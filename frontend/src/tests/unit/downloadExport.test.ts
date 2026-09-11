@@ -36,7 +36,9 @@ describe('downloadAuthenticatedFile', () => {
   });
 
   it('throws when the response is not ok', async () => {
-    globalThis.fetch = vi.fn(async () => new Response('nope', { status: 403 })) as unknown as typeof fetch;
+    globalThis.fetch = vi.fn(
+      async () => new Response('nope', { status: 403 }),
+    ) as unknown as typeof fetch;
 
     await expect(
       downloadAuthenticatedFile('/api/v1/events/export/xml', 'tok', 'events.xml'),

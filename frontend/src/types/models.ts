@@ -74,6 +74,8 @@ export interface Event {
 /** Enough of the event to render a booking row. */
 export interface BookingEventSummary {
   id: string;
+  /** Lets the attendee open a message to the organizer (assignment §10). */
+  organizer_id: string;
   title: string;
   venue: string;
   city: string;

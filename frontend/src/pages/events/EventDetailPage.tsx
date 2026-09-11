@@ -1,8 +1,19 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Building2, Calendar, Clock, ExternalLink, MapPin, Sofa, Ticket, Car } from 'lucide-react';
+import {
+  Building2,
+  Calendar,
+  Clock,
+  ExternalLink,
+  MapPin,
+  Pencil,
+  Sofa,
+  Ticket,
+  Car,
+} from 'lucide-react';
 
 import { EventMapEmbed } from '@/components/events/EventMapEmbed';
+import { PhotoGallery } from '@/components/events/PhotoGallery';
 import { BookingForm } from '@/components/bookings/BookingForm';
 import { Button } from '@/components/ui/button';
 import { ErrorMessage } from '@/components/shared/ErrorMessage';
@@ -12,13 +23,15 @@ import { eventTypeLabel } from '@/constants/eventTypes';
 import { apiErrorMessage } from '@/app/apiEnvelope';
 import { useGetEventQuery } from '@/app/eventsApi';
 import { useAuth } from '@/hooks/useAuth';
+import { useLang } from '@/contexts/langContext';
+import { INTL_LOCALE, type Locale } from '@/lib/i18n';
 import { emptyEventDetail, normalizeEventDetail } from '@/types/eventDetail';
 
 function isUUID(raw: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw);
 }
 
-function formatDateRange(startISO: string, endISO: string): string {
+function formatDateRange(startISO: string, endISO: string, locale: Locale): string {
   const start = new Date(startISO);
   const end = new Date(endISO);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '';
@@ -28,15 +41,15 @@ function formatDateRange(startISO: string, endISO: string): string {
     year: 'numeric',
     timeZone: 'UTC',
   };
-  const a = start.toLocaleDateString('el-GR', opts);
-  const b = end.toLocaleDateString('el-GR', opts);
+  const a = start.toLocaleDateString(INTL_LOCALE[locale], opts);
+  const b = end.toLocaleDateString(INTL_LOCALE[locale], opts);
   return `${a} – ${b}`;
 }
 
-function formatShort(iso: string): string {
+function formatShort(iso: string, locale: Locale): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('el-GR', {
+  return d.toLocaleString(INTL_LOCALE[locale], {
     weekday: 'short',
     day: '2-digit',
     month: '2-digit',
@@ -54,6 +67,7 @@ function triLabel(v: boolean | null, yes: string, no: string): string {
 export default function EventDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
+  const { t, locale } = useLang();
 
   const eventId = id ?? '';
   const validId = !!eventId && isUUID(eventId);
@@ -67,9 +81,9 @@ export default function EventDetailPage() {
 
   const loading = validId && isLoading;
   const error = !validId
-    ? 'Μη έγκυρο αναγνωριστικό εκδήλωσης'
+    ? t('eventDetail.invalidId')
     : queryError
-      ? apiErrorMessage(queryError, 'Δεν ήταν δυνατή η φόρτωση της εκδήλωσης.')
+      ? apiErrorMessage(queryError, t('eventDetail.loadError'))
       : null;
 
   const detail = useMemo(
@@ -103,14 +117,23 @@ export default function EventDetailPage() {
   // never left staring at a ticket list with no call to action.
   const bookingBlockedReason = useMemo(() => {
     if (!event) return '';
-    if (event.status === 'cancelled') return 'Η εκδήλωση έχει ακυρωθεί — δεν γίνονται κρατήσεις.';
-    if (event.status === 'completed' || hasEnded) return 'Η εκδήλωση έχει ολοκληρωθεί.';
-    if (event.status !== 'published') return 'Η εκδήλωση δεν είναι ακόμη δημοσιευμένη.';
-    if (event.ticket_types.length === 0) return 'Δεν υπάρχουν διαθέσιμοι τύποι εισιτηρίων.';
-    if (soldOut) return 'Τα εισιτήρια εξαντλήθηκαν.';
-    if (!user) return 'Συνδεθείτε για να κάνετε κράτηση.';
-    return 'Δεν είναι δυνατή η κράτηση αυτή τη στιγμή.';
-  }, [event, hasEnded, soldOut, user]);
+    if (event.status === 'cancelled') return t('eventDetail.blocked.cancelled');
+    if (event.status === 'completed' || hasEnded) return t('eventDetail.blocked.completed');
+    if (event.status !== 'published') return t('eventDetail.blocked.unpublished');
+    if (event.ticket_types.length === 0) return t('eventDetail.blocked.noTicketTypes');
+    if (soldOut) return t('eventDetail.blocked.soldOut');
+    if (!user) return t('eventDetail.blocked.login');
+    return t('eventDetail.blocked.generic');
+  }, [event, hasEnded, soldOut, user, t]);
+
+  // Everything the gallery shows: the featured image first, then the album.
+  const galleryImages = useMemo(() => {
+    if (!event) return [];
+    const urls = [event.featured_image_url, ...event.photos.map((p) => p.url)].filter(
+      (u): u is string => Boolean(u),
+    );
+    return Array.from(new Set(urls));
+  }, [event]);
 
   const locationLine = useMemo(() => {
     if (!event) return '';
@@ -118,6 +141,16 @@ export default function EventDetailPage() {
     const parts = [event.venue.trim(), addr, event.city.trim()].filter(Boolean);
     return parts.join(', ');
   }, [event]);
+
+  // Where the reader may edit this event: the admin form for administrators,
+  // the organizer form for its own organizer.
+  const editHref = useMemo(() => {
+    if (!event || !user) return null;
+    if (user.role === 'admin') return `/admin/events/${encodeURIComponent(event.id)}/edit`;
+    if (user.id === event.organizer_id)
+      return `/organizer/events/${encodeURIComponent(event.id)}/edit`;
+    return null;
+  }, [event, user]);
 
   const mapsHref = useMemo(() => {
     if (event?.latitude == null || event?.longitude == null) return null;
@@ -136,14 +169,14 @@ export default function EventDetailPage() {
     return (
       <div className="mx-auto max-w-[1100px] px-4 py-12 sm:px-6">
         <ErrorMessage
-          message={error ?? 'Δεν βρέθηκε η εκδήλωση.'}
+          message={error ?? t('eventDetail.notFound')}
           onRetry={validId ? () => void refetch() : undefined}
         />
         <Link
           to="/events"
-          className="comfortaa-regular mt-4 inline-block text-sm text-[#6d28d9] hover:underline"
+          className="comfortaa-regular mt-4 inline-block text-sm text-[var(--nexus-purple)] hover:underline"
         >
-          ← Επιστροφή στις εκδηλώσεις
+          {t('eventDetail.backToEvents')}
         </Link>
       </div>
     );
@@ -164,7 +197,7 @@ export default function EventDetailPage() {
           role="status"
           className="border-b border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-900 comfortaa-regular"
         >
-          Η εκδήλωση έχει ακυρωθεί από τον διοργανωτή. Δεν γίνονται νέες κρατήσεις.
+          {t('eventDetail.cancelledBanner')}
         </div>
       )}
       {(event.status === 'completed' || (event.status === 'published' && hasEnded)) && (
@@ -172,7 +205,7 @@ export default function EventDetailPage() {
           role="status"
           className="border-b border-neutral-200 bg-neutral-100 px-4 py-3 text-center text-sm text-neutral-700 comfortaa-regular"
         >
-          Η εκδήλωση έχει ολοκληρωθεί.
+          {t('eventDetail.completedBanner')}
         </div>
       )}
       {event.status === 'draft' && (
@@ -180,7 +213,7 @@ export default function EventDetailPage() {
           role="status"
           className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-900 comfortaa-regular"
         >
-          Πρόχειρη εκδήλωση — ορατή μόνο σε εσάς μέχρι τη δημοσίευση.
+          {t('eventDetail.draftBanner')}
         </div>
       )}
 
@@ -189,7 +222,7 @@ export default function EventDetailPage() {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               {event.event_type && (
-                <span className="rounded-full bg-[#6d28d9]/10 px-3 py-1 text-xs font-medium text-[#6d28d9] comfortaa-regular">
+                <span className="rounded-full bg-[var(--nexus-purple)]/10 px-3 py-1 text-xs font-medium text-[var(--nexus-purple)] comfortaa-regular">
                   {eventTypeLabel(event.event_type)}
                 </span>
               )}
@@ -207,37 +240,56 @@ export default function EventDetailPage() {
             </h1>
             <div className="mt-3 flex flex-col gap-2 text-sm text-neutral-700 comfortaa-regular">
               <p className="flex items-start gap-2">
-                <MapPin className="mt-0.5 size-4 shrink-0 text-[#6d28d9]" aria-hidden />
+                <MapPin className="mt-0.5 size-4 shrink-0 text-[var(--nexus-purple)]" aria-hidden />
                 <span>{locationLine}</span>
               </p>
               <p className="flex items-start gap-2">
-                <Calendar className="mt-0.5 size-4 shrink-0 text-[#6d28d9]" aria-hidden />
-                <span>{formatDateRange(event.start_at, event.end_at)}</span>
+                <Calendar
+                  className="mt-0.5 size-4 shrink-0 text-[var(--nexus-purple)]"
+                  aria-hidden
+                />
+                <span>{formatDateRange(event.start_at, event.end_at, locale)}</span>
               </p>
             </div>
           </div>
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+            {editHref ? (
+              <Button
+                asChild
+                variant="outline"
+                className="comfortaa-regular border-neutral-300 text-neutral-800"
+              >
+                <Link
+                  to={editHref}
+                  aria-label={t('eventDetail.edit')}
+                  title={t('eventDetail.edit')}
+                >
+                  <Pencil className="mr-2 size-4" />
+                  {t('eventDetail.edit')}
+                </Link>
+              </Button>
+            ) : null}
             {canBook && !soldOut ? (
               <Button
                 asChild
-                className="bg-[#6d28d9] px-6 text-white hover:bg-violet-700 comfortaa-regular"
+                className="bg-nexus-coral px-6 text-white hover:bg-nexus-coral-dark comfortaa-regular"
               >
                 <a href="#tickets">
                   <Ticket className="mr-2 size-4" />
-                  Εισιτήρια
+                  {t('eventDetail.ticketsButton')}
                 </a>
               </Button>
             ) : soldOut ? (
               <span className="rounded-full border-2 border-[var(--nexus-red)] px-4 py-2 text-sm font-semibold text-[var(--nexus-red)] comfortaa-regular">
-                Εξαντλημένα
+                {t('eventDetail.soldOut')}
               </span>
             ) : (
               <Button
                 asChild
                 variant="outline"
-                className="border-[#6d28d9] text-[#6d28d9]"
+                className="border-[var(--nexus-purple)] text-[var(--nexus-purple)]"
               >
-                <Link to="/login">Σύνδεση για κράτηση</Link>
+                <Link to="/login">{t('eventDetail.loginToBook')}</Link>
               </Button>
             )}
           </div>
@@ -245,25 +297,94 @@ export default function EventDetailPage() {
       </div>
 
       <div className="mx-auto max-w-[1100px] px-4 py-8 sm:px-6">
-        <Tabs defaultValue="description" className="w-full">
+        {/* Photos and tickets first (the things a visitor came for), the
+            descriptive tabs underneath. */}
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          <section aria-labelledby="photos-heading">
+            <h2 id="photos-heading" className="sr-only">
+              {t('eventDetail.photos')}
+            </h2>
+            <PhotoGallery images={galleryImages} title={event.title} />
+          </section>
+
+          <section
+            id="tickets"
+            aria-labelledby="tickets-heading"
+            className="scroll-mt-24 self-start rounded-2xl border border-neutral-200 bg-neutral-50/50 p-5"
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2
+                id="tickets-heading"
+                className="text-lg font-semibold text-neutral-950 comfortaa-bold"
+              >
+                {t('eventDetail.tickets')}
+              </h2>
+              <p className="text-xs text-neutral-600 comfortaa-regular">
+                {t('eventDetail.capacityLine', {
+                  capacity: event.capacity,
+                  sold: event.tickets_sold,
+                  remaining: event.tickets_remaining,
+                })}
+              </p>
+            </div>
+            {canBook && !soldOut && event.ticket_types.length > 0 ? (
+              <div className="mt-4">
+                <BookingForm event={event} />
+              </div>
+            ) : (
+              <>
+                {event.ticket_types.length > 0 ? (
+                  <ul className="mt-4 space-y-2">
+                    {event.ticket_types.map((tt) => (
+                      <li
+                        key={tt.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-3"
+                      >
+                        <div>
+                          <p className="font-medium text-neutral-900 comfortaa-regular">
+                            {tt.name}
+                          </p>
+                          <p className="text-xs text-neutral-500 comfortaa-regular">
+                            {t('eventDetail.availableOf', {
+                              available: tt.available,
+                              quantity: tt.quantity,
+                            })}
+                          </p>
+                        </div>
+                        <p className="text-lg font-semibold text-[var(--nexus-purple)] comfortaa-bold">
+                          {tt.price.toFixed(2)} €
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <p className="mt-4 rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 comfortaa-regular">
+                  {bookingBlockedReason}
+                </p>
+              </>
+            )}
+          </section>
+        </div>
+
+        <Tabs defaultValue="description" className="mt-10 w-full">
           <TabsList
             variant="line"
             className="mb-6 w-full flex-wrap justify-start gap-2 border-b border-neutral-200 pb-0"
           >
             <TabsTrigger value="description" className="comfortaa-regular">
-              Περιγραφή
+              {t('eventDetail.tabs.description')}
             </TabsTrigger>
             <TabsTrigger value="useful" className="comfortaa-regular">
-              Χρήσιμες πληροφορίες
+              {t('eventDetail.tabs.useful')}
             </TabsTrigger>
             <TabsTrigger value="organizer" className="comfortaa-regular">
-              Διοργανωτής
+              {t('eventDetail.tabs.organizer')}
             </TabsTrigger>
             <TabsTrigger value="dates" className="comfortaa-regular">
-              Ημερομηνίες
+              {t('eventDetail.tabs.dates')}
             </TabsTrigger>
             <TabsTrigger value="artists" className="comfortaa-regular">
-              Καλλιτέχνες
+              {t('eventDetail.tabs.artists')}
             </TabsTrigger>
           </TabsList>
 
@@ -277,7 +398,7 @@ export default function EventDetailPage() {
               {detail.contributors.length > 0 && (
                 <aside className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-4">
                   <h2 className="text-sm font-semibold text-neutral-900 comfortaa-bold">
-                    Συντελεστές
+                    {t('eventDetail.contributors')}
                   </h2>
                   <ul className="mt-3 space-y-2 text-sm">
                     {detail.contributors.map((c, i) => (
@@ -300,35 +421,47 @@ export default function EventDetailPage() {
           <TabsContent value="useful" className="mt-0 space-y-6">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <InfoCard
-                icon={<Clock className="size-5 text-[#6d28d9]" />}
-                title="Διάρκεια"
-                value={useful?.duration_minutes != null ? `${useful.duration_minutes} λεπτά` : '—'}
-              />
-              <InfoCard
-                icon={<Clock className="size-5 text-[#6d28d9]" />}
-                title="Διάλειμμα"
+                icon={<Clock className="size-5 text-[var(--nexus-purple)]" />}
+                title={t('eventDetail.duration')}
                 value={
-                  useful?.intermission_minutes != null
-                    ? `${useful.intermission_minutes} λεπτά`
+                  useful?.duration_minutes != null
+                    ? t('eventDetail.minutes', { n: useful.duration_minutes })
                     : '—'
                 }
               />
               <InfoCard
-                icon={<Sofa className="size-5 text-[#6d28d9]" />}
-                title="Θέσεις καθήμενων"
-                value={triLabel(useful?.seated_only ?? null, 'Ναι', 'Όχι')}
+                icon={<Clock className="size-5 text-[var(--nexus-purple)]" />}
+                title={t('eventDetail.intermission')}
+                value={
+                  useful?.intermission_minutes != null
+                    ? t('eventDetail.minutes', { n: useful.intermission_minutes })
+                    : '—'
+                }
               />
               <InfoCard
-                icon={<Car className="size-5 text-[#6d28d9]" />}
-                title="Parking"
-                value={triLabel(useful?.parking_available ?? null, 'Ναι', 'Όχι')}
+                icon={<Sofa className="size-5 text-[var(--nexus-purple)]" />}
+                title={t('eventDetail.seated')}
+                value={triLabel(
+                  useful?.seated_only ?? null,
+                  t('eventDetail.yes'),
+                  t('eventDetail.no'),
+                )}
+              />
+              <InfoCard
+                icon={<Car className="size-5 text-[var(--nexus-purple)]" />}
+                title={t('eventDetail.parking')}
+                value={triLabel(
+                  useful?.parking_available ?? null,
+                  t('eventDetail.yes'),
+                  t('eventDetail.no'),
+                )}
               />
             </div>
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="rounded-2xl border border-neutral-200 p-4">
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-neutral-900 comfortaa-bold">
                   <Ticket className="size-4" />
-                  Πολιτική αλλαγών και ακυρώσεων εισιτηρίων
+                  {t('eventDetail.policy')}
                 </h3>
                 {useful?.cancellation_policy ? (
                   <p className="mt-3 whitespace-pre-wrap text-sm text-neutral-700 comfortaa-regular">
@@ -336,14 +469,14 @@ export default function EventDetailPage() {
                   </p>
                 ) : (
                   <p className="mt-3 text-sm text-neutral-500 comfortaa-regular">
-                    Δεν έχει οριστεί κείμενο.
+                    {t('eventDetail.noPolicy')}
                   </p>
                 )}
               </div>
               <div className="rounded-2xl border border-neutral-200 p-4">
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-neutral-900 comfortaa-bold">
                   <MapPin className="size-4" />
-                  Τοποθεσία
+                  {t('eventDetail.location')}
                 </h3>
                 <p className="mt-2 text-sm font-medium text-neutral-800 comfortaa-regular">
                   {event.venue}
@@ -356,17 +489,16 @@ export default function EventDetailPage() {
                         href={mapsHref}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-white/95 px-3 py-1.5 text-xs font-medium text-[#6d28d9] shadow comfortaa-regular"
+                        className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-white/95 px-3 py-1.5 text-xs font-medium text-[var(--nexus-purple)] shadow comfortaa-regular"
                       >
-                        Άνοιγμα στους Χάρτες
+                        {t('eventDetail.openInMaps')}
                         <ExternalLink className="size-3" />
                       </a>
                     )}
                   </div>
                 ) : (
                   <p className="mt-3 text-xs text-neutral-500 comfortaa-regular">
-                    Δεν έχουν οριστεί συντεταγμένες χάρτη για αυτή την εκδήλωση. Ο διαχειριστής
-                    μπορεί να τις προσθέσει από την επεξεργασία εκδήλωσης (πλάτος / μήκος).
+                    {t('eventDetail.noCoordinates')}
                   </p>
                 )}
               </div>
@@ -376,8 +508,8 @@ export default function EventDetailPage() {
           <TabsContent value="organizer" className="mt-0">
             <div className="rounded-2xl border border-neutral-200 p-6">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-neutral-950 comfortaa-bold">
-                <Building2 className="size-5 text-[#6d28d9]" />
-                Διοργανωτής
+                <Building2 className="size-5 text-[var(--nexus-purple)]" />
+                {t('eventDetail.organizer')}
               </h2>
               {org && (org.legal_name || org.headquarters) ? (
                 <>
@@ -386,24 +518,30 @@ export default function EventDetailPage() {
                   </p>
                   <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                     <div>
-                      <dt className="text-xs text-neutral-500 comfortaa-regular">Έδρα</dt>
+                      <dt className="text-xs text-neutral-500 comfortaa-regular">
+                        {t('eventDetail.headquarters')}
+                      </dt>
                       <dd className="text-neutral-900 comfortaa-regular">
                         {org.headquarters || '—'}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-neutral-500 comfortaa-regular">ΑΦΜ</dt>
+                      <dt className="text-xs text-neutral-500 comfortaa-regular">
+                        {t('eventDetail.vat')}
+                      </dt>
                       <dd className="text-neutral-900 comfortaa-regular">
                         {org.vat_number || '—'}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-neutral-500 comfortaa-regular">Email</dt>
+                      <dt className="text-xs text-neutral-500 comfortaa-regular">
+                        {t('eventDetail.email')}
+                      </dt>
                       <dd>
                         {org.email ? (
                           <a
                             href={`mailto:${org.email}`}
-                            className="text-[#6d28d9] hover:underline"
+                            className="text-[var(--nexus-purple)] hover:underline"
                           >
                             {org.email}
                           </a>
@@ -413,10 +551,15 @@ export default function EventDetailPage() {
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-neutral-500 comfortaa-regular">Τηλέφωνο</dt>
+                      <dt className="text-xs text-neutral-500 comfortaa-regular">
+                        {t('eventDetail.phone')}
+                      </dt>
                       <dd>
                         {org.phone ? (
-                          <a href={`tel:${org.phone}`} className="text-[#6d28d9] hover:underline">
+                          <a
+                            href={`tel:${org.phone}`}
+                            className="text-[var(--nexus-purple)] hover:underline"
+                          >
                             {org.phone}
                           </a>
                         ) : (
@@ -425,7 +568,9 @@ export default function EventDetailPage() {
                       </dd>
                     </div>
                     <div className="sm:col-span-2">
-                      <dt className="text-xs text-neutral-500 comfortaa-regular">ΔΟΥ</dt>
+                      <dt className="text-xs text-neutral-500 comfortaa-regular">
+                        {t('eventDetail.taxOffice')}
+                      </dt>
                       <dd className="text-neutral-900 comfortaa-regular">
                         {org.tax_office || '—'}
                       </dd>
@@ -434,7 +579,7 @@ export default function EventDetailPage() {
                 </>
               ) : (
                 <p className="mt-3 text-sm text-neutral-600 comfortaa-regular">
-                  Δεν έχουν καταχωρηθεί δημόσια στοιχεία διοργανωτή.
+                  {t('eventDetail.noOrganizerInfo')}
                 </p>
               )}
             </div>
@@ -449,7 +594,7 @@ export default function EventDetailPage() {
                 >
                   <div>
                     <p className="text-sm font-semibold text-neutral-900 comfortaa-bold">
-                      {formatShort(oc.starts_at)}
+                      {formatShort(oc.starts_at, locale)}
                     </p>
                     {oc.label && (
                       <p className="text-xs text-neutral-500 comfortaa-regular">{oc.label}</p>
@@ -458,7 +603,7 @@ export default function EventDetailPage() {
                   <div className="text-sm text-neutral-700 comfortaa-regular">
                     <span className="font-medium">{event.title}</span>
                     {event.address && (
-                      <span className="mt-1 block text-xs underline text-[#6d28d9]">
+                      <span className="mt-1 block text-xs underline text-[var(--nexus-purple)]">
                         {event.address}
                       </span>
                     )}
@@ -469,11 +614,11 @@ export default function EventDetailPage() {
                   <div>
                     {soldOut ? (
                       <span className="inline-flex rounded-full border border-[var(--nexus-red)] px-3 py-1 text-xs font-semibold text-[var(--nexus-red)]">
-                        Εξαντλημένα
+                        {t('eventDetail.soldOut')}
                       </span>
                     ) : (
                       <span className="text-xs text-emerald-700 comfortaa-regular">
-                        Διαθέσιμα εισιτήρια
+                        {t('eventDetail.availableTickets')}
                       </span>
                     )}
                   </div>
@@ -485,7 +630,7 @@ export default function EventDetailPage() {
           <TabsContent value="artists" className="mt-0">
             {detail.artists.length === 0 ? (
               <p className="text-sm text-neutral-600 comfortaa-regular">
-                Δεν έχουν προστεθεί καλλιτέχνες.
+                {t('eventDetail.noArtists')}
               </p>
             ) : (
               <ul className="grid gap-3 sm:grid-cols-2">
@@ -502,75 +647,12 @@ export default function EventDetailPage() {
           </TabsContent>
         </Tabs>
 
-        {event.photos.length > 0 && (
-          <section className="mt-12">
-            <h2 className="text-lg font-semibold text-neutral-950 comfortaa-bold">
-              Φωτογραφίες
-            </h2>
-            <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {event.photos.map((photo, i) => (
-                <li key={photo.id} className="overflow-hidden rounded-xl border border-neutral-200">
-                  <img
-                    src={photo.url}
-                    alt={`${event.title} — φωτογραφία ${i + 1}`}
-                    loading="lazy"
-                    className="aspect-4/3 w-full object-cover transition-transform duration-300 hover:scale-105"
-                  />
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        <section
-          id="tickets"
-          className="mt-12 scroll-mt-24 rounded-2xl border border-neutral-200 bg-neutral-50/50 p-6"
-        >
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-lg font-semibold text-neutral-950 comfortaa-bold">Εισιτήρια</h2>
-            <p className="text-xs text-neutral-600 comfortaa-regular">
-              Χωρητικότητα {event.capacity} · Κρατήσεις {event.tickets_sold} · Διαθέσιμα{' '}
-              {event.tickets_remaining}
-            </p>
-          </div>
-          {event.ticket_types.length === 0 ? (
-            <p className="mt-2 text-sm text-neutral-600 comfortaa-regular">
-              Δεν υπάρχουν διαθέσιμοι τύποι εισιτηρίων.
-            </p>
-          ) : (
-            <ul className="mt-4 space-y-3">
-              {event.ticket_types.map((tt) => (
-                <li
-                  key={tt.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-3"
-                >
-                  <div>
-                    <p className="font-medium text-neutral-900 comfortaa-regular">{tt.name}</p>
-                    <p className="text-xs text-neutral-500 comfortaa-regular">
-                      Διαθέσιμα: {tt.available} / {tt.quantity}
-                    </p>
-                  </div>
-                  <p className="text-lg font-semibold text-[#6d28d9] comfortaa-bold">
-                    {tt.price.toFixed(2)} €
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-          {canBook && !soldOut && event.ticket_types.length > 0 ? (
-            <div className="mt-6">
-              <BookingForm event={event} />
-            </div>
-          ) : (
-            <p className="mt-6 rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700 comfortaa-regular">
-              {bookingBlockedReason}
-            </p>
-          )}
-        </section>
-
         <p className="mt-10 text-center">
-          <Link to="/events" className="text-sm text-[#6d28d9] hover:underline comfortaa-regular">
-            ← Όλες οι εκδηλώσεις
+          <Link
+            to="/events"
+            className="text-sm text-[var(--nexus-purple)] hover:underline comfortaa-regular"
+          >
+            {t('eventDetail.allEvents')}
           </Link>
         </p>
       </div>

@@ -9,6 +9,7 @@ import type { Swiper as SwiperInstance } from 'swiper/types';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { tr } from '@/lib/i18n';
 
 type SectionSwiperProps = {
   title: string;
@@ -53,7 +54,7 @@ export function SectionSwiper({
           {viewAllHref && viewAllLabel ? (
             <Link
               to={viewAllHref}
-              className="text-sm font-semibold text-[#6d28d9] transition hover:text-[#5b21b6] comfortaa-regular"
+              className="text-sm font-semibold text-nexus-coral transition hover:text-nexus-coral-dark comfortaa-regular"
             >
               {viewAllLabel}
             </Link>
@@ -63,7 +64,7 @@ export function SectionSwiper({
             variant="ghost"
             size="icon"
             className={cn('rounded-full', prevClass)}
-            aria-label="Προηγούμενα"
+            aria-label={tr('common.previous')}
           >
             <ChevronLeft className="size-5" aria-hidden />
           </Button>
@@ -72,7 +73,7 @@ export function SectionSwiper({
             variant="ghost"
             size="icon"
             className={cn('rounded-full', nextClass)}
-            aria-label="Επόμενα"
+            aria-label={tr('common.next')}
           >
             <ChevronRight className="size-5" aria-hidden />
           </Button>

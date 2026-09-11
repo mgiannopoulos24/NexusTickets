@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { MessageSquare } from 'lucide-react';
 
 import { apiErrorMessage } from '@/app/apiEnvelope';
 import { useGetMyBookingsQuery } from '@/app/bookingsApi';
@@ -7,12 +8,7 @@ import { ErrorMessage } from '@/components/shared/ErrorMessage';
 import { SkeletonList } from '@/components/shared/SkeletonList';
 import { cn } from '@/lib/utils';
 import type { BookingStatus } from '@/types/enums';
-
-const STATUS_LABEL: Record<BookingStatus, string> = {
-  confirmed: 'Επιβεβαιωμένη',
-  pending: 'Εκκρεμής',
-  cancelled: 'Ακυρωμένη',
-};
+import { useLang } from '@/contexts/langContext';
 
 const STATUS_COLOR: Record<BookingStatus, string> = {
   confirmed: 'text-emerald-700',
@@ -27,15 +23,18 @@ function formatDate(value: string | undefined): string {
 }
 
 export default function MyBookingsPage() {
+  const { t } = useLang();
   const { data: bookings, isLoading, error, refetch } = useGetMyBookingsQuery();
 
   return (
     <div className="min-h-screen bg-neutral-50 py-8">
       <div className="mx-auto max-w-4xl px-4">
         <div className="mb-6">
-          <h1 className="comfortaa-bold text-2xl font-bold text-neutral-900">Οι κρατήσεις μου</h1>
+          <h1 className="comfortaa-bold text-2xl font-bold text-neutral-900">
+            {t('myBookings.title')}
+          </h1>
           <p className="comfortaa-regular mt-1 text-sm text-neutral-600">
-            Όλες οι κρατήσεις εισιτηρίων που έχετε πραγματοποιήσει.
+            {t('myBookings.subtitle')}
           </p>
         </div>
 
@@ -43,39 +42,39 @@ export default function MyBookingsPage() {
           <SkeletonList rows={4} />
         ) : error ? (
           <ErrorMessage
-            message={apiErrorMessage(error, 'Δεν ήταν δυνατή η φόρτωση των κρατήσεων.')}
+            message={apiErrorMessage(error, t('myBookings.loadError'))}
             onRetry={() => void refetch()}
           />
         ) : (bookings ?? []).length === 0 ? (
-          <EmptyState
-            title="Δεν έχετε κρατήσεις ακόμα"
-            description="Μόλις κάνετε την πρώτη σας κράτηση, θα εμφανιστεί εδώ."
-          >
+          <EmptyState title={t('myBookings.emptyTitle')} description={t('myBookings.emptyBody')}>
             <Link
               to="/events"
-              className="comfortaa-regular inline-block rounded-lg bg-[#6d28d9] px-4 py-2 text-sm text-white hover:bg-violet-700"
+              className="comfortaa-regular inline-block rounded-lg bg-[var(--nexus-purple)] px-4 py-2 text-sm text-white hover:bg-violet-700"
             >
-              Αναζητήστε εκδηλώσεις
+              {t('myBookings.browse')}
             </Link>
           </EmptyState>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
-            <div className="comfortaa-regular grid min-w-[36rem] grid-cols-[1fr_110px_110px_120px] bg-neutral-50 px-4 py-3 text-xs font-semibold text-neutral-600">
-              <div>Εκδήλωση</div>
-              <div>Εισιτήρια</div>
-              <div>Κατάσταση</div>
-              <div>Σύνολο</div>
+            <div className="comfortaa-regular grid min-w-[40rem] grid-cols-[1fr_110px_110px_120px_44px] bg-neutral-50 px-4 py-3 text-xs font-semibold text-neutral-600">
+              <div>{t('myBookings.colEvent')}</div>
+              <div>{t('myBookings.colTickets')}</div>
+              <div>{t('myBookings.colStatus')}</div>
+              <div>{t('myBookings.colTotal')}</div>
+              <div>
+                <span className="sr-only">{t('myBookings.contact')}</span>
+              </div>
             </div>
-            <ul className="min-w-[36rem] divide-y divide-neutral-200">
+            <ul className="min-w-[40rem] divide-y divide-neutral-200">
               {(bookings ?? []).map((b) => (
-                <li key={b.id} className="px-4 py-3">
+                <li key={b.id} className="grid grid-cols-[1fr_44px] items-center px-4 py-3">
                   <Link
                     to={`/events/${encodeURIComponent(b.event_id)}`}
-                    className="grid grid-cols-[1fr_110px_110px_120px] items-center hover:text-[#6d28d9]"
+                    className="grid grid-cols-[1fr_110px_110px_120px] items-center hover:text-[var(--nexus-purple)]"
                   >
                     <div className="min-w-0 pr-3">
                       <p className="comfortaa-regular truncate text-sm font-medium text-neutral-900">
-                        {b.event?.title ?? 'Εκδήλωση'}
+                        {b.event?.title ?? t('common.event')}
                       </p>
                       <p className="comfortaa-regular truncate text-xs text-neutral-500">
                         {[b.event?.venue, b.event?.city].filter(Boolean).join(', ')}
@@ -83,7 +82,7 @@ export default function MyBookingsPage() {
                       </p>
                       {b.event?.status === 'cancelled' && (
                         <p className="comfortaa-regular mt-0.5 text-xs font-medium text-[var(--nexus-red)]">
-                          Η εκδήλωση ακυρώθηκε
+                          {t('myBookings.eventCancelled')}
                         </p>
                       )}
                     </div>
@@ -101,12 +100,23 @@ export default function MyBookingsPage() {
                         STATUS_COLOR[b.status] ?? 'text-neutral-700',
                       )}
                     >
-                      {STATUS_LABEL[b.status] ?? b.status}
+                      {t(`status.booking.${b.status}`)}
                     </div>
-                    <div className="comfortaa-regular text-sm font-medium text-[#6d28d9]">
+                    <div className="comfortaa-regular text-sm font-medium text-[var(--nexus-purple)]">
                       {b.total_cost.toFixed(2)} €
                     </div>
                   </Link>
+                  {/* A booking opens the line to the organizer (assignment §10). */}
+                  {b.event?.organizer_id ? (
+                    <Link
+                      to={`/messages?compose=1&to=${encodeURIComponent(b.event.organizer_id)}&event=${encodeURIComponent(b.event_id)}&subject=${encodeURIComponent(t('myBookings.messageSubject', { title: b.event.title }))}`}
+                      className="inline-flex size-9 items-center justify-center rounded-lg text-neutral-500 hover:bg-violet-50 hover:text-[var(--nexus-purple)]"
+                      aria-label={t('myBookings.messageOrganizerFor', { title: b.event.title })}
+                      title={t('myBookings.messageOrganizer')}
+                    >
+                      <MessageSquare className="size-4" />
+                    </Link>
+                  ) : null}
                 </li>
               ))}
             </ul>

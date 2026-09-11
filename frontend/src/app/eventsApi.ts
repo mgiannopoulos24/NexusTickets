@@ -1,6 +1,11 @@
 import { unwrap, unwrapList, type ApiEnvelope } from '@/app/apiEnvelope';
 import { baseApi } from '@/utils/api';
+
+export type AdminEventsArgs = { limit?: number; offset?: number; q?: string; status?: EventStatus };
+
+export type AdminEventsPage = { events: Event[]; total: number; limit: number; offset: number };
 import type { Category, Event } from '@/types/models';
+import type { EventStatus } from '@/types/enums';
 
 /**
  * Search criteria from assignment §8: category, title, free-text (description),
@@ -151,24 +156,45 @@ export const eventsApi = baseApi.injectEndpoints({
         body,
       }),
       transformResponse: (response: unknown): Event => unwrap<Event>(response),
-      invalidatesTags: (_r, _e, { id }) => [{ type: 'Event', id }, { type: 'Event', id: 'ORGANIZER' }],
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: 'Event', id },
+        { type: 'Event', id: 'ORGANIZER' },
+      ],
     }),
 
     publishEvent: builder.mutation<Event, string>({
-      query: (id) => ({ url: `/events/organizer/${encodeURIComponent(id)}/publish`, method: 'PATCH' }),
+      query: (id) => ({
+        url: `/events/organizer/${encodeURIComponent(id)}/publish`,
+        method: 'PATCH',
+      }),
       transformResponse: (response: unknown): Event => unwrap<Event>(response),
-      invalidatesTags: (_r, _e, id) => [{ type: 'Event', id }, { type: 'Event', id: 'ORGANIZER' }, 'Event'],
+      invalidatesTags: (_r, _e, id) => [
+        { type: 'Event', id },
+        { type: 'Event', id: 'ORGANIZER' },
+        'Event',
+      ],
     }),
 
     cancelEvent: builder.mutation<Event, string>({
-      query: (id) => ({ url: `/events/organizer/${encodeURIComponent(id)}/cancel`, method: 'PATCH' }),
+      query: (id) => ({
+        url: `/events/organizer/${encodeURIComponent(id)}/cancel`,
+        method: 'PATCH',
+      }),
       transformResponse: (response: unknown): Event => unwrap<Event>(response),
-      invalidatesTags: (_r, _e, id) => [{ type: 'Event', id }, { type: 'Event', id: 'ORGANIZER' }, 'Event'],
+      invalidatesTags: (_r, _e, id) => [
+        { type: 'Event', id },
+        { type: 'Event', id: 'ORGANIZER' },
+        'Event',
+      ],
     }),
 
     deleteEvent: builder.mutation<void, string>({
       query: (id) => ({ url: `/events/organizer/${encodeURIComponent(id)}`, method: 'DELETE' }),
-      invalidatesTags: (_r, _e, id) => [{ type: 'Event', id }, { type: 'Event', id: 'ORGANIZER' }, 'Event'],
+      invalidatesTags: (_r, _e, id) => [
+        { type: 'Event', id },
+        { type: 'Event', id: 'ORGANIZER' },
+        'Event',
+      ],
     }),
 
     uploadFeaturedImage: builder.mutation<Event, { id: string; file: File; admin?: boolean }>({
@@ -210,16 +236,29 @@ export const eventsApi = baseApi.injectEndpoints({
 
     // ------------------------------------------------------------------- admin
 
-    getAdminEvents: builder.query<Event[], { limit?: number; offset?: number } | void>({
+    getAdminEvents: builder.query<AdminEventsPage, AdminEventsArgs | void>({
       query: (args) => {
-        const { limit = 100, offset = 0 } = args ?? {};
-        return { url: `/events/admin?limit=${limit}&offset=${offset}` };
+        const { limit = 20, offset = 0, q = '', status } = args ?? {};
+        const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+        if (q.trim()) params.set('q', q.trim());
+        if (status) params.set('status', status);
+        return { url: `/events/admin?${params.toString()}` };
       },
-      transformResponse: (response: unknown): Event[] => unwrapList<Event>(response),
+      transformResponse: (response: unknown, _meta, args): AdminEventsPage => {
+        const body = response as ApiEnvelope<Event[]>;
+        const events = unwrapList<Event>(body);
+        const meta = (body.meta ?? {}) as { total?: number; limit?: number; offset?: number };
+        return {
+          events,
+          total: meta.total ?? events.length,
+          limit: meta.limit ?? args?.limit ?? 20,
+          offset: meta.offset ?? args?.offset ?? 0,
+        };
+      },
       providesTags: (result) =>
         result
           ? [
-              ...result.map((e) => ({ type: 'Event' as const, id: e.id })),
+              ...result.events.map((e) => ({ type: 'Event' as const, id: e.id })),
               { type: 'Event' as const, id: 'ADMIN' },
             ]
           : [{ type: 'Event' as const, id: 'ADMIN' }],
@@ -238,7 +277,11 @@ export const eventsApi = baseApi.injectEndpoints({
         body,
       }),
       transformResponse: (response: unknown): Event => unwrap<Event>(response),
-      invalidatesTags: (_r, _e, { id }) => [{ type: 'Event', id }, { type: 'Event', id: 'ADMIN' }, 'Event'],
+      invalidatesTags: (_r, _e, { id }) => [
+        { type: 'Event', id },
+        { type: 'Event', id: 'ADMIN' },
+        'Event',
+      ],
     }),
   }),
 });

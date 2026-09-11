@@ -1,6 +1,7 @@
 import { AlertCircle } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { tr } from '@/lib/i18n';
 
 type ErrorMessageProps = {
   title?: string;
@@ -16,7 +17,7 @@ export function ErrorMessage({
   message,
   className,
   onRetry,
-  retryLabel = 'Δοκιμάστε ξανά',
+  retryLabel = tr('common.retry'),
 }: ErrorMessageProps) {
   return (
     <div

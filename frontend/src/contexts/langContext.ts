@@ -1,23 +1,12 @@
 import { createContext, useContext } from 'react';
 
-import enTranslations from '@/locales/en.yaml';
-import grTranslations from '@/locales/gr.yaml';
+import type { Locale, TranslateParams } from '@/lib/i18n';
 
-export type TranslationTree =
-  | string
-  | {
-      readonly [key: string]: TranslationTree;
-    };
-
-export const translations: Record<'en' | 'el', TranslationTree> = {
-  en: enTranslations as TranslationTree,
-  el: grTranslations as TranslationTree,
-};
-
-export type Locale = keyof typeof translations;
+export type { Locale, TranslationTree } from '@/lib/i18n';
+export { translations } from '@/lib/i18n';
 
 export interface LangContextType {
-  t: (key: string) => string;
+  t: (key: string, params?: TranslateParams) => string;
   locale: Locale;
   setLocale: (locale: Locale) => void;
 }

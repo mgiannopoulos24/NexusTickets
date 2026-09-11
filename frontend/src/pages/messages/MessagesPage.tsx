@@ -1,305 +1,259 @@
-import { useCallback, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { MessagesSquare } from 'lucide-react';
+import { useCallback, useMemo } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Inbox, PenSquare, Send } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { ErrorMessage } from '@/components/shared/ErrorMessage';
-import { ConversationList } from '@/components/messenger/ConversationList';
-import { MessageComposer } from '@/components/messenger/MessageComposer';
-import { MessageThread } from '@/components/messenger/MessageThread';
-import { NewConversationDialog } from '@/components/messenger/NewConversationDialog';
+import { apiErrorMessage } from '@/app/apiEnvelope';
+import { useAppSelector } from '@/app/hooks';
 import {
   useDeleteMessageMutation,
-  useListConversationsQuery,
-  useListRecipientsQuery,
-  useListThreadQuery,
-  useReactToMessageMutation,
-  useSendMessageMutation,
-  useUploadAttachmentMutation,
+  useGetMessageQuery,
+  useListMailboxQuery,
 } from '@/app/messagesApi';
-import { useAppSelector } from '@/app/hooks';
-import { useAuth } from '@/hooks/useAuth';
-import { sendTypingHint, useTypingSignal } from '@/hooks/useTypingSignal';
+import {
+  ComposeMessageDialog,
+  type ComposeDraft,
+} from '@/components/messages/ComposeMessageDialog';
+import { MailboxList } from '@/components/messages/MailboxList';
+import { MessageView } from '@/components/messages/MessageView';
+import { replySubject } from '@/components/messages/participant';
+import { EmptyState } from '@/components/shared/EmptyState';
+import { ErrorMessage } from '@/components/shared/ErrorMessage';
+import { SkeletonList } from '@/components/shared/SkeletonList';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { Attachment, Message, MessageParticipant, MessageRecipient } from '@/types/message';
-import type { OutgoingMessage } from '@/components/messenger/MessageComposer';
+import type { MailboxFolder } from '@/types/message';
+import { useLang } from '@/contexts/langContext';
 
-const BOOKING_RULE = 'messaging requires a booking between the two users';
+const PAGE_SIZE = 20;
 
-function errorText(err: unknown, fallback: string): string {
-  if (typeof err === 'object' && err !== null && 'data' in err) {
-    const data = (err as { data?: { error?: { message?: string } } }).data;
-    const message = data?.error?.message;
-    if (message === BOOKING_RULE) {
-      return 'Μπορείτε να στείλετε μήνυμα μόνο σε διοργανωτές των εκδηλώσεων που κρατήσατε (ή στην υποστήριξη).';
-    }
-    if (message) return message;
-  }
-  if (err instanceof Error) return err.message;
-  return fallback;
+function parseFolder(raw: string | null): MailboxFolder {
+  return raw === 'sent' ? 'sent' : 'inbox';
 }
 
-function recipientToParticipant(r: MessageRecipient): MessageParticipant {
-  return { id: r.id, username: r.username, full_name: r.full_name, role: r.role };
+function parseOffset(raw: string | null): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  // Snap to a page boundary so a hand-edited URL still lands on a real page.
+  return Math.floor(n / PAGE_SIZE) * PAGE_SIZE;
 }
 
+/**
+ * The mailbox of assignment §10. Everything the page shows lives in the URL
+ * (`folder`, `offset`, `id`, and the compose intent), so folders, pages and
+ * opened messages can be linked to and the back button steps between them.
+ */
 export default function MessagesPage() {
-  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { t } = useLang();
+  const unreadCount = useAppSelector((s) => s.messaging.unreadCount);
 
-  const {
-    data: conversations,
-    isLoading: conversationsLoading,
-    error: conversationsError,
-    refetch: refetchConversations,
-  } = useListConversationsQuery();
-  const { data: recipients } = useListRecipientsQuery();
-  const [sendMessage, { isLoading: isSending }] = useSendMessageMutation();
-  const [deleteMessage] = useDeleteMessageMutation();
-  const [uploadAttachment] = useUploadAttachmentMutation();
-  const [reactToMessage] = useReactToMessageMutation();
+  const folder = parseFolder(searchParams.get('folder'));
+  const offset = parseOffset(searchParams.get('offset'));
+  const openId = searchParams.get('id');
+  const composeOpen = searchParams.get('compose') === '1';
 
-  const [query, setQuery] = useState('');
-  const [sendError, setSendError] = useState<string | null>(null);
-  const [replyTo, setReplyTo] = useState<Message | null>(null);
-  const [pickerOpened, setPickerOpened] = useState(false);
-  const [pickerDismissed, setPickerDismissed] = useState(false);
-
-  // The footer links here with ?compose=1 (and ?support=1 to reach an
-  // administrator). Both intents are read straight off the URL rather than
-  // copied into state by an effect.
-  const composeRequested = searchParams.get('compose') === '1';
-  const supportRequested = searchParams.get('support') === '1';
-
-  const supportContact = useMemo(() => recipients?.find((r) => r.support), [recipients]);
-
-  // The open thread lives in the URL, so a conversation can be linked to and
-  // the back button steps between them. A support link resolves to the
-  // administrator as soon as the recipient list has loaded.
-  const activeUserId =
-    searchParams.get('to') ?? (supportRequested ? (supportContact?.id ?? null) : null);
-
-  const isPickerOpen =
-    !pickerDismissed && (pickerOpened || (composeRequested && !supportRequested));
-
-  const openThread = (userId: string) => {
-    const next = new URLSearchParams(searchParams);
-    next.set('to', userId);
-    next.delete('compose');
-    next.delete('support');
-    setSearchParams(next, { replace: true });
-    setSendError(null);
-    setReplyTo(null);
-    setPickerOpened(false);
-    setPickerDismissed(true);
-  };
-
-  const closeThread = () => {
-    const next = new URLSearchParams(searchParams);
-    next.delete('to');
-    next.delete('support');
-    setSearchParams(next, { replace: true });
-  };
-
-  const openPicker = () => {
-    setPickerDismissed(false);
-    setPickerOpened(true);
-  };
-
-  const {
-    data: threadMessages,
-    isLoading: threadLoading,
-    error: threadError,
-  } = useListThreadQuery({ userId: activeUserId ?? '' }, { skip: !activeUserId });
-
-  // Typing hints are transient: they expire on their own if the other side
-  // stops without sending anything.
-  const typingBy = useAppSelector((state) => state.messaging.typingBy);
-  const isTyping = useTypingSignal(activeUserId ? typingBy[activeUserId] : undefined);
-  const notifyTyping = useCallback(() => {
-    if (activeUserId) sendTypingHint(activeUserId);
-  }, [activeUserId]);
-
-  const activeConversation = useMemo(
-    () => conversations?.find((c) => c.user.id === activeUserId),
-    [conversations, activeUserId],
+  const composeDraft = useMemo<ComposeDraft>(
+    () => ({
+      recipientId: searchParams.get('to') ?? undefined,
+      subject: searchParams.get('subject') ?? undefined,
+      eventId: searchParams.get('event') ?? undefined,
+    }),
+    [searchParams],
   );
 
-  // A thread opened from the picker has no conversation row yet, so fall back
-  // to the recipient list for the header identity.
-  const activeRecipient = useMemo(
-    () => recipients?.find((r) => r.id === activeUserId),
-    [recipients, activeUserId],
+  const {
+    data: page,
+    isLoading: pageLoading,
+    isFetching: pageFetching,
+    error: pageError,
+    refetch: refetchPage,
+  } = useListMailboxQuery({ folder, limit: PAGE_SIZE, offset }, { skip: Boolean(openId) });
+
+  const {
+    data: message,
+    isLoading: messageLoading,
+    error: messageError,
+  } = useGetMessageQuery(openId ?? '', { skip: !openId });
+
+  const [deleteMessage, { isLoading: deleting }] = useDeleteMessageMutation();
+
+  const update = useCallback(
+    (mutate: (next: URLSearchParams) => void) => {
+      const next = new URLSearchParams(searchParams);
+      mutate(next);
+      setSearchParams(next, { replace: true });
+    },
+    [searchParams, setSearchParams],
   );
 
-  const activeParticipant: MessageParticipant | null =
-    activeConversation?.user ?? (activeRecipient ? recipientToParticipant(activeRecipient) : null);
-  const activeSupport = activeConversation?.support ?? activeRecipient?.support ?? false;
+  const folderHref = (target: MailboxFolder) => `/messages?folder=${target}`;
+  const messageHref = (id: string) =>
+    `/messages?folder=${folder}${offset ? `&offset=${offset}` : ''}&id=${encodeURIComponent(id)}`;
+  const listHref = `/messages?folder=${folder}${offset ? `&offset=${offset}` : ''}`;
 
-  const visibleConversations = useMemo(() => {
-    const list = conversations ?? [];
-    const q = query.trim().toLocaleLowerCase('el-GR');
-    if (!q) return list;
-    return list.filter((c) =>
-      `${c.user.full_name} ${c.user.username} ${c.last_message.body}`
-        .toLocaleLowerCase('el-GR')
-        .includes(q),
-    );
-  }, [conversations, query]);
+  const openCompose = (draft: ComposeDraft = {}) =>
+    update((next) => {
+      next.set('compose', '1');
+      for (const [key, value] of [
+        ['to', draft.recipientId],
+        ['subject', draft.subject],
+        ['event', draft.eventId],
+      ] as const) {
+        if (value) next.set(key, value);
+        else next.delete(key);
+      }
+    });
 
-  // Replies inherit the thread's topic; only a brand-new thread asks for one.
-  const lastSubject = threadMessages?.[threadMessages.length - 1]?.subject?.trim() ?? '';
-  const hasThread = (threadMessages?.length ?? 0) > 0;
-  const defaultSubject = hasThread
-    ? lastSubject.startsWith('Απ:')
-      ? lastSubject
-      : `Απ: ${lastSubject}`
-    : '';
+  const closeCompose = () =>
+    update((next) => {
+      for (const key of ['compose', 'to', 'subject', 'event']) next.delete(key);
+    });
 
-  const handleSend = async ({ subject, body, attachment, gifUrl, replyToId }: OutgoingMessage) => {
-    if (!activeUserId) return;
-    setSendError(null);
-    const finalSubject = subject || defaultSubject || 'Μήνυμα';
+  const onSent = () =>
+    update((next) => {
+      for (const key of ['compose', 'to', 'subject', 'event', 'id', 'offset']) {
+        next.delete(key);
+      }
+      next.set('folder', 'sent');
+    });
+
+  const onDelete = async () => {
+    if (!openId) return;
     try {
-      await sendMessage({
-        recipient_id: activeUserId,
-        subject: finalSubject,
-        body,
-        ...(replyToId ? { reply_to_id: replyToId } : {}),
-        ...(gifUrl ? { gif_url: gifUrl } : {}),
-        ...(attachment?.kind === 'image' ? { image_url: attachment.url } : {}),
-        ...(attachment?.kind === 'file'
-          ? { file_url: attachment.url, file_name: attachment.name }
-          : {}),
-      }).unwrap();
+      await deleteMessage({ id: openId, folder }).unwrap();
+      toast.success(t('messages.deleted'));
+      update((next) => next.delete('id'));
     } catch (err) {
-      setSendError(errorText(err, 'Η αποστολή απέτυχε.'));
+      toast.error(apiErrorMessage(err, t('messages.deleteFailed')));
     }
   };
 
-  const handleUpload = async (file: File): Promise<Attachment> => {
-    try {
-      return await uploadAttachment(file).unwrap();
-    } catch (err) {
-      throw new Error(errorText(err, 'Η μεταφόρτωση απέτυχε.'), { cause: err });
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!activeUserId) return;
-    try {
-      await deleteMessage({ id, peerId: activeUserId }).unwrap();
-      // Both sides keep a tombstone, so say what actually happened.
-      toast.success('Το μήνυμα αποσύρθηκε και για τους δύο.');
-      if (replyTo?.id === id) setReplyTo(null);
-    } catch (err) {
-      toast.error(errorText(err, 'Η διαγραφή απέτυχε.'));
-    }
-  };
-
-  const handleReact = async (messageId: string, emoji: string) => {
-    if (!activeUserId) return;
-    try {
-      await reactToMessage({ messageId, emoji, peerId: activeUserId }).unwrap();
-    } catch (err) {
-      toast.error(errorText(err, 'Η αντίδραση απέτυχε.'));
-    }
-  };
-
-  if (conversationsError) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 py-10">
-        <ErrorMessage
-          message={errorText(conversationsError, 'Δεν ήταν δυνατή η φόρτωση των μηνυμάτων.')}
-          onRetry={() => void refetchConversations()}
-        />
-      </div>
-    );
-  }
+  const folders: { key: MailboxFolder; label: string; icon: typeof Inbox; badge?: number }[] = [
+    { key: 'inbox', label: t('messages.inbox'), icon: Inbox, badge: unreadCount },
+    { key: 'sent', label: t('messages.sent'), icon: Send },
+  ];
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-0 py-0 sm:px-4 sm:py-6">
-      <div className="flex h-[calc(100dvh-4rem)] overflow-hidden border-neutral-200 bg-white sm:h-[calc(100dvh-9rem)] sm:rounded-xl sm:border sm:shadow-sm">
-        {/* Sidebar: full width on a phone until a thread is opened. */}
-        <aside
-          className={cn(
-            'w-full shrink-0 border-neutral-200 md:w-80 md:border-r lg:w-96',
-            activeUserId ? 'hidden md:block' : 'block',
-          )}
-        >
-          <ConversationList
-            conversations={visibleConversations}
-            activeUserId={activeUserId}
-            query={query}
-            onQueryChange={setQuery}
-            onSelect={openThread}
-            onCompose={openPicker}
-            isLoading={conversationsLoading}
-          />
-        </aside>
+    <div className="min-h-screen bg-neutral-50 py-8">
+      <div className="mx-auto max-w-6xl px-4">
+        <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="comfortaa-bold text-2xl font-bold text-neutral-900">
+              {t('messages.title')}
+            </h1>
+            <p className="comfortaa-regular mt-1 text-sm text-neutral-600">
+              {t('messages.subtitle')}
+            </p>
+          </div>
+          <Button
+            type="button"
+            onClick={() => openCompose()}
+            className="comfortaa-regular bg-[var(--nexus-purple)] text-white hover:bg-violet-700"
+          >
+            <PenSquare className="mr-1 size-4" />
+            {t('messages.new')}
+          </Button>
+        </div>
 
-        <section className={cn('min-w-0 flex-1', activeUserId ? 'block' : 'hidden md:block')}>
-          {activeParticipant ? (
-            <div className="flex h-full min-h-0 flex-col">
-              <MessageThread
-                participant={activeParticipant}
-                support={activeSupport}
-                messages={threadMessages ?? []}
-                currentUserId={user?.id ?? ''}
-                isLoading={threadLoading}
-                isTyping={isTyping}
-                onBack={closeThread}
-                onDelete={handleDelete}
-                onReply={setReplyTo}
-                onReact={handleReact}
+        <div className="grid gap-6 md:grid-cols-[14rem_1fr]">
+          <nav aria-label={t('messages.folders')} className="flex gap-2 md:flex-col">
+            {folders.map(({ key, label, icon: Icon, badge }) => {
+              const active = key === folder;
+              return (
+                <Link
+                  key={key}
+                  to={folderHref(key)}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'comfortaa-regular flex flex-1 items-center gap-2 rounded-lg border px-3 py-2 text-sm md:flex-none',
+                    active
+                      ? 'border-[var(--nexus-purple)] bg-white font-semibold text-[var(--nexus-purple)]'
+                      : 'border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-100',
+                  )}
+                >
+                  <Icon className="size-4" />
+                  <span className="flex-1">{label}</span>
+                  {badge ? (
+                    <span
+                      className="rounded-full bg-[var(--nexus-purple)] px-2 py-0.5 text-[11px] font-semibold text-white"
+                      aria-label={t('messages.unreadBadge', { count: badge })}
+                    >
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <section aria-live="polite">
+            {openId ? (
+              messageLoading ? (
+                <SkeletonList rows={3} />
+              ) : messageError || !message ? (
+                <ErrorMessage
+                  message={apiErrorMessage(messageError, t('messages.notFound'))}
+                  onRetry={() => update((next) => next.delete('id'))}
+                />
+              ) : (
+                <MessageView
+                  folder={folder}
+                  message={message}
+                  backHref={listHref}
+                  deleting={deleting}
+                  onDelete={onDelete}
+                  onReply={
+                    folder === 'inbox'
+                      ? () =>
+                          openCompose({
+                            recipientId: message.sender_id,
+                            subject: replySubject(message.subject),
+                            eventId: message.event_id ?? undefined,
+                          })
+                      : undefined
+                  }
+                />
+              )
+            ) : pageLoading ? (
+              <SkeletonList rows={6} />
+            ) : pageError ? (
+              <ErrorMessage
+                message={apiErrorMessage(pageError, t('messages.loadError'))}
+                onRetry={() => void refetchPage()}
               />
-              <MessageComposer
-                defaultSubject={defaultSubject}
-                requireSubject={!hasThread}
-                disabled={!activeUserId}
-                isSending={isSending}
-                error={
-                  sendError ??
-                  (threadError
-                    ? errorText(threadError, 'Δεν ήταν δυνατή η φόρτωση της συνομιλίας.')
-                    : null)
+            ) : !page || page.total === 0 ? (
+              <EmptyState
+                icon={folder === 'inbox' ? Inbox : Send}
+                title={folder === 'inbox' ? t('messages.emptyInbox') : t('messages.emptySent')}
+                description={
+                  folder === 'inbox' ? t('messages.emptyInboxBody') : t('messages.emptySentBody')
                 }
-                onSend={handleSend}
-                onTyping={notifyTyping}
-                onUpload={handleUpload}
-                replyTo={replyTo}
-                onCancelReply={() => setReplyTo(null)}
               />
-            </div>
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-              <MessagesSquare className="size-12 text-neutral-300" aria-hidden />
-              <h2 className="comfortaa-bold mt-4 text-lg font-bold text-neutral-900">
-                Επιλέξτε μια συνομιλία
-              </h2>
-              <p className="comfortaa-regular mt-1 max-w-sm text-sm text-neutral-600">
-                Διαλέξτε κάποιον από τη λίστα ή ξεκινήστε νέα συνομιλία με διοργανωτή εκδήλωσης που
-                κρατήσατε.
-              </p>
-            </div>
-          )}
-        </section>
+            ) : (
+              <div className={cn(pageFetching && 'opacity-70 transition-opacity')}>
+                <MailboxList
+                  folder={folder}
+                  page={page}
+                  hrefFor={messageHref}
+                  onPageChange={(nextOffset) =>
+                    update((next) => {
+                      if (nextOffset > 0) next.set('offset', String(nextOffset));
+                      else next.delete('offset');
+                    })
+                  }
+                />
+              </div>
+            )}
+          </section>
+        </div>
       </div>
 
-      <NewConversationDialog
-        open={isPickerOpen}
-        onOpenChange={(open) => {
-          setPickerOpened(open);
-          setPickerDismissed(!open);
-          if (!open && composeRequested) {
-            const next = new URLSearchParams(searchParams);
-            next.delete('compose');
-            next.delete('support');
-            setSearchParams(next, { replace: true });
-          }
-        }}
-        recipients={recipients ?? []}
-        onPick={openThread}
+      <ComposeMessageDialog
+        open={composeOpen}
+        draft={composeDraft}
+        onClose={closeCompose}
+        onSent={onSent}
       />
     </div>
   );
