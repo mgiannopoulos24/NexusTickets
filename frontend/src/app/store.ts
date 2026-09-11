@@ -16,6 +16,10 @@ export const store = configureStore({
     events: eventsReducer,
   },
   middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(baseApi.middleware),
+  // Batch subscriber notifications on a microtask rather than an animation
+  // frame: same effect in the browser, and no frame can outlive a test
+  // environment (RTK's frame fallback threw once happy-dom had torn down).
+  enhancers: (getDefaultEnhancers) => getDefaultEnhancers({ autoBatch: { type: 'tick' } }),
 });
 
 export type RootState = ReturnType<typeof store.getState>;
