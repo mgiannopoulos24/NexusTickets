@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/pagination';
 import { Badge } from '@/components/ui/badge';
 import { Sparkles, Filter } from 'lucide-react';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 import { SkeletonList } from '@/components/shared/SkeletonList';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ErrorMessage } from '@/components/shared/ErrorMessage';

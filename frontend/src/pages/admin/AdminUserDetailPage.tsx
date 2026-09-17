@@ -13,7 +13,7 @@ import {
 } from '@/app/usersApi';
 import { AssignableRoles, type AssignableRole } from '@/types/enums';
 import { roleLabel, AccountStatusBadge } from '@/pages/admin/userDisplay';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 function formatDateTime(value?: string | null): string {
   if (!value) return '—';

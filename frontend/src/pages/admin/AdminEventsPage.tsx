@@ -11,7 +11,7 @@ import { SkeletonList } from '@/components/shared/SkeletonList';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 import { formatDate } from '@/helpers/formatDate';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';

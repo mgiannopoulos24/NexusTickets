@@ -7,7 +7,7 @@ import { useListUsersQuery } from '@/app/usersApi';
 import { accountStatusLabel, roleLabel, AccountStatusBadge } from '@/pages/admin/userDisplay';
 import type { AccountStatus } from '@/types/enums';
 import { cn } from '@/lib/utils';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 // The DB holds few users (seeded accounts + real registrations), so we fetch a
 // generous page once and filter / paginate on the client. This keeps the

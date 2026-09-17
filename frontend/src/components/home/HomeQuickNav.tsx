@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { CalendarCog, Search } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/types/enums';
 

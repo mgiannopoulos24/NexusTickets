@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 import { cn } from '@/lib/utils';
 
 type PhotoGalleryProps = {

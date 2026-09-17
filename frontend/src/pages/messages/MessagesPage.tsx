@@ -23,7 +23,7 @@ import { SkeletonList } from '@/components/shared/SkeletonList';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { MailboxFolder } from '@/types/message';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 const PAGE_SIZE = 20;
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
-import { LangContext, type Locale } from '@/contexts/langContext';
+import { LangContext, type Locale } from '@/contexts/langContextCore';
 import {
   INTL_LOCALE,
   readStoredLocale,

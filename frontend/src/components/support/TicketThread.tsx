@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { formatDateTime } from '@/helpers/formatDate';
 import { cn } from '@/lib/utils';
 import type { SupportThread } from '@/types/support';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 type TicketThreadProps = {
   thread: SupportThread;

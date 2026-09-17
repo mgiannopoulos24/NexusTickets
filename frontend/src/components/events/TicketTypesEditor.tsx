@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { type TicketTypeDraft, emptyTicketDraft } from '@/lib/ticketTypeDrafts';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 type Props = {
   drafts: TicketTypeDraft[];

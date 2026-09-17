@@ -5,7 +5,7 @@ import instagramIcon from '@/assets/icons/instagram.svg';
 import tiktokIcon from '@/assets/icons/tiktok.svg';
 import youtubeIcon from '@/assets/icons/youtube.svg';
 import linkedinIcon from '@/assets/icons/linkedin.svg';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import type { UserRole } from '@/types/enums';

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { formatDateTime } from '@/helpers/formatDate';
 import { cn } from '@/lib/utils';
 import type { SupportTicketPage } from '@/types/support';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 type TicketListProps = {
   page: SupportTicketPage;

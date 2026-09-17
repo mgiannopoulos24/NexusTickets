@@ -23,7 +23,7 @@ import { eventTypeLabel } from '@/constants/eventTypes';
 import { apiErrorMessage } from '@/app/apiEnvelope';
 import { useGetEventQuery } from '@/app/eventsApi';
 import { useAuth } from '@/hooks/useAuth';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 import { INTL_LOCALE, type Locale } from '@/lib/i18n';
 import { emptyEventDetail, normalizeEventDetail } from '@/types/eventDetail';
 

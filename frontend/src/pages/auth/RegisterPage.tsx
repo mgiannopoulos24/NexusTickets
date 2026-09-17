@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { EventMapEmbed } from '@/components/events/EventMapEmbed';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 import { tr } from '@/lib/i18n';
 
 type ApiEnvelope<T> = {

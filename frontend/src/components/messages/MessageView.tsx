@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { formatDateTime } from '@/helpers/formatDate';
 import type { MailboxFolder, Message } from '@/types/message';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 type MessageViewProps = {
   folder: MailboxFolder;

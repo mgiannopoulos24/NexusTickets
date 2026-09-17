@@ -6,7 +6,7 @@ import EventCard from '@/components/events/EventCard';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ErrorMessage } from '@/components/shared/ErrorMessage';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 import { categoryIdForSlug } from '@/lib/categorySlug';
 import type { CategoryBrowseSlug } from '@/constants/homeEventSections';
 

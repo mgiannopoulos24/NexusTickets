@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { ShieldAlert } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 export default function UnauthorizedPage() {
   const { t } = useLang();

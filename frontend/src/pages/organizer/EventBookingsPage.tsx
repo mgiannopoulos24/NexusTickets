@@ -13,7 +13,7 @@ import { SkeletonList } from '@/components/shared/SkeletonList';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { BookingStatus } from '@/types/enums';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 const STATUS_COLOR: Record<BookingStatus, string> = {
   confirmed: 'bg-emerald-100 text-emerald-800',

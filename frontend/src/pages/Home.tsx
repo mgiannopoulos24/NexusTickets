@@ -28,7 +28,7 @@ import {
 import { categoryIdForSlug } from '@/lib/categorySlug';
 import { cn } from '@/lib/utils';
 import type { Event as EventModel } from '@/types/models';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 function sectionDomId(key: HomeSliderKey): string {
   return `home-section-${key}`;

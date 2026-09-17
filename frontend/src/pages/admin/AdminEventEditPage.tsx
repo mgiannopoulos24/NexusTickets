@@ -48,7 +48,7 @@ import { DEFAULT_EVENT_TYPE, eventTypeOptions } from '@/constants/eventTypes';
 import TimePicker from 'react-time-picker';
 import 'react-time-picker/dist/TimePicker.css';
 import 'react-clock/dist/Clock.css';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 import { tr } from '@/lib/i18n';
 
 function isUUID(raw: string): boolean {

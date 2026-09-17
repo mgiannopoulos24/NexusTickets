@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import type { EventDetail } from '@/types/eventDetail';
 import { cn } from '@/lib/utils';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 type Props = {
   value: EventDetail;

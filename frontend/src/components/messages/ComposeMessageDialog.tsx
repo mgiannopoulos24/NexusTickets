@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { MessageRecipient } from '@/types/message';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 import { tr } from '@/lib/i18n';
 
 const BOOKING_RULE = 'messaging requires a booking between the two users';

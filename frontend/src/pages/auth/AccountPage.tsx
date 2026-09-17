@@ -12,7 +12,7 @@ import { EventMapEmbed } from '@/components/events/EventMapEmbed';
 import { ErrorMessage } from '@/components/shared/ErrorMessage';
 import { SkeletonList } from '@/components/shared/SkeletonList';
 import type { User } from '@/types/models';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 function coordToNull(v: string): number | null {
   const t = v.trim().replace(',', '.');

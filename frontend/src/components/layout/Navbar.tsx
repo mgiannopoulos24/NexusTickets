@@ -29,7 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { EVENTS_NAV_DROPDOWN_ITEMS } from '@/constants/navEventsDropdown';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 const navPrimaryClass =
   'flex shrink-0 cursor-pointer items-center self-stretch border-b-4 border-b-transparent px-3 outline-0 transition-colors hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)] hover:border-b-[var(--nexus-purple)]';

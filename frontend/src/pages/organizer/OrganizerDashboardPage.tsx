@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 
 import { OrganizerLayout } from '@/components/layout/OrganizerLayout';
 import { Button } from '@/components/ui/button';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 export default function OrganizerDashboardPage() {
   const { t } = useLang();

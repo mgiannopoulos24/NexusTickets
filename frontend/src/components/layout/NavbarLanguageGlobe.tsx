@@ -6,7 +6,7 @@ import { SelectAltPanelContainer, SelectAltScrollRegion } from '@/components/ui/
 import flagGb from '@/assets/icons/flag-gb.svg';
 import flagGr from '@/assets/icons/flag-gr.svg';
 import globeIcon from '@/assets/icons/globe.svg';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 /** Locales with `src/locales/*.yaml` bundles (parsed at build time). */
 const LANGUAGE_OPTIONS = [

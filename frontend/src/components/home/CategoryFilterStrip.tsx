@@ -1,7 +1,7 @@
 import type { HomeSliderKey } from '@/constants/homeEventSections';
 import { useDragScroll } from '@/hooks/useDragScroll';
 import { cn } from '@/lib/utils';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 export type HomeSectionTab = {
   key: HomeSliderKey;

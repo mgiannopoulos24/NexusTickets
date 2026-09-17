@@ -32,7 +32,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import type { EventDetail } from '@/types/eventDetail';
 import { emptyEventDetail } from '@/types/eventDetail';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 import { tr } from '@/lib/i18n';
 
 type TicketDraft = {

@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { PanelLeftClose, PanelLeftOpen, type LucideIcon } from 'lucide-react';
 
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 import { cn } from '@/lib/utils';
 
 export type SidebarLink = { label: string; to: string; icon: LucideIcon };

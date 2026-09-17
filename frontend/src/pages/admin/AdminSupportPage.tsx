@@ -16,7 +16,7 @@ import { ErrorMessage } from '@/components/shared/ErrorMessage';
 import { SkeletonList } from '@/components/shared/SkeletonList';
 import { cn } from '@/lib/utils';
 import type { SupportTicketStatus } from '@/types/support';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 const PAGE_SIZE = 20;
 const FILTERS: Array<SupportTicketStatus | 'all'> = ['open', 'answered', 'closed', 'all'];

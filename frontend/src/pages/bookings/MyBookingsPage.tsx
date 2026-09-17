@@ -8,7 +8,7 @@ import { ErrorMessage } from '@/components/shared/ErrorMessage';
 import { SkeletonList } from '@/components/shared/SkeletonList';
 import { cn } from '@/lib/utils';
 import type { BookingStatus } from '@/types/enums';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 const STATUS_COLOR: Record<BookingStatus, string> = {
   confirmed: 'text-emerald-700',

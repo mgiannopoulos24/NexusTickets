@@ -11,7 +11,7 @@ import { SkeletonList } from '@/components/shared/SkeletonList';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Event } from '@/types/models';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 const bookedSeats = (ev: Event): number => ev.tickets_sold ?? 0;
 

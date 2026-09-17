@@ -3,7 +3,7 @@ import { Users, CalendarDays, Download } from 'lucide-react';
 
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { useListUsersQuery } from '@/app/usersApi';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 export default function AdminDashboard() {
   const { t } = useLang();

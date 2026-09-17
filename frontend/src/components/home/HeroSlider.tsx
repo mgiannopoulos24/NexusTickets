@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { formatShortDate } from '@/helpers/formatDate';
 import { cn } from '@/lib/utils';
 import type { Event } from '@/types/models';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 const AUTOPLAY_MS = 5000;
 /** How far a pointer must travel to count as a swipe rather than a click. */

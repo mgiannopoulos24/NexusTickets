@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar, MapPin, Ticket } from 'lucide-react';
 import { formatShortDate } from '@/helpers/formatDate';
 import { formatCurrency } from '@/helpers/formatCurrency';
-import { useLang } from '@/contexts/langContext';
+import { useLang } from '@/contexts/langContextCore';
 
 interface EventCardProps {
   event: Event;
