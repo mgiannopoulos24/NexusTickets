@@ -47,6 +47,7 @@ func main() {
 	seedEvents(pg.Gorm)
 	seedEventPhotos(pg.Gorm, ensureMediaRoot(cfg.MediaStoragePath))
 	seedPeople(pg.Gorm)
+	seedOrganizerDisplay(pg.Gorm)
 
 	log.Info("seed complete")
 }

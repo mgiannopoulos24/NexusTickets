@@ -168,7 +168,7 @@ cd backend && go run ./cmd/seed
 # Or start a standalone seed container by building just the seed binary.
 ```
 
-The built-in administrator is created automatically on the first backend start (`ADMIN_USERNAME` / `ADMIN_PASSWORD`, default `admin` / `ChangeMe123!`). The seeder adds the demo `organizer` / `attendee` and ten more accounts (same password), 7 categories, 150 events with ticket types and 5 photos each, plus sample bookings, messages and support tickets; run it with `make seed`.
+The built-in administrator is created automatically on the first backend start (`ADMIN_USERNAME` / `ADMIN_PASSWORD`, default `admin` / `ChangeMe123!`). The seeder adds the demo `organizer` / `attendee` and ten more accounts (same password), 7 categories, 150 events with ticket types and 5 photos each, plus sample bookings, messages and support tickets, and fills each event's public "Organizer" tab from its organizer's profile (name, city, e-mail); run it with `make seed`.
 
 ### Running Without Docker
 
