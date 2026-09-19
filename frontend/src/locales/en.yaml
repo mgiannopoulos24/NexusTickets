@@ -283,6 +283,7 @@
   "ticketOpened": "New support request"
   "ticketClosedByUser": "Request closed by the user"
   "ticketReplied": "New reply on a request"
+  "view": "View"
 "hero":
   "featured": "Featured events"
   "slideOf": "Slide {index} of {count}"

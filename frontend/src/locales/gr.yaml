@@ -283,6 +283,7 @@
   "ticketOpened": "Νέο αίτημα υποστήριξης"
   "ticketClosedByUser": "Αίτημα έκλεισε από τον χρήστη"
   "ticketReplied": "Νέα απάντηση σε αίτημα"
+  "view": "Προβολή"
 "hero":
   "featured": "Προβεβλημένες εκδηλώσεις"
   "slideOf": "Διαφάνεια {index} από {count}"

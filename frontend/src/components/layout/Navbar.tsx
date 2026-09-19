@@ -25,6 +25,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { useAppSelector } from '@/app/hooks';
+import { useGetSupportCountsQuery } from '@/app/supportApi';
 import { Badge } from '@/components/ui/badge';
 import { EVENTS_NAV_DROPDOWN_ITEMS } from '@/constants/navEventsDropdown';
 import { cn } from '@/lib/utils';
@@ -43,6 +44,12 @@ export function Navbar() {
   const { user, accessToken, isHydrating, logout } = useAuth();
   const { t } = useLang();
   const unreadCount = useAppSelector((s) => s.messaging.unreadCount);
+  // Open support requests drive the badge on the admin links. The counts
+  // endpoint is admin-only, so it is skipped for everyone else.
+  const { data: supportCounts } = useGetSupportCountsQuery(undefined, {
+    skip: user?.role !== 'admin',
+  });
+  const openTickets = user?.role === 'admin' ? (supportCounts?.open ?? 0) : 0;
 
   const handleLogout = async () => {
     await logout();
@@ -184,8 +191,13 @@ export function Navbar() {
                             'font-medium text-[var(--nexus-red)] focus:text-[var(--nexus-red)] data-[highlighted]:text-[var(--nexus-red)]',
                           )}
                         >
-                          <Link to="/admin" className="flex w-full items-center">
-                            {t('nav.adminPanel')}
+                          <Link to="/admin" className="flex w-full items-center justify-between">
+                            <span>{t('nav.adminPanel')}</span>
+                            {openTickets > 0 ? (
+                              <span className="rounded-full bg-[var(--nexus-red)] px-2 py-0.5 text-[11px] font-semibold text-white">
+                                {openTickets > 99 ? '99+' : openTickets}
+                              </span>
+                            ) : null}
                           </Link>
                         </DropdownMenuItem>
                       </>
@@ -234,7 +246,7 @@ export function Navbar() {
                   <Menu className="size-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="p-0">
+              <SheetContent side="right" className="overflow-y-auto p-0">
                 <SheetHeader className="border-b border-neutral-200">
                   <SheetTitle className="comfortaa-bold">
                     <Link to="/" className="inline-flex items-baseline">
@@ -266,6 +278,19 @@ export function Navbar() {
                         </Link>
                       </SheetClose>
                     ))}
+                    {user?.role === 'organizer' || user?.role === 'admin' ? (
+                      <SheetClose asChild>
+                        <Link
+                          to="/organizer/events"
+                          className={cn(
+                            'rounded-xl px-3 py-2 text-base text-neutral-800 transition-colors comfortaa-regular',
+                            'hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)]',
+                          )}
+                        >
+                          {t('nav.myEvents')}
+                        </Link>
+                      </SheetClose>
+                    ) : null}
                   </nav>
 
                   <div className="mt-4 border-t border-neutral-200 pt-4">
@@ -287,6 +312,55 @@ export function Navbar() {
                               {t('nav.myAccount')}
                             </Link>
                           </SheetClose>
+                          <SheetClose asChild>
+                            <Link
+                              to="/bookings/me"
+                              className={cn(
+                                'rounded-xl px-3 py-2 text-base text-neutral-800 transition-colors comfortaa-regular',
+                                'hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)]',
+                              )}
+                            >
+                              {t('nav.myBookings')}
+                            </Link>
+                          </SheetClose>
+                          <SheetClose asChild>
+                            <Link
+                              to="/messages"
+                              className={cn(
+                                'flex items-center justify-between rounded-xl px-3 py-2 text-base text-neutral-800 transition-colors comfortaa-regular',
+                                'hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)]',
+                              )}
+                            >
+                              <span>{t('nav.messages')}</span>
+                              {unreadCount > 0 ? (
+                                <span className="rounded-full bg-[var(--nexus-purple)] px-2 py-0.5 text-[11px] font-semibold text-white">
+                                  {unreadCount > 99 ? '99+' : unreadCount}
+                                </span>
+                              ) : null}
+                            </Link>
+                          </SheetClose>
+                          <SheetClose asChild>
+                            <Link
+                              to="/support"
+                              className={cn(
+                                'rounded-xl px-3 py-2 text-base text-neutral-800 transition-colors comfortaa-regular',
+                                'hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)]',
+                              )}
+                            >
+                              {t('nav.support')}
+                            </Link>
+                          </SheetClose>
+                          <SheetClose asChild>
+                            <Link
+                              to="/settings"
+                              className={cn(
+                                'rounded-xl px-3 py-2 text-base text-neutral-800 transition-colors comfortaa-regular',
+                                'hover:bg-[var(--nexus-lightgray)] hover:text-[var(--nexus-purple)]',
+                              )}
+                            >
+                              {t('nav.settings')}
+                            </Link>
+                          </SheetClose>
                           {(user.role === 'organizer' || user.role === 'admin') && (
                             <SheetClose asChild>
                               <Link
@@ -305,11 +379,16 @@ export function Navbar() {
                               <Link
                                 to="/admin"
                                 className={cn(
-                                  'rounded-xl px-3 py-2 text-base font-medium text-[var(--nexus-red)] transition-colors comfortaa-regular',
+                                  'flex items-center justify-between rounded-xl px-3 py-2 text-base font-medium text-[var(--nexus-red)] transition-colors comfortaa-regular',
                                   'hover:bg-red-50',
                                 )}
                               >
-                                {t('nav.adminPanel')}
+                                <span>{t('nav.adminPanel')}</span>
+                                {openTickets > 0 ? (
+                                  <span className="rounded-full bg-[var(--nexus-red)] px-2 py-0.5 text-[11px] font-semibold text-white">
+                                    {openTickets > 99 ? '99+' : openTickets}
+                                  </span>
+                                ) : null}
                               </Link>
                             </SheetClose>
                           )}

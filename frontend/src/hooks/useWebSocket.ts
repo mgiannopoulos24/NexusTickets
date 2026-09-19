@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { useAppDispatch } from '@/app/hooks';
@@ -20,10 +21,12 @@ import { tr } from '@/lib/i18n';
  * Keeps the push channel open while signed in. The server sends two things:
  * the unread total (drives the navbar badge) and each new inbox message, which
  * refreshes an open inbox and pops a toast so the arrival is visible wherever
- * the user is in the app (assignment §10).
+ * the user is in the app (assignment §10). Toasts carry a "View" action that
+ * navigates to the message or support ticket.
  */
 export function useWebSocket(): void {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const { accessToken } = useAuth();
 
   // The socket only reports changes, so the badge starts from a REST read.
@@ -43,9 +46,11 @@ export function useWebSocket(): void {
       if (envelope.type === WSMessageTypes.new_message) {
         const payload = envelope.payload as WSNewMessagePayload;
         dispatch(messagesApi.util.invalidateTags([{ type: 'Message', id: 'inbox' }]));
+        const href = `/messages?folder=inbox&id=${encodeURIComponent(payload.id)}`;
         toast.message(tr('ws.newMessage'), {
           description: payload.subject,
           id: `message-${payload.id}`,
+          action: { label: tr('ws.view'), onClick: () => navigate(href) },
         });
         return;
       }
@@ -75,6 +80,15 @@ export function useWebSocket(): void {
         toast.message(title, {
           description: payload.subject,
           id: `support-${payload.ticket_id}-${payload.action}`,
+          action: {
+            label: tr('ws.view'),
+            onClick: () =>
+              navigate(
+                payload.by_admin
+                  ? `/support?id=${encodeURIComponent(payload.ticket_id)}`
+                  : `/admin/support?id=${encodeURIComponent(payload.ticket_id)}`,
+              ),
+          },
         });
       }
     });
@@ -83,5 +97,5 @@ export function useWebSocket(): void {
       unsubscribe();
       wsClient.disconnect();
     };
-  }, [dispatch, accessToken]);
+  }, [dispatch, navigate, accessToken]);
 }

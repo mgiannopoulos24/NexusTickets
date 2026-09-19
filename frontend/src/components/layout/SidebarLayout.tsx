@@ -5,7 +5,7 @@ import { PanelLeftClose, PanelLeftOpen, type LucideIcon } from 'lucide-react';
 import { useLang } from '@/contexts/langContextCore';
 import { cn } from '@/lib/utils';
 
-export type SidebarLink = { label: string; to: string; icon: LucideIcon };
+export type SidebarLink = { label: string; to: string; icon: LucideIcon; badge?: number };
 
 type SidebarLayoutProps = {
   /** Translation key of the area's title. */
@@ -66,7 +66,7 @@ export function SidebarLayout({ titleKey, links, root, children }: SidebarLayout
         </button>
       </div>
       <nav className="flex flex-col gap-1 px-2 py-2">
-        {links.map(({ label, to, icon: Icon }) => (
+        {links.map(({ label, to, icon: Icon, badge }) => (
           <Link
             key={to}
             to={to}
@@ -76,6 +76,11 @@ export function SidebarLayout({ titleKey, links, root, children }: SidebarLayout
           >
             <Icon className="size-5 shrink-0" aria-hidden />
             <span className="truncate">{t(label)}</span>
+            {badge ? (
+              <span className="ml-auto shrink-0 rounded-full bg-[var(--nexus-red)] px-2 py-0.5 text-[11px] font-semibold text-white">
+                {badge > 99 ? '99+' : badge}
+              </span>
+            ) : null}
           </Link>
         ))}
       </nav>
@@ -110,16 +115,24 @@ export function SidebarLayout({ titleKey, links, root, children }: SidebarLayout
             <PanelLeftOpen className="size-5" />
           </button>
           <nav className="flex flex-col gap-1 border-t border-neutral-200 py-2">
-            {links.map(({ label, to, icon: Icon }) => (
+            {links.map(({ label, to, icon: Icon, badge }) => (
               <Link
                 key={to}
                 to={to}
                 aria-current={isActive(to) ? 'page' : undefined}
                 title={t(label)}
-                className={itemClass(isActive(to), false)}
+                className={cn(itemClass(isActive(to), false), 'relative')}
               >
                 <Icon className="size-5 shrink-0" aria-hidden />
                 <span className="sr-only">{t(label)}</span>
+                {badge ? (
+                  <span
+                    aria-hidden
+                    className="absolute -right-0.5 -top-0.5 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-[var(--nexus-red)] px-1 text-[10px] font-semibold text-white"
+                  >
+                    {badge > 99 ? '99+' : badge}
+                  </span>
+                ) : null}
               </Link>
             ))}
           </nav>
@@ -150,8 +163,7 @@ export function SidebarLayout({ titleKey, links, root, children }: SidebarLayout
           role="dialog"
           aria-modal="true"
           aria-label={t(titleKey)}
-          // @ts-expect-error `inert` is a valid attribute; React's typings lag behind.
-          inert={open ? undefined : ''}
+          inert={!open}
           className={cn(
             'absolute inset-y-0 left-0 w-[260px] max-w-[85vw] overflow-y-auto border-r border-neutral-200 bg-white shadow-xl',
             'transition-transform duration-300 ease-out will-change-transform motion-reduce:transition-none',
