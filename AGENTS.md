@@ -3,10 +3,10 @@
 This document serves as the single source of truth for all agents working on the NexusTickets project. It consolidates the project's architecture, conventions, and specific implementation rules.
 
 ## 1. Stack Overview
-- **Backend**: Go 1.22+ (Fiber v2, GORM, Wire, PostgreSQL 16, Redis 7, Gorilla WebSocket)
-- **Frontend**: React 19, Vite 6, Bun, TypeScript 5 (strict), Tailwind CSS v4, shadcn/ui, Lucide React, React Router v7, Redux Toolkit, RTK Query
+- **Backend**: Go 1.22+ (Fiber v2, GORM, Wire, PostgreSQL 16, Redis 7, gofiber/websocket)
+- **Frontend**: React 19, Vite 8, Bun, TypeScript 6 (strict), Tailwind CSS v4, shadcn/ui, Lucide React, React Router v7, Redux Toolkit, RTK Query
 - **Auth**: JWT (Access + Refresh), Role-Based Access Control (Admin, Organizer, Attendee, Guest)
-- **Realtime**: Native WebSocket API on frontend $\leftrightarrow$ Gorilla WebSocket on backend
+- **Realtime**: Native WebSocket API on frontend $\leftrightarrow$ gofiber/websocket on backend (push-only: the server never interprets client frames)
 
 ## 2. Project Structure
 ```
@@ -22,15 +22,19 @@ This document serves as the single source of truth for all agents working on the
 │   │   ├── handler/     # REST (v1) and WebSocket handlers
 │   │   ├── middleware/  # Auth, Rate limiting, CORS, Logging
 │   │   └── wire/        # Dependency Injection providers
-│   ├── migrations/      # SQL migration files (Up/Down)
+│   ├── db/              # Postgres connection + AutoMigrate (constraints, indexes)
+│   ├── export/          # XML / JSON catalogue export
 │   └── pkg/             # Shared public packages
 └── frontend/            # React application
     ├── src/
-    │   ├── app/         # Redux store, root providers, hooks
-    │   ├── features/    # Domain-specific slices (Auth, Events, Bookings, Organizer, Messaging, Admin)
-    │   ├── components/  # Shared UI (ui/ shadcn, layout/, shared/)
+    │   ├── app/         # Redux store, slices and RTK Query API slices
+    │   ├── pages/       # One composition per screen (admin/, organizer/, events/, ...)
+    │   ├── components/  # Shared UI (ui/ shadcn, layout/, shared/, per-feature folders)
+    │   ├── contexts/    # AuthContent, LangContext
     │   ├── hooks/       # Global custom hooks (useAuth, useWebSocket)
-    │   ├── lib/         # API client, WS client, i18n strings, utils
+    │   ├── lib/         # i18n lookup (i18n.ts), formatters, utils
+    │   ├── locales/     # UI strings: gr.yaml, en.yaml
+    │   ├── utils/       # api.ts (RTK Query base query), wsClient.ts
     │   ├── types/       # TypeScript models, enums, WS envelopes
     │   ├── routes/      # Router config & ProtectedRoute
     │   └── tests/       # Vitest suite (unit/, components/, pages/, helpers/)
@@ -57,7 +61,7 @@ This document serves as the single source of truth for all agents working on the
 - **State**: Redux Toolkit for global/auth state; RTK Query for server state.
 - **Typography**: Use predefined classes in `typography.css` (e.g., `comfortaa-bold`).
 - **Routing**: Lazy-load all route-level components.
-- **i18n**: No library; use centralized strings in `lib/i18n/*.ts`. Never hardcode Greek in JSX.
+- **i18n**: No library; use centralized strings in `locales/gr.yaml` and `locales/en.yaml`, resolved through `t()` (React) or `tr()` (outside React). Never hardcode Greek in JSX.
 
 ## 4. Detailed Domain Rules
 
@@ -79,7 +83,7 @@ This document serves as the single source of truth for all agents working on the
 - **Lifecycle**: Periodic retraining (6h) via cron; atomic model swap with `sync.RWMutex`.
 
 ### i18n & Formatting
-- **Greek UI**: All strings must reside in `lib/i18n/ui.ts`, `errors.ts`, or `messages.ts`.
+- **Greek UI**: All strings must reside in `src/locales/gr.yaml`, with an identical key in `en.yaml`.
 - **Formatters**: Use `formatDate`, `formatCurrency`, etc., from `lib/utils.ts` (locale `el-GR`).
 
 ### Security & Deployment

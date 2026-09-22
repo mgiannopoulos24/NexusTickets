@@ -44,13 +44,31 @@ func seedEventPhotos(d *gorm.DB, mediaRoot string) {
 
 	now := time.Now().UTC()
 	seeded := 0
+	repaired := 0
 	for _, ev := range events {
-		var existing int64
-		if err := d.Model(&postgres.EventPhotoModel{}).Where("event_id = ?", ev.ID).Count(&existing).Error; err != nil {
+		var existing []postgres.EventPhotoModel
+		if err := d.Where("event_id = ?", ev.ID).Find(&existing).Error; err != nil {
 			panic(err)
 		}
-		if existing > 0 {
-			continue
+
+		// Rows alone do not prove the pictures are still there. A database that
+		// was reset and re-seeded while the media directory pointed somewhere
+		// else (a container without the uploads bind mount, say) leaves rows
+		// referencing files that never landed on disk — and because the old
+		// check only counted rows, every later run skipped the event and the
+		// API served 404s forever. So verify the files too, and rebuild the
+		// gallery when any of them is missing.
+		stale := false
+		if len(existing) > 0 {
+			if photoFilesPresent(mediaRoot, existing) {
+				continue
+			}
+			if err := d.Where("event_id = ?", ev.ID).
+				Delete(&postgres.EventPhotoModel{}).Error; err != nil {
+				panic(fmt.Errorf("drop stale photo rows for %s: %w", ev.Title, err))
+			}
+			stale = true
+			repaired++
 		}
 
 		dir := filepath.Join(mediaRoot, ev.ID.String())
@@ -92,7 +110,9 @@ func seedEventPhotos(d *gorm.DB, mediaRoot string) {
 			}
 		}
 
-		if featured != nil && (ev.FeaturedImageURL == nil || strings.TrimSpace(*ev.FeaturedImageURL) == "") {
+		// On a repair the stored featured image points at a file that is gone,
+		// so it has to be replaced rather than preserved.
+		if featured != nil && (stale || ev.FeaturedImageURL == nil || strings.TrimSpace(*ev.FeaturedImageURL) == "") {
 			if err := d.Model(&postgres.EventModel{}).Where("id = ?", ev.ID).
 				Update("featured_image_url", *featured).Error; err != nil {
 				panic(fmt.Errorf("set featured image for %s: %w", ev.Title, err))
@@ -101,7 +121,24 @@ func seedEventPhotos(d *gorm.DB, mediaRoot string) {
 		seeded++
 	}
 
+	if repaired > 0 {
+		fmt.Printf("seeded photos for %d events (%d each, %d rebuilt because their files were missing)\n",
+			seeded, photosPerEvent, repaired)
+		return
+	}
 	fmt.Printf("seeded photos for %d events (%d each)\n", seeded, photosPerEvent)
+}
+
+// photoFilesPresent reports whether every row of a gallery still has its file
+// on disk. One missing file makes the whole gallery suspect, so the caller
+// rebuilds it wholesale instead of patching individual rows.
+func photoFilesPresent(mediaRoot string, rows []postgres.EventPhotoModel) bool {
+	for _, r := range rows {
+		if _, err := os.Stat(filepath.Join(mediaRoot, filepath.FromSlash(r.StoragePath))); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // ensureMediaRoot resolves the media directory the way the server does.

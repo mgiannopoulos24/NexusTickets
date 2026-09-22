@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -52,7 +55,53 @@ func runCompletionSweeper(events *service.EventService, log *zap.Logger) {
 	}
 }
 
+// runHealthcheck probes the server's own /health endpoint and reports the exit
+// code Docker expects. The runtime image is `scratch`: it has no shell and no
+// wget, so the statically linked binary has to be its own health probe.
+func runHealthcheck() int {
+	port := strings.TrimSpace(os.Getenv("APP_PORT"))
+	if port == "" {
+		port = "8080"
+	}
+
+	// The server speaks TLS exactly when both files are configured, so the
+	// probe follows the same rule.
+	scheme := "http"
+	if strings.TrimSpace(os.Getenv("TLS_CERT_FILE")) != "" &&
+		strings.TrimSpace(os.Getenv("TLS_KEY_FILE")) != "" {
+		scheme = "https"
+	}
+
+	client := &http.Client{
+		Timeout: 3 * time.Second,
+		Transport: &http.Transport{
+			// This request never leaves the container: it loops back to the
+			// server's own listener, whose certificate is self-signed and
+			// issued for a different name. Verifying it would add nothing.
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
+		},
+	}
+
+	resp, err := client.Get(scheme + "://127.0.0.1:" + port + "/health")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "healthcheck:", err)
+		return 1
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintln(os.Stderr, "healthcheck: unexpected status", resp.StatusCode)
+		return 1
+	}
+	return 0
+}
+
 func main() {
+	// `nexustickets-api healthcheck` runs the probe above instead of the server.
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		os.Exit(runHealthcheck())
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		panic(err)
