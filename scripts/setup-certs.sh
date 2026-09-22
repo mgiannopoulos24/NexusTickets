@@ -41,7 +41,12 @@ EOF
     -extensions v3_req
 fi
 
-chmod 600 "${OUT}/key.pem"
+# 644, not 600: this key is bind-mounted into the backend container, which runs
+# as the non-root uid 65532 baked into the scratch image. Host uid/gid do not
+# map inside, so the file has to be world-readable for the server to load it.
+# These are throwaway self-signed certs for localhost (gitignored) — a real
+# deployment should mount real certificates owned by the runtime user instead.
+chmod 644 "${OUT}/key.pem"
 echo "Wrote ${OUT}/cert.pem and ${OUT}/key.pem"
 
 # Vite dev server certs (for frontend/localhost*.pem)
