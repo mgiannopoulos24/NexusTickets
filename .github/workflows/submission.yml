@@ -34,13 +34,35 @@ jobs:
 
       - name: zip tracked files
         # `git archive` packs exactly what is committed: node_modules, dist/,
-        # .env, uploads/ and other ignored files never make it in.
+        # .env, uploads/ and other ignored files never make it in. It also
+        # honours the `export-ignore` entries in .gitattributes, which is where
+        # the agent instructions and the CI workflows are left out.
         run: git archive --format=zip --prefix=nexustickets/ -o nexustickets-source.zip HEAD
 
       - name: sanity check
         run: |
-          unzip -l nexustickets-source.zip | grep -qE "node_modules|/dist/|\.env$" && { echo "zip contains build/secret files"; exit 1; } || true
-          unzip -l nexustickets-source.zip | tail -1
+          set -euo pipefail
+          list=$(unzip -Z1 nexustickets-source.zip)
+          fail=0
+          for pattern in \
+            'node_modules' \
+            '/dist/' \
+            '\.env$' \
+            '/AGENTS\.md$' \
+            '/\.agents/' \
+            '/\.claude/' \
+            '/\.github/' \
+            '/TODO\.md$' \
+            '/\.gitattributes$'
+          do
+            if printf '%s\n' "$list" | grep -qE "$pattern"; then
+              echo "::error::zip must not contain $pattern"
+              printf '%s\n' "$list" | grep -E "$pattern" | head
+              fail=1
+            fi
+          done
+          [ "$fail" -eq 0 ]
+          echo "zip holds $(printf '%s\n' "$list" | wc -l) entries"
 
       - uses: actions/upload-artifact@v4
         with:
