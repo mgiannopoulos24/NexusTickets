@@ -27,8 +27,8 @@ Registration creates a `pending` account; only `approved` accounts can log in.
 
 Error codes: `400` validation, `401` missing/expired token or bad credentials,
 `403` wrong role / not the owner / messaging without a booking, `404`,
-`409` username or e-mail taken, `422` domain rule (event not bookable, capacity
-exceeded, ticket types exceed capacity, cannot delete/cancel in this state),
+`409` username or e-mail taken and capacity exceeded, `422` domain rule (event
+not bookable, ticket types exceed capacity, cannot delete/cancel in this state),
 `429` rate limited.
 
 ## Auth — `/auth` (5 requests/min per IP)
@@ -92,7 +92,7 @@ Event lifecycle: `draft → published → completed` (automatic when `end_at` pa
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
-| POST | `/bookings` | attendee, organizer, admin | `{ event_id, ticket_type_id, quantity }` → 201; event must be `published` and not ended; availability is decremented atomically (`UPDATE … WHERE available >= n`), `422` when short; `total_cost` computed server-side; a booking is final |
+| POST | `/bookings` | attendee, organizer, admin | `{ event_id, ticket_type_id, quantity }` → 201; event must be `published` and not ended; availability is decremented atomically (`UPDATE … WHERE available >= n`), `409` when short; `total_cost` computed server-side; a booking is final |
 | GET | `/bookings/me?limit&offset` | same | own bookings with event / ticket type summaries (`event.organizer_id` lets the client open a message to the organizer) |
 | GET | `/bookings/:id` | attendee, organizer | own booking, or a booking on one of the organizer's events |
 | GET | `/bookings/organizer/events/:eventId?limit&offset` | organizer | all bookings of one of my events, with attendee identity |
