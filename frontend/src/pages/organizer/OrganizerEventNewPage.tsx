@@ -152,11 +152,13 @@ function NewEventTimePicker({
 
 function DateTimeDialogField({
   label,
+  required = false,
   date,
   timeHHMM,
   onChange,
 }: {
   label: string;
+  required?: boolean;
   date: Date | undefined;
   timeHHMM: string;
   onChange: (nextDate: Date | undefined, nextTime: string) => void;
@@ -193,7 +195,10 @@ function DateTimeDialogField({
   return (
     <div>
       <div className="flex items-center justify-between gap-2">
-        <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">{label}</label>
+        <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
+          {label}
+          {required && <span className="text-[var(--nexus-red)]"> *</span>}
+        </label>
         <Button
           type="button"
           variant="ghost"
@@ -526,13 +531,13 @@ export default function OrganizerEventNewPage() {
           <div className="space-y-5">
             <div>
               <label className="mb-1.5 block text-sm font-medium text-neutral-800 comfortaa-regular">
-                {t('eventForm.title')}
+                {t('eventForm.title')} <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Input value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-neutral-800 comfortaa-regular">
-                {t('eventForm.description')}
+                {t('eventForm.description')} <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Textarea
                 value={description}
@@ -558,7 +563,7 @@ export default function OrganizerEventNewPage() {
 
             <div className="rounded-2xl border border-neutral-200 p-4">
               <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
-                {t('eventForm.ticketTypes')}
+                {t('eventForm.ticketTypes')} <span className="text-[var(--nexus-red)]">*</span>
               </p>
               <p className="mt-1 text-xs text-neutral-500 comfortaa-regular">
                 {t('eventForm.ticketTypesHint')}
@@ -644,7 +649,7 @@ export default function OrganizerEventNewPage() {
                     htmlFor="event-capacity"
                     className="mb-1 block text-xs text-neutral-600 comfortaa-regular"
                   >
-                    {t('eventForm.capacity')}
+                    {t('eventForm.capacity')} <span className="text-[var(--nexus-red)]">*</span>
                   </label>
                   <Input
                     id="event-capacity"
@@ -655,13 +660,13 @@ export default function OrganizerEventNewPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                    {t('eventForm.venue')}
+                    {t('eventForm.venue')} <span className="text-[var(--nexus-red)]">*</span>
                   </label>
                   <Input value={venue} onChange={(e) => setVenue(e.target.value)} />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-neutral-600 comfortaa-regular">
-                    {t('eventForm.city')}
+                    {t('eventForm.city')} <span className="text-[var(--nexus-red)]">*</span>
                   </label>
                   <Input value={city} onChange={(e) => setCity(e.target.value)} />
                 </div>
@@ -708,6 +713,7 @@ export default function OrganizerEventNewPage() {
                 <div>
                   <DateTimeDialogField
                     label={t('eventForm.start')}
+                    required
                     date={startDate}
                     timeHHMM={startTime}
                     onChange={(d, t) => syncStart(d, t)}
@@ -716,6 +722,7 @@ export default function OrganizerEventNewPage() {
                 <div>
                   <DateTimeDialogField
                     label={t('eventForm.end')}
+                    required
                     date={endDate}
                     timeHHMM={endTime}
                     onChange={(d, t) => syncEnd(d, t)}
@@ -768,7 +775,7 @@ export default function OrganizerEventNewPage() {
 
             <div className="rounded-2xl border border-neutral-200 p-4">
               <p className="text-sm font-semibold text-neutral-800 comfortaa-bold">
-                {t('eventForm.categories')}
+                {t('eventForm.categories')} <span className="text-[var(--nexus-red)]">*</span>
               </p>
               {loadingCats ? (
                 <p className="mt-4 text-sm text-neutral-600 comfortaa-regular">
