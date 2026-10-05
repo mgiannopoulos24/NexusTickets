@@ -161,16 +161,122 @@ Docker Compose:
 ειδοποιήσεων. Το backend είναι η μοναδική είσοδος στα δεδομένα· ο browser δεν
 έχει καμία απευθείας πρόσβαση στη βάση.
 
-```
-┌────────────────────────┐  HTTPS · REST (JSON envelope)  ┌────────────────────────────┐
-│ Browser                │ ─────────────────────────────▶ │ Go API (Fiber)             │
-│ React SPA              │ ◀───────────────────────────── │ handler → service → repo   │
-│ Leaflet / OpenStreetMap│  WSS /api/v1/ws/messages       │ WebSocket hub (push only)  │
-└────────────────────────┘ ◀───────────────────────────── └─────────────┬──────────────┘
-                                                             ┌──────────┴──────────┐
-                                                             ▼                     ▼
-                                                        PostgreSQL 16           Redis 7
-```
+// ── Διάγραμμα αρχιτεκτονικής (native Typst· καμία εξωτερική εξάρτηση) ──────
+// Ένα κουτί του διαγράμματος: έντονος τίτλος και προαιρετικές λεπτομέρειες.
+#let dnode(title, detail: none) = rect(
+  radius: 3pt,
+  inset: 7pt,
+  stroke: 0.6pt + luma(120),
+  fill: luma(252),
+  width: 100%,
+  align(center)[
+    #set par(justify: false, leading: 0.5em)
+    #set text(hyphenate: false)
+    #text(size: 9.5pt, weight: "bold")[#title]
+    #if detail != none [
+      #linebreak()
+      #text(size: 7.5pt, fill: luma(90))[#detail]
+    ]
+  ],
+)
+
+// Κοινό μελάνι και κοινή αιχμή για όλα τα βέλη του σχήματος.
+#let dink = 0.6pt + luma(120)
+#let dhead-len = 4.5pt
+#let dhead-width = 5pt
+
+// Οριζόντιο βέλος που γεμίζει το πλάτος του κελιού, με την αιχμή στο άκρο
+// που δείχνει το `dir` (left ή right).
+#let dharrow(dir) = {
+  let head = if dir == right {
+    polygon(
+      fill: luma(120), stroke: none,
+      (0pt, 0pt), (0pt, dhead-width), (dhead-len, dhead-width / 2),
+    )
+  } else {
+    polygon(
+      fill: luma(120), stroke: none,
+      (dhead-len, 0pt), (dhead-len, dhead-width), (0pt, dhead-width / 2),
+    )
+  }
+  let head-dx = if dir == right { 100% - dhead-len } else { 0% }
+  block(width: 100%, height: dhead-width)[
+    #place(top + left, dy: dhead-width / 2, line(length: 100%, stroke: dink))
+    #place(top + left, dx: head-dx, head)
+  ]
+}
+
+// Μια επιγραφή ακριβώς πάνω από το δικό της βέλος.
+#let dlink(label, dir) = [
+  #set par(justify: false, leading: 0.5em)
+  #set text(hyphenate: false)
+  // Χωρίς αυτό το Typst παρεμβάλλει το προεπιλεγμένο κενό block, υπολογισμένο
+  // στο μέγεθος κειμένου του γονέα — πολύ μεγάλο για μια επιγραφή 7pt.
+  #set block(spacing: 0pt)
+  #align(center)[#text(size: 7pt, fill: luma(90))[#label]]
+  #v(1pt)
+  #dharrow(dir)
+]
+
+// Διακλαδωμένο βέλος: ο μίσχος φεύγει από το κέντρο του Go API, η δοκός τρέχει
+// ως το κέντρο της αριστερής στήλης και από τα δύο άκρα της πέφτει μία αιχμή
+// στο αντίστοιχο αποθηκευτικό σύστημα.
+//
+// Οι δύο θέσεις είναι τα κέντρα της 1ης και της 3ης στήλης του grid. Με στήλες
+// (1fr, 1.05fr, 1fr) τα κέντρα πέφτουν στο 16.4% και στο 83.6% του διαθέσιμου
+// για fr χώρου· οι δύο διάκενοι των 5pt μετατοπίζουν το καθένα κατά 1.64pt.
+#let dfork(stem: 10pt, drop: 13pt) = {
+  let x-left = 16.4% - 1.64pt
+  let x-right = 83.6% + 1.64pt
+  let head = polygon(
+    fill: luma(120),
+    stroke: none,
+    (0pt, 0pt), (dhead-width, 0pt), (dhead-width / 2, dhead-len),
+  )
+  block(width: 100%, height: stem + drop + dhead-len)[
+    #place(top + left, dx: x-right, line(angle: 90deg, length: stem, stroke: dink))
+    #place(top + left, dx: x-left, dy: stem, line(length: 67.2% + 3.28pt, stroke: dink))
+    #place(top + left, dx: x-left, dy: stem, line(angle: 90deg, length: drop, stroke: dink))
+    #place(top + left, dx: x-right, dy: stem, line(angle: 90deg, length: drop, stroke: dink))
+    #place(top + left, dx: x-left - dhead-width / 2, dy: stem + drop, head)
+    #place(top + left, dx: x-right - dhead-width / 2, dy: stem + drop, head)
+  ]
+}
+
+#figure(
+  kind: image,
+  supplement: [Σχήμα],
+  block(width: 100%, breakable: false)[
+    // Ένα μόνο grid για τις τρεις σειρές, ώστε τα κουτιά της κάτω σειράς να
+    // έχουν ακριβώς το πλάτος εκείνων από πάνω τους.
+    #grid(
+      columns: (1fr, 1.05fr, 1fr),
+      column-gutter: 5pt,
+      align: horizon,
+
+      dnode([Browser], detail: [React SPA \ Leaflet / OpenStreetMap]),
+
+      stack(
+        // Το μόνο κενό που μετράει πλέον: χωρίζει τα δύο ζεύγη μεταξύ τους.
+        spacing: 9pt,
+        dlink([HTTPS · REST (JSON envelope)], right),
+        dlink([WSS `/api/v1/ws/messages` · push only], left),
+      ),
+
+      dnode(
+        [Go API (Fiber)],
+        detail: [handler #sym.arrow.r service #sym.arrow.r repository \ WebSocket hub],
+      ),
+
+      grid.cell(colspan: 3, dfork()),
+
+      dnode([PostgreSQL 16], detail: [μόνιμη αποθήκευση · full-text search]),
+      [],
+      dnode([Redis 7], detail: [refresh tokens · rate limiting · μετρητές]),
+    )
+  ],
+  caption: [Τα μέρη του συστήματος και οι διαδρομές επικοινωνίας τους],
+)
 
 == Ροή Αιτήματος
 
@@ -205,7 +311,9 @@ REST. Το WebSocket χρησιμοποιείται μόνο ως κανάλι *
 `/api`, `/uploads` και το WebSocket στο backend, το οποίο επίσης ακούει με TLS.
 Σε παραγωγικό περιβάλλον το frontend μεταγλωττίζεται σε στατικά αρχεία και
 εξυπηρετείται από nginx, που τερματίζει το TLS στη θύρα 443 και προωθεί τα ίδια
-μονοπάτια στο backend. Και στις δύο περιπτώσεις ο browser βλέπει μία μόνο
+μονοπάτια στο backend — και αυτό το εσωτερικό σκέλος ταξιδεύει κρυπτογραφημένο,
+αφού το backend σερβίρει το δικό του TLS και το nginx το προσεγγίζει με
+`proxy_pass https://`. Και στις δύο περιπτώσεις ο browser βλέπει μία μόνο
 προέλευση (origin), οπότε δεν απαιτούνται cross-origin αιτήματα.
 
 = Σχεδιασμός Βάσης Δεδομένων
@@ -263,7 +371,7 @@ GORM: περιορισμούς CHECK, ξένα κλειδιά με ρητούς 
     [`phone`, `address`, `city`, `country`], [varchar, nullable], [στοιχεία επικοινωνίας και διεύθυνσης (Απ. 2)],
     [`latitude`, `longitude`], [double, nullable], [γεωγραφική τοποθεσία (Απ. 2)],
     [`vat_number`], [varchar, nullable], [ΑΦΜ (9 ψηφία)],
-    [`role`], [varchar + CHECK], [`admin` · `organizer` · `attendee`],
+    [`role`], [varchar + CHECK], [`admin` · `organizer` · `attendee` (το CHECK δέχεται και `guest`, που δεν ανατίθεται ποτέ σε λογαριασμό)],
     [`account_status`], [varchar + CHECK], [`pending` · `approved` · `rejected` (Απ. 2–4)],
     [`created_at`, `updated_at`], [timestamptz], [],
   ),
@@ -287,7 +395,7 @@ GORM: περιορισμούς CHECK, ξένα κλειδιά με ρητούς 
     [`latitude`, `longitude`], [double, nullable], [`<GeoLocation>`],
     [`start_time`, `end_time`], [timestamptz], [`StartDateTime`, `EndDateTime`· CHECK `end ≥ start`],
     [`capacity`], [int], [`Capacity`· CHECK `≥ 0`],
-    [`status`], [varchar + CHECK], [`draft` · `published` · `completed` · `cancelled`],
+    [`status`], [varchar + CHECK], [`draft` · `published` · `completed` · `cancelled`· το CHECK δέχεται επιπλέον την παλαιά τιμή `deleted`],
     [`featured_image_url`], [varchar, nullable], [εικόνα εξωφύλλου],
     [`event_detail`], [jsonb], [προαιρετικό πλούσιο περιεχόμενο (εκτός DTD)],
     [`search_vector`], [tsvector, generated], [`to_tsvector('greek', title ‖ description ‖ venue ‖ city)`, δείκτης GIN],
@@ -466,20 +574,21 @@ rate limiter και τη διαδρομή αποθήκευσης πολυμέσ�
 Μετά το AutoMigrate, εκτελούνται επιπλέον SQL εντολές με τη ρήτρα `IF NOT EXISTS`
 για:
 
-- *10 CHECK constraints* — π.χ. `users_role_chk`, `events_capacity_chk`,
+- *13 CHECK constraints* — π.χ. `users_role_chk`, `events_capacity_chk`,
   `ticket_types_available_chk`, `bookings_quantity_chk`.
-- *19 FOREIGN KEY constraints* — π.χ. `fk_events_organizer`,
+- *16 FOREIGN KEY constraints* — π.χ. `fk_events_organizer`,
   `fk_bookings_ticket_type`, `fk_messages_sender`, `fk_event_photos_event`.
-- *3 UNIQUE composite indexes* — π.χ. `ticket_types_event_name_uq`,
-  `event_categories_unique`.
+- *2 UNIQUE composite indexes* — `ticket_types_event_name_uq` και
+  `event_photos_event_position_uq`.
 - *1 generated column* — `search_vector tsvector GENERATED ALWAYS AS (...) STORED`
   με Greek full-text search configuration.
-- *16+ performance indexes* — π.χ. `events_search_vector_gin_idx`,
-  `events_startat_idx`, `messages_recipient_unread_idx`, `ticket_types_event_idx`.
+- *19 performance indexes* — π.χ. `events_search_vector_gin_idx`,
+  `events_status_start_time_idx`, `messages_recipient_unread_idx`,
+  `ticket_types_event_id_idx`.
 
 Ο μηχανισμός `search_vector` χρησιμοποιεί `to_tsvector('greek', coalesce(title, '') || ' '
-|| coalesce(description, ''))` για την υποστήριξη αναζήτησης ελεύθερου κειμένου στα
-ελληνικά.
+|| coalesce(description, '') || ' ' || coalesce(venue, '') || ' ' || coalesce(city, ''))`
+για την υποστήριξη αναζήτησης ελεύθερου κειμένου στα ελληνικά.
 
 == Επίπεδο Τομέα (Domain Layer)
 
@@ -491,17 +600,17 @@ rate limiter και τη διαδρομή αποθήκευσης πολυμέσ�
 Οι κύριες οντότητες που ορίζονται είναι:
 
 - *User* — Χρήστης με πεδία: ID (UUID v7), Username, PasswordHash, FirstName,
-  LastName, Email, Phone, Address, City, Country, Latitude, Longitude, VATNumber,
-  Role, AccountStatus, CreatedAt, UpdatedAt.
+  LastName, Email, PhotoURL, Phone, Address, City, Country, Latitude, Longitude,
+  VATNumber, Role, AccountStatus, CreatedAt, UpdatedAt.
 - *Event* — Εκδήλωση με πεδία: ID, OrganizerID, Title, Description, Venue,
-  FeaturedImageURL, Detail (jsonb), Address, City, Country, Latitude, Longitude,
-  StartAt, EndAt, Capacity, Status, CreatedAt, UpdatedAt.
+  EventType, FeaturedImageURL, Detail (jsonb), Address, City, Country, Latitude,
+  Longitude, StartAt, EndAt, Capacity, Status, CreatedAt, UpdatedAt.
 - *TicketType* — Τύπος εισιτηρίου με πεδία: ID, EventID, Name, Price, Quantity,
   Available, CreatedAt, UpdatedAt.
 - *Booking* — Κράτηση με πεδία: ID, UserID, EventID, TicketTypeID, Quantity,
   TotalCost, Status, CreatedAt, UpdatedAt.
-- *Message* — Μήνυμα με πεδία: ID, SenderID, RecipientID, Subject, Body,
-  ReadAt, DeletedBySender, DeletedByRecipient, CreatedAt.
+- *Message* — Μήνυμα με πεδία: ID, SenderID, RecipientID, EventID (προαιρετικό),
+  Subject, Body, ReadAt, DeletedBySender, DeletedByRecipient, CreatedAt.
 - *Category* — Κατηγορία με πεδία: ID, Name (unique), CreatedAt.
 - *EventPhoto* — Φωτογραφία εκδήλωσης με πεδία: ID, EventID, StoragePath,
   Position, CreatedAt.
@@ -516,7 +625,9 @@ rate limiter και τη διαδρομή αποθήκευσης πολυμέσ�
 
 - *UserRole*: `admin`, `organizer`, `attendee`, `guest`
 - *AccountStatus*: `pending`, `approved`, `rejected`
-- *EventStatus*: `draft`, `published`, `cancelled`, `completed` (= `deleted`)
+- *EventStatus*: `draft`, `published`, `cancelled`, `completed` (το `deleted`
+  επιβιώνει μόνο ως παλαιά τιμή σε γραμμές γραμμένες πριν τη λογική διαγραφή και
+  απορρίπτεται από την `ValidEventStatus`)
 - *BookingStatus*: `pending`, `confirmed`, `cancelled`
 
 === Σφάλματα (Sentinel Errors)
@@ -550,15 +661,38 @@ rate limiter και τη διαδρομή αποθήκευσης πολυμέσ�
 
 Οι κύριες διασυνδέσεις που ορίζονται:
 
-| *Διασύνδεση* | *Κύριες Μέθοδοι* |
-|---|---|
-| UserRepository | GetByID, GetByUsername, GetByEmail, Create, UpdateProfile, Approve, Reject, List, ListByIDs |
-| EventRepository | Create, GetByID, ListOrganizer, ListPublic, Search, Update, Delete, SetStatus, SetCategories, SetTicketTypes, GetPhotos, ListForExport |
-| TicketTypeRepository | Create, GetByID, ListByEvent, Update, Delete, DecrementAvailabilityAtomic |
-| BookingRepository | Create, CreateBookingWithDecrement, GetByID, ListByUser, ListByEvent, ListConfirmedByEvent, ListDistinctConfirmedUserIDsByEvent |
-| MessageRepository | Create, CreateBatch, GetByID, ListInbox, ListSent, MarkAsRead, DeleteForUser, GetUnreadCount |
-| CategoryRepository | Create, GetByID, GetByName, ListAll |
-| EventPhotoRepository, UserEventViewRepository | Φωτογραφίες εκδήλωσης, καταγραφή προβολών για τον recommender |
+#figure(
+  table(
+    columns: (auto, 1fr),
+    align: (left, left),
+    [*Διασύνδεση*], [*Κύριες μέθοδοι*],
+    [`UserRepository`], [`GetByID`, `GetByUsername`, `GetByEmail`, `Create`,
+      `UpdateProfile`, `Approve`, `Reject`, `SetRole`, `List`, `ListByRole`,
+      `ListByIDs`],
+    [`EventRepository`], [`Create`, `GetByID`, `ListOrganizer`, `ListPublic`,
+      `Search`, `Update`, `Delete`, `SetStatus`, `MarkCompleted`,
+      `SetCategories`, `SetTicketTypes`, `GetPhotos`, `ListAdmin`,
+      `ListForExport`],
+    [`TicketTypeRepository`], [`Create`, `GetByID`, `ListByEvent`, `Update`,
+      `Delete`, `DecrementAvailabilityAtomic`],
+    [`BookingRepository`], [`Create`, `CreateBookingWithDecrement`, `GetByID`,
+      `ListByUser`, `ListByEvent`, `ListConfirmedByEvent`,
+      `ListDistinctConfirmedUserIDsByEvent`, `ListAllConfirmed`,
+      `CountByTicketType`, `ExistsBetweenAttendeeAndOrganizer`,
+      `ListCorrespondentIDs`],
+    [`MessageRepository`], [`Create`, `CreateBatch`, `GetByID`, `ListInbox`,
+      `ListSent`, `MarkAsRead`, `DeleteForUser`, `GetUnreadCount`],
+    [`CategoryRepository`], [`Create`, `GetByID`, `GetByName`, `ListAll`],
+    [`SupportRepository`], [`CreateTicket`, `GetTicket`, `ListTicketsByUser`,
+      `ListTickets`, `CountTicketsByStatus`, `AddMessage`, `ListMessages`,
+      `SetTicketStatus`],
+    [`EventPhotoRepository`], [`Add`, `ListByEvent`, `Delete` — οι φωτογραφίες
+      της εκδήλωσης],
+    [`UserEventViewRepository`], [`Record`, `CountByEvent`, `ListAll` — η
+      καταγραφή προβολών που τροφοδοτεί τον recommender],
+  ),
+  caption: [Διασυνδέσεις του επιπέδου αποθετηρίου],
+)
 
 === Υλοποίηση με GORM
 
@@ -595,8 +729,9 @@ UUID v7 ως πρωτεύον κλειδί.
 - Φιλτράρισμα κατά κατηγορία (μέσω του πίνακα `event_categories`).
 - Φιλτράρισμα κατά χρονικό διάστημα (overlap check).
 - Φιλτράρισμα κατά εύρος τιμής (μέσω EXISTS subquery σε `ticket_types`).
-- Keyset pagination: το αποτέλεσμα περιλαμβάνει `after_start` και `after_id`
-  για την επόμενη σελίδα.
+- Keyset pagination: ο πελάτης στέλνει `after_start` και `after_id`, και το
+  `meta` της απόκρισης επιστρέφει `next_after_start` / `next_after_id` για την
+  επόμενη σελίδα.
 
 == Επίπεδο Υπηρεσιών (Service Layer)
 
@@ -687,8 +822,8 @@ token και αποσύνδεση χρηστών.
   (`ErrTicketTypeLocked`).
 
 *Διαχείριση φωτογραφιών:*
-- Υποστήριξη upload (multipart), ανίχνευση MIME από bytes (jpeg, png, gif, webp),
-  μέγιστο μέγεθος 5MB.
+- Υποστήριξη upload (multipart) και ανίχνευση MIME από bytes (jpeg, png, gif,
+  webp)· το όριο μεγέθους των 5MB ελέγχεται ήδη στον handler.
 - Αποθήκευση στη διαδρομή `mediaRoot/<eventID>/<uuid>.<ext>`.
 - Διαγραφή και ορισμός featured image.
 
@@ -801,6 +936,7 @@ token και αποσύνδεση χρηστών.
     [POST], [`/api/v1/auth/login`], [Είσοδος],
     [POST], [`/api/v1/auth/refresh`], [Ανανέωση token],
     [POST], [`/api/v1/auth/logout`], [Αποσύνδεση],
+    [GET], [`/api/v1/auth/username-available`], [Έλεγχος διαθεσιμότητας username],
     [GET], [`/api/v1/users/me`], [Στοιχεία χρήστη],
     [PATCH], [`/api/v1/users/me`], [Ενημέρωση προφίλ],
     [GET], [`/api/v1/users/admin`], [Λίστα χρηστών],
@@ -818,11 +954,14 @@ token και αποσύνδεση χρηστών.
     [DELETE], [`/api/v1/events/organizer/:id`], [Διαγραφή],
     [PATCH], [`/api/v1/events/organizer/:id/publish`], [Δημοσίευση],
     [PATCH], [`/api/v1/events/organizer/:id/cancel`], [Ακύρωση],
-    [POST/PATCH/DELETE], [`/api/v1/events/organizer/:id/ticket-types[/:ttId]`], [Τύποι εισιτηρίων],
+    [POST/PATCH/DELETE], [`/api/v1/events/organizer/:id/ticket-types[/:ticketTypeId]`], [Τύποι εισιτηρίων],
     [POST/DELETE], [`/api/v1/events/organizer/:id/photos[/:photoId]`], [Φωτογραφίες],
+    [POST], [`/api/v1/events/organizer/:id/featured-image`], [Εικόνα εξωφύλλου],
     [GET/PATCH], [`/api/v1/events/admin[/:id]`], [Διαχείριση εκδηλώσεων από admin],
+    [POST], [`/api/v1/events/admin/:id/featured-image`], [Εικόνα εξωφύλλου (admin)],
     [POST], [`/api/v1/bookings/`], [Δημιουργία κράτησης],
     [GET], [`/api/v1/bookings/me`], [Οι κρατήσεις μου],
+    [GET], [`/api/v1/bookings/:id`], [Μία κράτηση],
     [GET], [`/api/v1/bookings/organizer/events/:eventId`], [Κρατήσεις εκδήλωσης (διοργανωτής)],
     [GET], [`/api/v1/messages/inbox`], [Εισερχόμενα],
     [GET], [`/api/v1/messages/sent`], [Απεσταλμένα],
@@ -851,7 +990,7 @@ token και αποσύνδεση χρηστών.
 
 *Request DTOs:*
 - `RegisterRequest` — username, password, confirm_password, first_name, last_name,
-  email, phone, address, city, country, vat_number.
+  email, phone, address, city, country, latitude, longitude, vat_number, role.
 - `LoginRequest` — username, password.
 - `CreateEventRequest` — title, description, venue, event_type, address, city,
   country, latitude, longitude, start_at, end_at, capacity, categories,
@@ -861,7 +1000,7 @@ token και αποσύνδεση χρηστών.
 - `NotifyAttendeesRequest` — subject, body.
 
 *Response DTOs:*
-- `TokenPairResponse` — access_token, refresh_token, token_type,
+- `AuthTokensResponse` — access_token, refresh_token, token_type,
   access_expires_in, refresh_expires_in.
 - `UserResponse` — Όλα τα πεδία χρήστη εκτός από password hash.
 - `EventResponse` — Πλήρη στοιχεία εκδήλωσης με ticket types, categories, photos.
@@ -947,7 +1086,8 @@ Authorization.
     [`ErrNotFound`], [404],
     [`ErrUsernameTaken`, `ErrEmailTaken`], [409],
     [`ErrMessagingNotAllowed`], [403],
-    [`ErrEventNotBookable`, `ErrInvalidEventState`, `ErrTicketTypeLocked`, `ErrCapacityExceeded`], [422],
+    [`ErrCapacityExceeded`], [409],
+    [`ErrEventNotBookable`, `ErrInvalidEventState`, `ErrTicketTypeLocked`], [422],
     [`ErrInvalidRole`, σφάλματα επικύρωσης], [400],
     [Άγνωστο σφάλμα], [500],
   ),
@@ -957,8 +1097,10 @@ Authorization.
 == WebSocket
 
 Η επικοινωνία πραγματικού χρόνου (Real-time Communication) υλοποιείται μέσω
-του πρωτοκόλλου WebSocket, χρησιμοποιώντας τη βιβλιοθήκη Gorilla WebSocket
-σε συνδυασμό με Fiber. Η αρχιτεκτονική ακολουθεί το μοτίβο Hub/Client.
+του πρωτοκόλλου WebSocket, χρησιμοποιώντας τη βιβλιοθήκη `gofiber/websocket`
+(την προσαρμογή του πρωτοκόλλου στο fasthttp που χρησιμοποιεί το Fiber)· από το
+`gorilla/websocket` δανειζόμαστε μόνο τις σταθερές τύπου πλαισίου (text, ping,
+close). Η αρχιτεκτονική ακολουθεί το μοτίβο Hub/Client.
 
 === Hub
 
@@ -999,12 +1141,15 @@ goroutine και διαχειρίζεται τρία κανάλια:
 5. Το Hub διανέμει το μήνυμα σε όλες τις ενεργές συνδέσεις του παραλήπτη.
 6. Ο `WritePump` του client γράφει το μήνυμα στη WebSocket σύνδεση.
 
-Τα δύο είδη μηνυμάτων WebSocket που ορίζονται:
+Τα τρία είδη μηνυμάτων WebSocket που ορίζονται:
 
 - `new_message` — Νέο μήνυμα στα εισερχόμενα (περιλαμβάνει όλα τα στοιχεία
   του μηνύματος).
 - `unread_count` — Ενημέρωση μετρητή μη αναγνωσμένων μηνυμάτων, σε κάθε
   μεταβολή του (αποστολή, άνοιγμα, διαγραφή).
+- `support_update` — Ειδοποίηση προς την άλλη πλευρά ενός αιτήματος
+  υποστήριξης όταν αυτό ανοίγει, απαντιέται ή κλείνει, ώστε το νήμα και η ουρά
+  της διαχείρισης να ανανεώνονται ζωντανά.
 
 == Εξαγωγή XML και JSON
 
@@ -1173,12 +1318,19 @@ JSON Web Tokens και εξουσιοδότηση ανά ρόλο. Το κεφά
 == Κρυπτογράφηση Μεταφοράς (TLS)
 
 Όλες οι αλληλεπιδράσεις γίνονται μέσω TLS, όπως απαιτεί η Απαίτηση 1. Το
-backend εκκινεί με `ListenTLS` όταν οριστούν `TLS_CERT_FILE` / `TLS_KEY_FILE`.
-Στην ανάπτυξη ο Vite dev server εξυπηρετεί το SPA με το ίδιο τοπικό
+backend εκκινεί με `ListenTLS` όταν οριστούν `TLS_CERT_FILE` / `TLS_KEY_FILE`,
+και αυτά ορίζονται και στα δύο περιβάλλοντα: ο διακομιστής δεν ακούει ποτέ σε
+καθαρό HTTP. Στην ανάπτυξη ο Vite dev server εξυπηρετεί το SPA με το ίδιο τοπικό
 πιστοποιητικό mkcert στο `https://localhost:5173` και προωθεί REST και
-WebSocket στο backend· στην παραγωγή το nginx τερματίζει το TLS στη θύρα 443.
-Η σύνδεση WebSocket ανοίγει πάντα ως `wss://` στην ίδια προέλευση με τη
-σελίδα, ώστε να μην μπλοκάρεται ως mixed content.
+WebSocket στο backend· στην παραγωγή το nginx τερματίζει το TLS στη θύρα 443 και
+προωθεί με τη σειρά του πάνω από TLS. Έτσι κρυπτογραφείται όχι μόνο το σκέλος
+browser–nginx αλλά και το εσωτερικό nginx–backend. Η σύνδεση WebSocket ανοίγει
+πάντα ως `wss://` στην ίδια προέλευση με τη σελίδα, ώστε να μην μπλοκάρεται ως
+mixed content.
+
+Επειδή τα πιστοποιητικά είναι τοπικά και αυτο-υπογεγραμμένα, το nginx δεν
+επαληθεύει το πιστοποιητικό του backend (`proxy_ssl_verify off`)· σε πραγματική
+εγκατάσταση τη θέση τους παίρνουν πιστοποιητικά αναγνωρισμένης αρχής.
 
 == Αυθεντικοποίηση με JSON Web Tokens
 
@@ -1200,10 +1352,11 @@ WebSocket στο backend· στην παραγωγή το nginx τερματίζ
 == Εξουσιοδότηση ανά Ρόλο
 
 Κάθε ομάδα διαδρομών περνά από `JWTAuth` και `RequireRole(...)`. Οι δημόσιες
-διαδρομές (λίστα, αναζήτηση, λεπτομέρειες εκδήλωσης, κατηγορίες,
-προτεινόμενα) χρησιμοποιούν `OptionalJWTAuth`, ώστε ο επισκέπτης να εξυπηρετείται
-χωρίς token ενώ ο συνδεδεμένος χρήστης να αναγνωρίζεται (π.χ. για την
-καταγραφή προβολών). Ο έλεγχος ρόλου αφορά την *κατηγορία* ενέργειας· ο
+διαδρομές (λίστα και αναζήτηση εκδηλώσεων, κατηγορίες) δεν απαιτούν καθόλου
+token, ενώ οι λεπτομέρειες εκδήλωσης και οι προτεινόμενες χρησιμοποιούν
+`OptionalJWTAuth`, ώστε ο επισκέπτης να εξυπηρετείται χωρίς token ενώ ο
+συνδεδεμένος χρήστης να αναγνωρίζεται (για την καταγραφή προβολών και για την
+εξατομίκευση των προτάσεων). Ο έλεγχος ρόλου αφορά την *κατηγορία* ενέργειας· ο
 έλεγχος *ιδιοκτησίας* (ο διοργανωτής τροποποιεί μόνο τις δικές του
 εκδηλώσεις, ο χρήστης ανοίγει μόνο δικά του μηνύματα και κρατήσεις) γίνεται
 στο επίπεδο υπηρεσιών και επιστρέφει `ErrForbidden`.
@@ -1331,7 +1484,7 @@ train/test 80/20, εκπαιδεύει το μοντέλο και αναφέρε
 == Backend
 
 Οι δοκιμές του Go γράφονται με το τυπικό πακέτο `testing` και εκτελούνται με
-`go test ./...` (147 περιπτώσεις). Οι υπηρεσίες ελέγχονται σε απομόνωση με
+`go test ./...` (153 περιπτώσεις). Οι υπηρεσίες ελέγχονται σε απομόνωση με
 in-memory υλοποιήσεις των διασυνδέσεων αποθετηρίου, ώστε κάθε κανόνας να
 ελέγχεται χωρίς βάση δεδομένων· μόνο το Redis είναι πραγματικό, επειδή η
 λογική των tokens και των μετρητών εξαρτάται από τη σημασιολογία του.
@@ -1348,8 +1501,9 @@ in-memory υλοποιήσεις των διασυνδέσεων αποθετη�
 - *Κρατήσεις*: επιτυχής δέσμευση και ενημέρωση διαθεσιμότητας, απόρριψη όταν
   δεν επαρκούν οι θέσεις (`ErrCapacityExceeded`), απόρριψη για μη
   δημοσιευμένη ή ληγμένη εκδήλωση, υπολογισμός κόστους από τον server.
-- *Μηνύματα*: κανόνας κράτησης μεταξύ των δύο μερών και εξαίρεση διαχειριστή,
-  αρχειοθέτηση στους δύο φακέλους, σελιδοποίηση, το ότι η λίστα δεν σημαίνει
+- *Μηνύματα*: κανόνας κράτησης μεταξύ των δύο μερών (και το ότι ο διαχειριστής
+  *δεν* εξαιρείται από αυτόν, αφού τα αιτήματα προς τη διαχείριση περνούν από τα
+  support tickets), αρχειοθέτηση στους δύο φακέλους, σελιδοποίηση, το ότι η λίστα δεν σημαίνει
   ανάγνωση ενώ το άνοιγμα ναι, ανεξάρτητη διαγραφή ανά φάκελο, μετρητής μη
   αναγνωσμένων με fallback στη βάση, ειδοποίηση ακύρωσης και μαζικό μήνυμα
   διοργανωτή (ένα ανά χρήστη, όχι στον ίδιο τον διοργανωτή).
@@ -1362,9 +1516,9 @@ in-memory υλοποιήσεις των διασυνδέσεων αποθετη�
   πολλαπλές συνδέσεις, αποχώρηση), mappers μοντέλων, δημιουργία του
   ενσωματωμένου διαχειριστή.
 
-Επιπλέον, η εξαγωγή XML της πραγματικής βάσης (55 εκδηλώσεις με κρατήσεις και
-φωτογραφίες) επικυρώθηκε ως προς το `docs/events-catalog.dtd` με έναν
-validating parser (lxml) χωρίς σφάλματα.
+Επιπλέον, η εξαγωγή XML του πλήρους καταλόγου εκδηλώσεων της πραγματικής βάσης
+(με κρατήσεις και φωτογραφίες) επικυρώθηκε ως προς το `docs/events-catalog.dtd`
+με έναν validating parser (lxml) χωρίς σφάλματα.
 
 == Frontend
 
@@ -1384,9 +1538,14 @@ slices, λήψη εξαγωγής).
 == Στατικοί Έλεγχοι και Ολοκλήρωση
 
 Ο κώδικας περνά από `go vet`, `tsc --noEmit` (strict) και ESLint (με τους
-κανόνες του React Compiler). Τρεις ροές GitHub Actions εκτελούν σε κάθε pull
-request lint, τις δοκιμές και ελέγχους ασφάλειας (`govulncheck`, `gitleaks`,
-`trivy`). Τέλος, η πλήρης ροή — εγγραφή, έγκριση, δημιουργία και δημοσίευση
+κανόνες του React Compiler). Η ροή `ci.yml` του GitHub Actions εκτελείται σε
+κάθε pull request και σε κάθε push στον `main` με τρεις εργασίες: `backend`
+(`gofmt`, `go vet`, έλεγχος ότι το παραγόμενο `wire_gen.go` είναι ενημερωμένο
+και `go test ./...` με πραγματικό Redis service), `frontend` (`tsc --noEmit`,
+ESLint, Vitest και παραγωγικό build) και `docker` (χτίσιμο και των δύο εικόνων).
+Μια δεύτερη ροή, η `submission.yml`, εκτελείται χειροκίνητα και παράγει τα δύο
+παραδοτέα: το `report.pdf` μέσω Typst και το zip του πηγαίου κώδικα μέσω
+`git archive`. Τέλος, η πλήρης ροή — εγγραφή, έγκριση, δημιουργία και δημοσίευση
 εκδήλωσης, κράτηση, μήνυμα και λήψη του μέσω WebSocket, ακύρωση με ειδοποίηση,
 εξαγωγή — επαληθεύθηκε χειροκίνητα στο πλήρες Docker περιβάλλον μέσω
 `https://localhost:5173`.

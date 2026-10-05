@@ -69,14 +69,15 @@ nexustickets/
 ├── frontend/
 │   ├── src/
 │   │   ├── app/             # Redux store, typed hooks
-│   │   ├── features/        # Modules χαρακτηριστικών: auth, events, bookings, messaging, admin, organizer
 │   │   ├── components/      # Κοινόχρηστα UI components, shadcn/ui primitives, layout
+│   │   ├── contexts/        # Providers αυθεντικοποίησης και γλώσσας
 │   │   ├── hooks/           # Κοινόχρηστα custom hooks
-│   │   ├── lib/             # API client, utilities, i18n strings
+│   │   ├── lib/             # Αναζήτηση i18n, formatters, utilities
+│   │   ├── locales/         # Κείμενα διεπαφής: gr.yaml, en.yaml
 │   │   ├── types/           # Global TypeScript types και models
 │   │   ├── routes/          # React Router configuration, ProtectedRoute
-│   │   ├── pages/           # Page components
-│   │   └── utils/           # Utility functions
+│   │   ├── pages/           # Page components, ομαδοποιημένα ανά περιοχή
+│   │   └── utils/           # API client (api.ts) και WebSocket client (wsClient.ts)
 │   └── ...
 ├── docs/                    # Τεχνική τεκμηρίωση
 ├── report/                  # Ακαδημαϊκή αναφορά (PDF)

@@ -19,8 +19,10 @@ import (
 // It skips automatically when the dataset is not present (e.g. in CI), so it
 // never blocks the normal test run. To run it:
 //
-//	RECOMMENDATION_DATA_DIR=../../data go test ./internal/service/ \
-//	    -run TestBMFOfflineEvaluation -v
+//	go test ./internal/service/ -run TestBMFOfflineEvaluation -v
+//
+// The dataset defaults to <repo>/data; RECOMMENDATION_DATA_DIR overrides it
+// with a path relative to this package (internal/service).
 func TestBMFOfflineEvaluation(t *testing.T) {
 	dir := os.Getenv("RECOMMENDATION_DATA_DIR")
 	if dir == "" {
