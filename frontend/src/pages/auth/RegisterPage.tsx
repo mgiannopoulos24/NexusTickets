@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { useLang } from '@/contexts/langContextCore';
 import { tr } from '@/lib/i18n';
+import { apiErrorMessage } from '@/app/apiEnvelope';
 
 type ApiEnvelope<T> = {
   data: T | null;
@@ -75,7 +76,9 @@ type RegisterForm = z.infer<ReturnType<typeof makeSchema>>;
 type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'error';
 
 function mapRegisterError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : '';
+  // RTK Query rejects with { status, data: { error } }, not an Error, so read
+  // the server's message out of the envelope.
+  const msg = apiErrorMessage(err, '');
   if (msg.includes('username already taken')) return tr('register.e.usernameTaken');
   if (msg.includes('email already taken')) return tr('register.e.emailTaken');
   if (msg.includes('missing required registration fields')) return tr('register.e.required');
@@ -439,7 +442,16 @@ export default function RegisterPage() {
               >
                 {t('register.phone')}
               </label>
-              <Input id="reg-phone" type="tel" autoComplete="tel" {...register('phone')} />
+              <Input
+                id="reg-phone"
+                type="tel"
+                autoComplete="tel"
+                className={cn(errors.phone && 'border-red-500')}
+                {...register('phone')}
+              />
+              {errors.phone && (
+                <p className="mt-1 text-sm text-[var(--nexus-red)]">{errors.phone.message}</p>
+              )}
             </div>
 
             <div>
@@ -449,7 +461,15 @@ export default function RegisterPage() {
               >
                 {t('register.vat')}
               </label>
-              <Input id="reg-vat" type="text" {...register('vat_number')} />
+              <Input
+                id="reg-vat"
+                type="text"
+                className={cn(errors.vat_number && 'border-red-500')}
+                {...register('vat_number')}
+              />
+              {errors.vat_number && (
+                <p className="mt-1 text-sm text-[var(--nexus-red)]">{errors.vat_number.message}</p>
+              )}
             </div>
 
             <div className="md:col-span-2">
