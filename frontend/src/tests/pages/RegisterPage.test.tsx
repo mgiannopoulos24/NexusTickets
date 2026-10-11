@@ -1,4 +1,3 @@
-import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { Route, Routes } from 'react-router-dom';
@@ -43,6 +42,11 @@ const fillRequired = async () => {
   type('Όνομα *', 'Μαρία');
   type('Επώνυμο *', 'Παπαδοπούλου');
   type('Email *', 'maria@example.com');
+  type('Τηλέφωνο *', '210 1234567');
+  type('ΑΦΜ *', '123456789');
+  type('Διεύθυνση *', 'Πανεπιστημίου 30');
+  type('Πόλη *', 'Αθήνα');
+  type('Χώρα *', 'Ελλάδα');
 };
 
 const submit = async () => {
@@ -65,6 +69,16 @@ describe('RegisterPage (§2)', () => {
     expect(screen.getByText('Εισάγετε όνομα')).toBeInTheDocument();
     expect(screen.getByText('Εισάγετε επώνυμο')).toBeInTheDocument();
     expect(screen.getByText('Εισάγετε έγκυρο email')).toBeInTheDocument();
+    // §2 also asks for a phone, a VAT number and an address.
+    for (const msg of [
+      'Εισάγετε τηλέφωνο',
+      'Εισάγετε ΑΦΜ',
+      'Εισάγετε διεύθυνση',
+      'Εισάγετε πόλη',
+      'Εισάγετε χώρα',
+    ]) {
+      expect(screen.getByText(msg)).toBeInTheDocument();
+    }
     expect(api.matching('/auth/register')).toHaveLength(0);
   });
 
@@ -95,7 +109,7 @@ describe('RegisterPage (§2)', () => {
   it('accepts only a nine-digit VAT number', async () => {
     renderRegister();
     await fillRequired();
-    type('ΑΦΜ', '12345');
+    type('ΑΦΜ *', '12345');
     await submit();
 
     expect(await screen.findByText('Το ΑΦΜ πρέπει να αποτελείται από 9 ψηφία')).toBeInTheDocument();
@@ -105,7 +119,7 @@ describe('RegisterPage (§2)', () => {
   it('rejects a malformed phone number', async () => {
     renderRegister();
     await fillRequired();
-    type('Τηλέφωνο', '12-34');
+    type('Τηλέφωνο *', '12-34');
     await submit();
 
     expect(await screen.findByText('Εισάγετε έγκυρο τηλέφωνο (8–15 ψηφία)')).toBeInTheDocument();
@@ -125,8 +139,6 @@ describe('RegisterPage (§2)', () => {
     renderRegister();
     fireEvent.click(screen.getByRole('radio', { name: /Διοργανωτής/ }));
     await fillRequired();
-    type('Τηλέφωνο', '210 1234567');
-    type('ΑΦΜ', '123456789');
     type('Γεωγρ. πλάτος', '37,9838');
     type('Γεωγρ. μήκος', '23.7275');
     await submit();
@@ -140,9 +152,9 @@ describe('RegisterPage (§2)', () => {
       last_name: 'Παπαδοπούλου',
       email: 'maria@example.com',
       phone: '210 1234567',
-      address: null,
-      city: null,
-      country: null,
+      address: 'Πανεπιστημίου 30',
+      city: 'Αθήνα',
+      country: 'Ελλάδα',
       latitude: 37.9838,
       longitude: 23.7275,
       vat_number: '123456789',

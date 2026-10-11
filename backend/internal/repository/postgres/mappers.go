@@ -160,6 +160,7 @@ func bookingModelToDomain(m BookingModel) domain.Booking {
 		Quantity:     m.Quantity,
 		TotalCost:    m.TotalCost,
 		Status:       domain.BookingStatus(m.Status),
+		ConfirmedAt:  m.ConfirmedAt,
 		CreatedAt:    m.CreatedAt,
 		UpdatedAt:    m.UpdatedAt,
 	}
@@ -174,6 +175,7 @@ func bookingDomainToModel(b domain.Booking) BookingModel {
 		Quantity:     b.Quantity,
 		TotalCost:    b.TotalCost,
 		Status:       string(b.Status),
+		ConfirmedAt:  b.ConfirmedAt,
 		CreatedAt:    b.CreatedAt,
 		UpdatedAt:    b.UpdatedAt,
 	}

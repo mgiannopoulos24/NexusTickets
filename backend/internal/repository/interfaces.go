@@ -80,6 +80,13 @@ type EventRepository interface {
 	ListTicketTypesByEventIDs(ctx context.Context, eventIDs []uuid.UUID) (map[uuid.UUID][]domain.TicketType, error)
 	ListCategoriesByEventIDs(ctx context.Context, eventIDs []uuid.UUID) (map[uuid.UUID][]domain.Category, error)
 	ListPhotosByEventIDs(ctx context.Context, eventIDs []uuid.UUID) (map[uuid.UUID][]domain.EventPhoto, error)
+
+	// ListBookableOrganizerIDs returns the organizers of every published event
+	// that has not ended by `now`: the events anyone can still attend.
+	ListBookableOrganizerIDs(ctx context.Context, now time.Time) ([]uuid.UUID, error)
+	// OrganizesBookableEvent reports whether the user runs at least one such
+	// event.
+	OrganizesBookableEvent(ctx context.Context, organizerID uuid.UUID, now time.Time) (bool, error)
 }
 
 type TicketTypeRepository interface {
@@ -101,20 +108,38 @@ type BookingRepository interface {
 	ListByUser(ctx context.Context, userID uuid.UUID, limit, offset int) ([]domain.Booking, error)
 	ListByEvent(ctx context.Context, eventID uuid.UUID, limit, offset int) ([]domain.Booking, error)
 	ListConfirmedByEvent(ctx context.Context, eventID uuid.UUID, limit, offset int) ([]domain.Booking, error)
+	// ListDistinctConfirmedUserIDsByEvent returns everyone holding a confirmed
+	// booking for the event, including bookings cancelled with the event.
 	ListDistinctConfirmedUserIDsByEvent(ctx context.Context, eventID uuid.UUID) ([]uuid.UUID, error)
 	ListByEventIDs(ctx context.Context, eventIDs []uuid.UUID) ([]domain.Booking, error)
-	// ListAllConfirmed returns every confirmed booking. Used to build the
-	// recommendation training matrix (a strong implicit-feedback signal).
+	// ListAllConfirmed returns every booking that was confirmed. Used to build
+	// the recommendation training matrix (a strong implicit-feedback signal).
 	ListAllConfirmed(ctx context.Context) ([]domain.Booking, error)
+	// CountByTicketType counts the pending and confirmed bookings on a ticket
+	// type; lapsed holds do not lock it.
 	CountByTicketType(ctx context.Context, ticketTypeID uuid.UUID) (int, error)
-	// ExistsBetweenAttendeeAndOrganizer reports whether the attendee has booked
-	// any event run by the organizer. Gates direct messaging.
+	// CountActiveByEvent counts the pending and confirmed bookings on an event.
+	CountActiveByEvent(ctx context.Context, eventID uuid.UUID) (int, error)
+	// ExistsBetweenAttendeeAndOrganizer reports whether the attendee has a
+	// confirmed booking on any event run by the organizer. Gates direct
+	// messaging.
 	ExistsBetweenAttendeeAndOrganizer(ctx context.Context, attendeeID, organizerID uuid.UUID) (bool, error)
-	// ListCorrespondentIDs returns every user the given user shares a booking
-	// with, in either direction.
+	// ListCorrespondentIDs returns every user the given user shares a
+	// confirmed booking with, in either direction.
 	ListCorrespondentIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error)
 
-	SetStatus(ctx context.Context, bookingID uuid.UUID, status domain.BookingStatus) error
+	// Confirm moves a PENDING booking created after holdCutoff to CONFIRMED.
+	// It returns ErrBookingNotPending if the booking is not such a hold.
+	Confirm(ctx context.Context, bookingID uuid.UUID, holdCutoff time.Time) (domain.Booking, error)
+	// Release moves a PENDING booking to CANCELLED and puts its seats back on
+	// sale. It returns ErrBookingNotPending if the booking is not pending.
+	Release(ctx context.Context, bookingID uuid.UUID) error
+	// ReleaseExpired releases every PENDING booking created at or before
+	// holdCutoff and returns how many it released.
+	ReleaseExpired(ctx context.Context, holdCutoff time.Time) (int64, error)
+	// CancelByEvent cancels every pending or confirmed booking on the event,
+	// returning the seats of the pending ones.
+	CancelByEvent(ctx context.Context, eventID uuid.UUID) error
 }
 
 type MessageRepository interface {

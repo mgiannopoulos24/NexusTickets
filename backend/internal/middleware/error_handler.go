@@ -43,8 +43,11 @@ func ErrorHandler(log *zap.Logger) fiber.ErrorHandler {
 			errors.Is(err, domain.ErrEventEnded),
 			errors.Is(err, domain.ErrEventLocked),
 			errors.Is(err, domain.ErrEventNeedsCategory),
-			errors.Is(err, domain.ErrEventNeedsTicketType):
+			errors.Is(err, domain.ErrEventNeedsTicketType),
+			errors.Is(err, domain.ErrBookingExpired):
 			return response.Error(c, fiber.StatusUnprocessableEntity, "business_rule_violation", err.Error())
+		case errors.Is(err, domain.ErrBookingNotPending):
+			return response.Error(c, fiber.StatusConflict, "booking_not_pending", err.Error())
 		case errors.Is(err, domain.ErrCapacityExceeded):
 			return response.Error(c, fiber.StatusConflict, "capacity_exceeded", err.Error())
 		default:

@@ -13,8 +13,10 @@ var (
 	ErrForbidden    = errors.New("forbidden")
 
 	// Booking / capacity.
-	ErrEventNotBookable = errors.New("event is not open for booking")
-	ErrCapacityExceeded = errors.New("requested tickets exceed available capacity")
+	ErrEventNotBookable  = errors.New("event is not open for booking")
+	ErrCapacityExceeded  = errors.New("requested tickets exceed available capacity")
+	ErrBookingNotPending = errors.New("booking is no longer awaiting confirmation")
+	ErrBookingExpired    = errors.New("booking hold has expired")
 
 	// Registration / uniqueness.
 	ErrUsernameTaken = errors.New("username already taken")

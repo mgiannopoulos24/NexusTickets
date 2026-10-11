@@ -40,7 +40,7 @@ The platform supports four distinct roles: Administrator, Organizer, Attendee, a
 - **Framework**: React 19
 - **Build Tool**: Vite 8+
 - **Package Manager / Runtime**: Bun
-- **Language**: TypeScript 5+ (strict mode)
+- **Language**: TypeScript 7 (strict mode)
 - **Styling**: Tailwind CSS v4
 - **UI Components**: shadcn/ui (Radix primitives + Tailwind)
 - **Icons**: Lucide React
@@ -48,6 +48,8 @@ The platform supports four distinct roles: Administrator, Organizer, Attendee, a
 - **Routing**: React Router v7
 - **State Management**: Redux Toolkit + RTK Query
 - **Forms**: React Hook Form + Zod
+- **Maps**: Leaflet / react-leaflet with OpenStreetMap tiles and Nominatim geocoding
+- **Tests**: Vitest + React Testing Library, Playwright for browser journeys
 
 ---
 
@@ -57,6 +59,7 @@ The platform supports four distinct roles: Administrator, Organizer, Attendee, a
 nexustickets/
 ├── backend/
 │   ├── cmd/server/          # Application entry point
+│   ├── cmd/seed/            # Demo data seeder
 │   ├── internal/
 │   │   ├── config/          # Environment configuration
 │   │   ├── domain/          # Entities, value objects, domain errors
@@ -65,6 +68,7 @@ nexustickets/
 │   │   ├── handler/         # Fiber HTTP handlers (v1)
 │   │   ├── middleware/       # Auth, rate limiting, logging, CORS
 │   │   ├── dto/             # Request and response structs
+│   │   ├── integration/     # API tests against real Postgres + Redis
 │   │   └── wire/            # Dependency injection providers
 │   └── pkg/                 # Shared utilities (response helpers, pagination, UUID)
 ├── frontend/
@@ -78,7 +82,9 @@ nexustickets/
 │   │   ├── types/           # Global TypeScript types and models
 │   │   ├── routes/          # React Router configuration, ProtectedRoute
 │   │   ├── pages/           # Page components, grouped by area
-│   │   └── utils/           # API client (api.ts) and WebSocket client (wsClient.ts)
+│   │   ├── utils/           # API client (api.ts) and WebSocket client (wsClient.ts)
+│   │   └── tests/           # Vitest suites
+│   ├── e2e/                 # Playwright browser journeys
 │   └── ...
 ├── docs/                    # Technical documentation
 ├── report/                  # Academic report (PDF)
@@ -87,8 +93,7 @@ nexustickets/
 ├── Makefile
 ├── .env.example
 ├── README.md
-├── README.el.md
-└── TODO.md
+└── README.el.md
 ```
 
 ---
@@ -125,9 +130,6 @@ It covers the architecture decisions, database design, implementation details fo
 - Go 1.22+
 - Bun 1.x
 - Make
-
-### Prerequisites
-
 - [mkcert](https://github.com/FiloSottile/mkcert) (for local TLS certs)
 
 ### Quick Start (Development — Hot Reload)
@@ -196,11 +198,18 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres re
 ## Available Make Targets
 
 ```
-make dev            Start backend in development mode (hot reload)
-make build          Build production binaries
-make test           Run all backend tests
+make help           List available targets
+make dev            Start the full dev environment (Docker Compose, hot reload)
+make build          Build production images
+make test           Run all tests (prompts for the database)
+make test-full      Start Postgres/Redis, run all tests, stop them
+make test-short     Run all tests without a database
+make backend        Backend tests, integration suite included (needs the DB)
+make backend-short  Backend tests without the database
+make frontend       TypeScript check + Vitest
 make lint           Run golangci-lint
 make wire           Regenerate Wire dependency injection code
+make seed           Seed the database with demo data
 make db-reset       Delete postgres/redis volumes and recreate
 make certs          Generate local TLS certificates via mkcert
 ```
@@ -216,17 +225,21 @@ Key variables:
 ```
 # Backend
 APP_ENV                 development | staging | production
-DATABASE_URL            PostgreSQL connection string
-REDIS_URL               Redis connection string
-JWT_ACCESS_SECRET       Secret for signing access tokens
-JWT_REFRESH_SECRET      Secret for signing refresh tokens
-ADMIN_USERNAME          Default administrator username
-ADMIN_PASSWORD          Default administrator password
+DATABASE_URL            PostgreSQL connection string (or DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD)
+REDIS_URL               Redis connection string (or REDIS_HOST/REDIS_PORT/REDIS_PASSWORD)
+JWT_SECRET              Secret for signing access and refresh tokens
+ADMIN_USERNAME          Built-in administrator, created on first start
+ADMIN_PASSWORD          Its password
+ADMIN_EMAIL             Its e-mail
+RATE_LIMIT_MAX_REQUESTS Requests per window allowed on the auth endpoints
+RATE_LIMIT_WINDOW       Length of that window
 MEDIA_STORAGE_PATH      Directory for uploaded event photos (default: `backend/uploads/media`)
 CORS_ALLOWED_ORIGINS    Comma-separated list of allowed origins
+TLS_CERT_FILE           TLS certificate; with TLS_KEY_FILE the API serves HTTPS
+TLS_KEY_FILE            TLS private key
 
 # Frontend
-VITE_API_BASE_URL       Backend origin only, or empty for same-origin (e.g. http://localhost:8080). The app calls `/api/v1/...` on that origin.
+VITE_WS_URL             WebSocket URL; leave empty to use the page's own origin
 ```
 
 ---
@@ -241,8 +254,12 @@ Public endpoints (no authentication required):
 POST   /api/v1/auth/register
 POST   /api/v1/auth/login
 POST   /api/v1/auth/refresh
+GET    /api/v1/auth/username-available
 GET    /api/v1/events
+GET    /api/v1/events/search
+GET    /api/v1/events/recommended
 GET    /api/v1/events/:id
+GET    /api/v1/categories
 ```
 
 All other endpoints require a valid JWT and appropriate role. Refer to `docs/api.md` for the complete route map.
@@ -253,6 +270,18 @@ All other endpoints require a valid JWT and appropriate role. Refer to `docs/api
 
 | Capability | Guest | Attendee | Organizer | Admin |
 |---|---|---|---|---|
+| Browse and search events | Yes | Yes | Yes | Yes |
+| View event details | Yes | Yes | Yes | Yes |
+| Book tickets | No | Yes | Yes | Yes |
+| View own bookings | No | Yes | Yes | Yes |
+| Create and manage own events | No | No | Yes | Yes |
+| Edit any event | No | No | No | Yes |
+| Send and receive messages | No | Yes | Yes | Yes |
+| Open support requests | No | Yes | Yes | No (answers them) |
+| Approve / reject users | No | No | No | Yes |
+| Export events (XML / JSON) | No | No | No | Yes |
+
+---|---|---|---|---|
 | Browse and search events | Yes | Yes | Yes | Yes |
 | View event details | Yes | Yes | Yes | Yes |
 | Book tickets | No | Yes | Yes | No |
@@ -266,29 +295,37 @@ All other endpoints require a valid JWT and appropriate role. Refer to `docs/api
 
 ## Key Features
 
-**Event management**: Organizers create events with multiple ticket types, capacity enforcement, categories, geolocation, and optional photo galleries. Events follow a lifecycle: Draft, Published, Completed, Cancelled.
+**Event management**: Organizers create events with multiple ticket types, capacity enforcement, categories, location and optional photo galleries. Events follow a lifecycle: Draft, Published, Completed, Cancelled. Cancelling an event cancels all of its bookings and notifies everyone who booked.
 
-**Booking system**: Atomic capacity decrement prevents overbooking under concurrent requests. Bookings are confirmed immediately upon submission and cannot be reversed by the attendee.
+**Booking system**: Booking first places a 10-minute hold on the seats (`pending`) and the attendee then confirms it (`confirmed`). A confirmed booking is final; backing out, or letting the hold expire, cancels it and returns the seats at once. An atomic capacity decrement prevents overbooking under concurrent requests, and a background job releases expired holds every minute.
 
-**Messaging**: Organizers and attendees communicate through an inbox/sent messaging system. Event cancellation triggers bulk notifications to all registered attendees.
+**Search**: The home page searches as you type and shows up to three results, with keyboard navigation. The events page filters by category, title, free text, dates, price and location. Every word matches as a prefix, using PostgreSQL's Greek full-text search.
 
-**Recommendation engine**: Authenticated users receive personalized event suggestions based on their booking history and browsing behavior, powered by a Biased Matrix Factorization model trained periodically on platform data. New users receive popularity-based recommendations.
+**Messaging**: Organizers and attendees linked by a confirmed booking write to each other through an inbox/sent mailbox, with live delivery and an unread badge over WebSocket. The administrator can also write to the organizer of any event still open for booking. Cancelling an event messages everyone who booked it.
 
-**Admin tools**: The administrator manages user registrations (approve or reject) and can export the full event catalogue in XML or JSON format conforming to the assignment DTD.
+**Recommendation engine**: Signed-in users get personalized suggestions from their bookings and the events they viewed, using a Biased Matrix Factorization model retrained periodically. New users and guests get the most popular events.
 
-**Map integration**: Event detail pages display an interactive OpenStreetMap with a marker at the event location.
+**Admin tools**: The administrator approves or rejects registrations, manages users and events, answers support requests, and exports the full event catalogue as XML or JSON following the assignment's DTD.
+
+**Maps**: Event pages show an OpenStreetMap map. Without coordinates, the event's address is looked up instead and marked as approximate. In the registration, account and event forms, typing an address places the pin, and clicking the map or dragging the pin fills in the coordinates and the address.
 
 ---
 
 ## Testing
 
 ```bash
-# Backend unit and integration tests
-cd backend && go test ./...
+# Backend unit tests (Redis required for the service tests)
+make backend-short
 
-# Frontend unit tests
-cd frontend && bun run test
+# Backend with the integration suite (real Postgres + Redis, through the HTTP API)
+make backend
 
-# End-to-end tests
-cd frontend && bun run e2e
+# Frontend type check and unit tests
+make frontend
+
+# Browser journeys with Playwright, against a running dev stack
+cd frontend && bunx playwright install chromium   # once
+E2E_ADMIN_PASSWORD=<ADMIN_PASSWORD> bun run e2e
 ```
+
+See `docs/setup.md` for the variables each suite reads.

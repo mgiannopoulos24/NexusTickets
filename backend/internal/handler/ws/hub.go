@@ -59,13 +59,11 @@ func (h *Hub) Register(c *Client) {
 
 // SendToUser delivers a text frame to every open connection for the given user.
 func (h *Hub) SendToUser(userID uuid.UUID, payload []byte) {
+	// The lock is held while sending: Run removes a client under the write
+	// lock before closing its channel, so every channel seen here is open.
 	h.mu.RLock()
-	set := h.clients[userID]
-	h.mu.RUnlock()
-	if len(set) == 0 {
-		return
-	}
-	for c := range set {
+	defer h.mu.RUnlock()
+	for c := range h.clients[userID] {
 		select {
 		case c.send <- payload:
 		default:

@@ -37,7 +37,7 @@ func TestRecommendationService_TrainsFromDBAndScoresRealEvents(t *testing.T) {
 	}
 
 	svc := NewRecommendationService(bookings, views)
-	svc.train(context.Background())
+	svc.Train(context.Background())
 
 	// Users with history are known; a random user is not.
 	if !svc.HasUser(userA) {
@@ -70,7 +70,7 @@ func TestRecommendationService_TrainsFromDBAndScoresRealEvents(t *testing.T) {
 
 func TestRecommendationService_ColdStartNoData(t *testing.T) {
 	svc := NewRecommendationService(newMockBookingRepo(), newMockViewsRepo())
-	svc.train(context.Background())
+	svc.Train(context.Background())
 
 	if svc.HasUser(uuid.New()) {
 		t.Error("expected no known users with no data")

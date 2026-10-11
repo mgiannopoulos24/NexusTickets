@@ -90,4 +90,38 @@ describe('EventDetailPage (§9)', () => {
       0,
     );
   });
+
+  describe('messaging the organizer as an admin', () => {
+    const messageLink = () => screen.queryByRole('link', { name: 'Μήνυμα στον διοργανωτή' });
+
+    it('opens a draft to the organizer, no booking needed', async () => {
+      signIn({ role: 'admin' });
+      await renderDetail();
+      const href = messageLink()?.getAttribute('href') ?? '';
+      expect(href).toContain('/messages?compose=1');
+      expect(href).toContain('to=org-1');
+      expect(href).toContain(`event=${EVENT_ID}`);
+    });
+
+    it.each(['attendee', 'organizer'] as const)('is not offered to %s', async (role) => {
+      signIn({ role });
+      await renderDetail();
+      expect(messageLink()).not.toBeInTheDocument();
+    });
+
+    it("is not offered on the admin's own event", async () => {
+      signIn({ role: 'admin', id: 'org-1' });
+      await renderDetail();
+      expect(messageLink()).not.toBeInTheDocument();
+    });
+
+    it.each([
+      { status: 'cancelled' as const },
+      { start_at: '2020-01-01T18:00:00Z', end_at: '2020-01-01T20:00:00Z' },
+    ])('is not offered for an event that is over (%o)', async (ev) => {
+      signIn({ role: 'admin' });
+      await renderDetail(ev);
+      expect(messageLink()).not.toBeInTheDocument();
+    });
+  });
 });

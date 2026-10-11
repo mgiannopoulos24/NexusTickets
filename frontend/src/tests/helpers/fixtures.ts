@@ -40,8 +40,9 @@ export function category(over: Partial<Category> = {}): Category {
   return { id: 'cat-1', name: 'Μουσική', ...over };
 }
 
+/** A confirmed booking carries its confirmation time, as the API sends it. */
 export function booking(over: Partial<Booking> = {}): Booking {
-  return {
+  const b: Booking = {
     id: 'bk-1',
     user_id: 'u-1',
     event_id: EVENT_ID,
@@ -53,4 +54,6 @@ export function booking(over: Partial<Booking> = {}): Booking {
     updated_at: '2026-02-01T00:00:00Z',
     ...over,
   };
+  if (b.status === 'confirmed' && !('confirmed_at' in over)) b.confirmed_at = b.created_at;
+  return b;
 }

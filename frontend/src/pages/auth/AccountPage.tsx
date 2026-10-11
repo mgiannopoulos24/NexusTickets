@@ -8,7 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { EventMapEmbed } from '@/components/events/EventMapEmbed';
+import { LocationPicker } from '@/components/events/LocationPicker';
 import { ErrorMessage } from '@/components/shared/ErrorMessage';
 import { SkeletonList } from '@/components/shared/SkeletonList';
 import type { User } from '@/types/models';
@@ -89,17 +89,6 @@ export default function AccountPage() {
       toast.error(apiErrorMessage(err, t('account.saveFailed')));
     }
   };
-
-  const mapPreviewCoords = useMemo(() => {
-    const latRaw = form.latitude.trim().replace(',', '.');
-    const lonRaw = form.longitude.trim().replace(',', '.');
-    if (latRaw === '' || lonRaw === '') return null;
-    const lat = Number.parseFloat(latRaw);
-    const lon = Number.parseFloat(lonRaw);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
-    return { lat, lon };
-  }, [form.latitude, form.longitude]);
 
   if (isLoading) {
     return (
@@ -277,15 +266,11 @@ export default function AccountPage() {
               </div>
             </div>
 
-            {mapPreviewCoords && (
-              <div className="overflow-hidden rounded-lg border border-neutral-200">
-                <EventMapEmbed
-                  latitude={mapPreviewCoords.lat}
-                  longitude={mapPreviewCoords.lon}
-                  className="min-h-[220px] rounded-none"
-                />
-              </div>
-            )}
+            <LocationPicker
+              value={form}
+              onChange={(p) => setEdits((prev) => ({ ...prev, ...p }))}
+              disabled={saving}
+            />
 
             <div className="space-y-2">
               <Label htmlFor="vat_number" className="comfortaa-regular">

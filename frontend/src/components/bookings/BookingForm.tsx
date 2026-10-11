@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -19,8 +19,14 @@ import { Label } from '@/components/ui/label';
 import { useLang } from '@/contexts/langContextCore';
 import { cn } from '@/lib/utils';
 
-import { useCreateBookingMutation } from '@/app/bookingsApi';
-import type { Event } from '@/types/models';
+import { apiErrorMessage } from '@/app/apiEnvelope';
+import {
+  useCancelBookingMutation,
+  useConfirmBookingMutation,
+  useCreateBookingMutation,
+} from '@/app/bookingsApi';
+import { formatCountdown, useHoldCountdown } from '@/hooks/useHoldCountdown';
+import type { Booking, Event } from '@/types/models';
 
 // Built per locale so validation messages follow the language switch.
 function makeSchema(t: (key: string) => string) {
@@ -40,7 +46,11 @@ export function BookingForm({ event }: BookingFormProps) {
   const { t } = useLang();
   const bookingSchema = useMemo(() => makeSchema(t), [t]);
   const [createBooking, { isLoading }] = useCreateBookingMutation();
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [confirmBooking, { isLoading: isConfirming }] = useConfirmBookingMutation();
+  const [cancelBooking] = useCancelBookingMutation();
+  // The pending booking holding the seats while the dialog asks to confirm.
+  const [hold, setHold] = useState<Booking | null>(null);
+  const secondsLeft = useHoldCountdown(hold?.hold_expires_at);
 
   const {
     register,
@@ -65,27 +75,50 @@ export function BookingForm({ event }: BookingFormProps) {
   const quantityForTotal = Number.isFinite(quantity) && quantity > 0 ? quantity : 0;
   const totalCost = selectedTicket ? selectedTicket.price * quantityForTotal : 0;
 
-  // Submitting the form only opens the confirmation step — the booking itself
-  // is sent by handleConfirm, because §9 requires an explicit confirmation that
-  // cannot be undone afterwards.
-  const onSubmit = () => {
-    setIsConfirmOpen(true);
-  };
-
-  const handleConfirm = async () => {
+  // Submitting holds the seats as a PENDING booking and opens the
+  // confirmation step. §9 requires an explicit confirmation that cannot be
+  // undone afterwards; until then the user can still back out, and the seats
+  // go back on sale.
+  const onSubmit = async () => {
     try {
-      await createBooking({
+      const pending = await createBooking({
         event_id: event.id,
         ticket_type_id: selectedTicketId,
         quantity,
       }).unwrap();
-      toast.success(t('booking.success'));
-      setIsConfirmOpen(false);
+      setHold(pending);
     } catch (err: unknown) {
-      const e = err as { data?: { error?: string } };
-      toast.error(e?.data?.error ?? t('booking.error'));
+      toast.error(apiErrorMessage(err, t('booking.error')));
     }
   };
+
+  const handleConfirm = async () => {
+    if (!hold) return;
+    try {
+      await confirmBooking(hold.id).unwrap();
+      toast.success(t('booking.success'));
+    } catch (err: unknown) {
+      toast.error(apiErrorMessage(err, t('booking.error')));
+    } finally {
+      setHold(null);
+    }
+  };
+
+  // Backing out releases the seats now rather than when the hold lapses.
+  // Failure is harmless: the server releases the hold once it expires.
+  const releaseHold = () => {
+    if (!hold) return;
+    void cancelBooking(hold.id);
+    setHold(null);
+  };
+
+  useEffect(() => {
+    if (hold && secondsLeft === 0) {
+      void cancelBooking(hold.id);
+      setHold(null);
+      toast.error(t('booking.expired'));
+    }
+  }, [hold, secondsLeft, cancelBooking, t]);
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -187,7 +220,12 @@ export function BookingForm({ event }: BookingFormProps) {
         {isLoading ? t('booking.processing') : t('booking.submit')}
       </Button>
 
-      <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+      <Dialog
+        open={hold !== null}
+        onOpenChange={(open) => {
+          if (!open) releaseHold();
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="comfortaa-bold">{t('booking.confirmTitle')}</DialogTitle>
@@ -200,22 +238,32 @@ export function BookingForm({ event }: BookingFormProps) {
               <strong>{t('booking.event')}</strong> {event.title}
             </p>
             <p>
-              <strong>{t('booking.ticket')}</strong> {selectedTicket?.name} x {quantity}
+              <strong>{t('booking.ticket')}</strong>{' '}
+              {hold?.ticket_type?.name ?? selectedTicket?.name} x {hold?.quantity ?? quantity}
             </p>
             <p className="comfortaa-bold text-lg font-bold text-[var(--nexus-purple)]">
-              {t('booking.totalLabel', { total: totalCost.toFixed(2) })}
+              {t('booking.totalLabel', { total: (hold?.total_cost ?? totalCost).toFixed(2) })}
             </p>
+            {secondsLeft !== null && (
+              <p className="text-amber-700" role="timer" aria-live="off">
+                {t('booking.holdCountdown', { time: formatCountdown(secondsLeft) })}
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button
+              type="button"
               variant="outline"
-              onClick={() => setIsConfirmOpen(false)}
+              onClick={releaseHold}
+              disabled={isConfirming}
               className="comfortaa-regular"
             >
               {t('booking.cancel')}
             </Button>
             <Button
+              type="button"
               onClick={handleConfirm}
+              disabled={isConfirming}
               className="comfortaa-regular bg-nexus-coral text-white hover:bg-nexus-coral-dark"
             >
               {t('booking.confirm')}

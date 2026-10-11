@@ -86,10 +86,23 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (domain.Us
 	if !ValidEmail(in.Email) {
 		return domain.User{}, domain.Invalid("email address is not valid")
 	}
-	if in.Phone != nil && strings.TrimSpace(*in.Phone) != "" && !ValidPhone(*in.Phone) {
+	// §2 asks every new user for a phone, an address with its location and
+	// a VAT number; the coordinates stay optional (the address locates them).
+	for _, f := range []struct {
+		name  string
+		value *string
+	}{
+		{"phone", in.Phone}, {"address", in.Address}, {"city", in.City},
+		{"country", in.Country}, {"VAT number", in.VATNumber},
+	} {
+		if f.value == nil || strings.TrimSpace(*f.value) == "" {
+			return domain.User{}, domain.Invalid("%s is required", f.name)
+		}
+	}
+	if !ValidPhone(*in.Phone) {
 		return domain.User{}, domain.Invalid("phone number is not valid")
 	}
-	if in.VATNumber != nil && strings.TrimSpace(*in.VATNumber) != "" && !ValidVATNumber(*in.VATNumber) {
+	if !ValidVATNumber(*in.VATNumber) {
 		return domain.User{}, domain.Invalid("VAT number must be 9 digits")
 	}
 

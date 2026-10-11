@@ -39,7 +39,8 @@ func NewBookingService(
 }
 
 // CreateBooking validates the event is published, computes total_cost from ticket price, and
-// creates the booking with atomic availability decrement.
+// creates a PENDING booking with atomic availability decrement. The seats are
+// held until ConfirmBooking, CancelBooking or the hold expiring.
 func (s *BookingService) CreateBooking(ctx context.Context, userID uuid.UUID, role domain.UserRole, in CreateBookingInput) (domain.Booking, error) {
 	// Guests browse only (§Εισαγωγή); every signed-in role may book. The route
 	// and the event page allow the same set, so keep the three in step.
@@ -82,7 +83,7 @@ func (s *BookingService) CreateBooking(ctx context.Context, userID uuid.UUID, ro
 		TicketTypeID: in.TicketTypeID,
 		Quantity:     in.Quantity,
 		TotalCost:    totalCost,
-		Status:       domain.BookingStatusConfirmed,
+		Status:       domain.BookingStatusPending,
 	}
 
 	created, err := s.bookings.CreateBookingWithDecrement(ctx, booking, in.TicketTypeID, in.Quantity)
@@ -93,6 +94,75 @@ func (s *BookingService) CreateBooking(ctx context.Context, userID uuid.UUID, ro
 		return domain.Booking{}, err
 	}
 	return created, nil
+}
+
+// ConfirmBooking turns the caller's PENDING booking into a CONFIRMED one. A
+// confirmed booking is final (§9). A hold that has lapsed, or whose event can
+// no longer be booked, is released instead.
+func (s *BookingService) ConfirmBooking(ctx context.Context, userID, bookingID uuid.UUID) (domain.Booking, error) {
+	b, err := s.ownPendingBooking(ctx, userID, bookingID)
+	if err != nil {
+		return domain.Booking{}, err
+	}
+
+	now := time.Now().UTC()
+	if !b.HoldExpiresAt().After(now) {
+		s.release(ctx, b.ID)
+		return domain.Booking{}, domain.ErrBookingExpired
+	}
+	event, err := s.events.GetByID(ctx, b.EventID)
+	if err != nil {
+		return domain.Booking{}, err
+	}
+	if event.Status != domain.EventStatusPublished {
+		s.release(ctx, b.ID)
+		return domain.Booking{}, domain.ErrEventNotBookable
+	}
+	if !event.EndAt.IsZero() && event.EndAt.Before(now) {
+		s.release(ctx, b.ID)
+		return domain.Booking{}, domain.ErrEventEnded
+	}
+
+	return s.bookings.Confirm(ctx, b.ID, now.Add(-domain.BookingHoldTTL))
+}
+
+// CancelBooking drops the caller's PENDING booking and returns its seats. A
+// confirmed booking cannot be cancelled by the attendee.
+func (s *BookingService) CancelBooking(ctx context.Context, userID, bookingID uuid.UUID) (domain.Booking, error) {
+	b, err := s.ownPendingBooking(ctx, userID, bookingID)
+	if err != nil {
+		return domain.Booking{}, err
+	}
+	if err := s.bookings.Release(ctx, b.ID); err != nil {
+		return domain.Booking{}, err
+	}
+	return s.bookings.GetByID(ctx, b.ID)
+}
+
+// ReleaseExpiredHolds cancels the holds older than BookingHoldTTL and returns
+// their seats. main runs it on a ticker.
+func (s *BookingService) ReleaseExpiredHolds(ctx context.Context) (int64, error) {
+	return s.bookings.ReleaseExpired(ctx, time.Now().UTC().Add(-domain.BookingHoldTTL))
+}
+
+func (s *BookingService) ownPendingBooking(ctx context.Context, userID, bookingID uuid.UUID) (domain.Booking, error) {
+	b, err := s.bookings.GetByID(ctx, bookingID)
+	if err != nil {
+		return domain.Booking{}, err
+	}
+	if b.UserID != userID {
+		return domain.Booking{}, domain.ErrForbidden
+	}
+	if b.Status != domain.BookingStatusPending {
+		return domain.Booking{}, domain.ErrBookingNotPending
+	}
+	return b, nil
+}
+
+// release gives up a hold that can no longer be confirmed. It is best effort:
+// if it fails, the sweeper releases the hold once it expires.
+func (s *BookingService) release(ctx context.Context, bookingID uuid.UUID) {
+	_ = s.bookings.Release(ctx, bookingID)
 }
 
 // BookingContext carries the rows a set of bookings point at, looked up in a

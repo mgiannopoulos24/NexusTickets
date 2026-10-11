@@ -59,6 +59,7 @@ func InitializeApp(db *gorm.DB, redisClient *redis.Client, cfg config.Config) (*
 		AdminExportHandler:    adminExportHandler,
 		RecommendationService: recommendationService,
 		EventService:          eventService,
+		BookingService:        bookingService,
 		Users:                 userRepository,
 	}
 	return appDependencies, nil
@@ -79,6 +80,8 @@ type AppDependencies struct {
 	RecommendationService *service.RecommendationService
 	// EventService is exposed so main can run the COMPLETED sweeper.
 	EventService *service.EventService
+	// BookingService is exposed so main can run the booking-hold sweeper.
+	BookingService *service.BookingService
 	// Users is exposed so main can make sure the built-in admin exists.
 	Users repository.UserRepository
 }

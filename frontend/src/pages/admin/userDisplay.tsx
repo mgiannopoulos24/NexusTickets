@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import type { AccountStatus, UserRole } from '@/types/enums';
 import { cn } from '@/lib/utils';
 import { tr } from '@/lib/i18n';

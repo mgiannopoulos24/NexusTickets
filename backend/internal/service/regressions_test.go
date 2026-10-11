@@ -392,11 +392,11 @@ func TestAuthService_RegisterHonoursRole(t *testing.T) {
 	users := newMockUserRepo()
 	svc := NewAuthService(users, newTestRedis(), "test-secret")
 
-	organizer, err := svc.Register(context.Background(), RegisterInput{
+	organizer, err := svc.Register(context.Background(), withContact(RegisterInput{
 		Username: "neworg", Password: "sup3rsecret", ConfirmPassword: "sup3rsecret",
 		FirstName: "A", LastName: "B", Email: "org@example.test",
 		Role: domain.UserRoleOrganizer,
-	})
+	}))
 	if err != nil {
 		t.Fatalf("register organizer: %v", err)
 	}
@@ -408,10 +408,10 @@ func TestAuthService_RegisterHonoursRole(t *testing.T) {
 	}
 
 	// An empty role still defaults to attendee.
-	attendee, err := svc.Register(context.Background(), RegisterInput{
+	attendee, err := svc.Register(context.Background(), withContact(RegisterInput{
 		Username: "newatt", Password: "sup3rsecret", ConfirmPassword: "sup3rsecret",
 		FirstName: "A", LastName: "B", Email: "att@example.test",
-	})
+	}))
 	if err != nil {
 		t.Fatalf("register attendee: %v", err)
 	}
@@ -420,11 +420,11 @@ func TestAuthService_RegisterHonoursRole(t *testing.T) {
 	}
 
 	// Anything else is refused.
-	if _, err := svc.Register(context.Background(), RegisterInput{
+	if _, err := svc.Register(context.Background(), withContact(RegisterInput{
 		Username: "sneaky", Password: "sup3rsecret", ConfirmPassword: "sup3rsecret",
 		FirstName: "A", LastName: "B", Email: "sneaky@example.test",
 		Role: domain.UserRoleAdmin,
-	}); !errors.Is(err, domain.ErrInvalidRole) {
+	})); !errors.Is(err, domain.ErrInvalidRole) {
 		t.Fatalf("expected ErrInvalidRole, got %v", err)
 	}
 }
@@ -434,10 +434,10 @@ func TestAuthService_RefreshRejectsRejectedAccount(t *testing.T) {
 	svc := NewAuthService(users, newTestRedis(), "test-secret")
 	ctx := context.Background()
 
-	if _, err := svc.Register(ctx, RegisterInput{
+	if _, err := svc.Register(ctx, withContact(RegisterInput{
 		Username: "pending", Password: "sup3rsecret", ConfirmPassword: "sup3rsecret",
 		FirstName: "A", LastName: "B", Email: "pending@example.test",
-	}); err != nil {
+	})); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 	user, err := users.GetByUsername(ctx, "pending")
@@ -468,10 +468,10 @@ func TestAuthService_RefreshPicksUpRoleChange(t *testing.T) {
 	svc := NewAuthService(users, newTestRedis(), "test-secret")
 	ctx := context.Background()
 
-	if _, err := svc.Register(ctx, RegisterInput{
+	if _, err := svc.Register(ctx, withContact(RegisterInput{
 		Username: "promoted", Password: "sup3rsecret", ConfirmPassword: "sup3rsecret",
 		FirstName: "A", LastName: "B", Email: "promoted@example.test",
-	}); err != nil {
+	})); err != nil {
 		t.Fatalf("register: %v", err)
 	}
 	user, _ := users.GetByUsername(ctx, "promoted")

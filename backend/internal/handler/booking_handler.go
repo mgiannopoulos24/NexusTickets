@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -73,6 +74,40 @@ func (h *BookingHandler) Get(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "invalid booking id")
 	}
 	booking, err := h.service.GetBooking(c.Context(), userID, role, id)
+	if err != nil {
+		return err
+	}
+	out, err := h.hydrate(c, []domain.Booking{booking})
+	if err != nil {
+		return err
+	}
+	return response.OK(c, out[0])
+}
+
+// Confirm finalises the caller's pending booking (§9: confirmed bookings are
+// not reversible).
+func (h *BookingHandler) Confirm(c *fiber.Ctx) error {
+	return h.transition(c, h.service.ConfirmBooking)
+}
+
+// Cancel drops the caller's pending booking and releases its seats.
+func (h *BookingHandler) Cancel(c *fiber.Ctx) error {
+	return h.transition(c, h.service.CancelBooking)
+}
+
+func (h *BookingHandler) transition(
+	c *fiber.Ctx,
+	apply func(ctx context.Context, userID, bookingID uuid.UUID) (domain.Booking, error),
+) error {
+	userID, err := authUserID(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid booking id")
+	}
+	booking, err := apply(c.Context(), userID, id)
 	if err != nil {
 		return err
 	}
@@ -176,7 +211,7 @@ func (h *BookingHandler) hydrate(c *fiber.Ctx, bookings []domain.Booking) ([]dto
 }
 
 func toBookingResponse(b domain.Booking) dto.BookingResponse {
-	return dto.BookingResponse{
+	resp := dto.BookingResponse{
 		ID:           b.ID.String(),
 		UserID:       b.UserID.String(),
 		EventID:      b.EventID.String(),
@@ -187,4 +222,13 @@ func toBookingResponse(b domain.Booking) dto.BookingResponse {
 		CreatedAt:    b.CreatedAt.UTC().Format(time.RFC3339),
 		UpdatedAt:    b.UpdatedAt.UTC().Format(time.RFC3339),
 	}
+	if b.ConfirmedAt != nil {
+		v := b.ConfirmedAt.UTC().Format(time.RFC3339)
+		resp.ConfirmedAt = &v
+	}
+	if b.Status == domain.BookingStatusPending {
+		v := b.HoldExpiresAt().UTC().Format(time.RFC3339)
+		resp.HoldExpiresAt = &v
+	}
+	return resp
 }

@@ -1,27 +1,14 @@
-import { render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { screen, within } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
 
 import { Footer } from '@/components/layout/Footer';
+import { renderWithProviders, resetStore, signIn } from '@/tests/helpers/renderWithProviders';
 import type { UserRole } from '@/types/enums';
 
-const mockAuth = vi.fn();
-
-vi.mock('@/hooks/useAuth', () => ({
-  useAuth: () => mockAuth(),
-}));
-
 function renderAs(role: UserRole | null) {
-  mockAuth.mockReturnValue(
-    role === null
-      ? { user: null, isAuthenticated: false }
-      : { user: { id: 'u1', username: 'someone', role }, isAuthenticated: true },
-  );
-  return render(
-    <MemoryRouter>
-      <Footer />
-    </MemoryRouter>,
-  );
+  resetStore();
+  if (role !== null) signIn({ role });
+  return renderWithProviders(<Footer />);
 }
 
 /** Reads the links under a footer column heading. */

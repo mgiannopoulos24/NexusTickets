@@ -1,12 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 
 import MyBookingsPage from '@/pages/bookings/MyBookingsPage';
 import { EVENT_ID, booking } from '@/tests/helpers/fixtures';
 import { mockFetch, type MockFetch } from '@/tests/helpers/mockFetch';
 import { renderWithProviders, resetStore, signIn } from '@/tests/helpers/renderWithProviders';
 
+const toasts = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock('sonner', () => ({ toast: toasts }));
+
 let api: MockFetch;
+
+const inTenMinutes = () => new Date(Date.now() + 10 * 60_000).toISOString();
 
 const withEvent = {
   event: {
@@ -73,5 +78,79 @@ describe('MyBookingsPage (§11)', () => {
     api.fail('/bookings/me', 500, 'boom');
     renderWithProviders(<MyBookingsPage />);
     expect(await screen.findByRole('button', { name: /Δοκιμ|Retry/i })).toBeInTheDocument();
+  });
+
+  it('lets a pending hold be confirmed from the list', async () => {
+    const pending = booking({ ...withEvent, status: 'pending', hold_expires_at: inTenMinutes() });
+    api.on('/confirm', () => ({
+      ...pending,
+      status: 'confirmed',
+      confirmed_at: pending.created_at,
+    }));
+    api.on('/bookings/me', () => [pending]);
+    renderWithProviders(<MyBookingsPage />);
+
+    expect(await screen.findByRole('timer')).toHaveTextContent(/9:5\d|10:00/);
+    // No messaging until the booking is confirmed.
+    expect(screen.queryByRole('link', { name: /Μήνυμα στον διοργανωτή/ })).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Επιβεβαίωση' }));
+    });
+    await waitFor(() => expect(toasts.success).toHaveBeenCalledWith('Η κράτηση επιβεβαιώθηκε'));
+    const [call] = api.matching('/bookings/bk-1/confirm');
+    expect(call.method).toBe('PATCH');
+  });
+
+  it('lets a pending hold be released from the list', async () => {
+    const pending = booking({ ...withEvent, status: 'pending', hold_expires_at: inTenMinutes() });
+    api.on('/cancel', () => ({ ...pending, status: 'cancelled' }));
+    api.on('/bookings/me', () => [pending]);
+    renderWithProviders(<MyBookingsPage />);
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Αποδέσμευση θέσεων' }));
+    });
+    await waitFor(() => expect(toasts.success).toHaveBeenCalledWith('Οι θέσεις αποδεσμεύτηκαν'));
+    expect(api.matching('/bookings/bk-1/cancel')[0].method).toBe('PATCH');
+  });
+
+  it("shows the server's reason when a hold cannot be confirmed", async () => {
+    const pending = booking({ ...withEvent, status: 'pending', hold_expires_at: inTenMinutes() });
+    api.fail('/confirm', 422, 'booking hold has expired');
+    api.on('/bookings/me', () => [pending]);
+    renderWithProviders(<MyBookingsPage />);
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Επιβεβαίωση' }));
+    });
+    await waitFor(() => expect(toasts.error).toHaveBeenCalledWith('booking hold has expired'));
+  });
+
+  it('offers no actions on a hold that has run out', async () => {
+    api.on('/bookings/me', () => [
+      booking({
+        ...withEvent,
+        status: 'pending',
+        hold_expires_at: new Date(Date.now() - 1000).toISOString(),
+      }),
+    ]);
+    renderWithProviders(<MyBookingsPage />);
+
+    expect(await screen.findByText('Η δέσμευση των θέσεων έληξε')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Επιβεβαίωση' })).not.toBeInTheDocument();
+  });
+
+  it('keeps messaging open for a confirmed booking cancelled with its event', async () => {
+    api.on('/bookings/me', () => [
+      booking({
+        ...withEvent,
+        status: 'cancelled',
+        confirmed_at: '2026-02-01T00:00:00Z',
+        event: { ...withEvent.event, status: 'cancelled' },
+      }),
+    ]);
+    renderWithProviders(<MyBookingsPage />);
+    expect(await screen.findByRole('link', { name: /Μήνυμα στον διοργανωτή/ })).toBeInTheDocument();
   });
 });

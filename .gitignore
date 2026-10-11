@@ -8,6 +8,8 @@ backend/server
 
 ## Frontend
 frontend/node_modules/
+frontend/test-results/
+frontend/playwright-report/
 frontend/dist/
 frontend/bun.lockb
 

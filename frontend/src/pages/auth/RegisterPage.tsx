@@ -6,7 +6,7 @@ import * as z from 'zod';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { EventMapEmbed } from '@/components/events/EventMapEmbed';
+import { LocationPicker, type LocationValue } from '@/components/events/LocationPicker';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { useLang } from '@/contexts/langContextCore';
@@ -46,23 +46,28 @@ function makeSchema(t: (key: string) => string) {
       first_name: z.string().trim().min(1, t('register.v.firstName')),
       last_name: z.string().trim().min(1, t('register.v.lastName')),
       email: z.string().trim().email(t('register.v.email')),
-      phone: z.string().refine(
-        (v) => {
-          const t = v.trim();
-          if (t === '') return true;
-          const digits = (t.match(/\d/g) ?? []).length;
-          return /^\+?[\d(][\d\s().-]*$/.test(t) && digits >= 8 && digits <= 15;
-        },
-        { message: t('register.v.phone') },
-      ),
-      address: z.string(),
-      city: z.string(),
-      country: z.string(),
+      phone: z
+        .string()
+        .trim()
+        .min(1, t('register.v.phoneRequired'))
+        .refine(
+          (v) => {
+            const t = v.trim();
+            const digits = (t.match(/\d/g) ?? []).length;
+            return /^\+?[\d(][\d\s().-]*$/.test(t) && digits >= 8 && digits <= 15;
+          },
+          { message: t('register.v.phone') },
+        ),
+      address: z.string().trim().min(1, t('register.v.address')),
+      city: z.string().trim().min(1, t('register.v.city')),
+      country: z.string().trim().min(1, t('register.v.country')),
       latitude: z.string(),
       longitude: z.string(),
-      vat_number: z.string().refine((v) => v.trim() === '' || /^\d{9}$/.test(v.trim()), {
-        message: t('register.v.vat'),
-      }),
+      vat_number: z
+        .string()
+        .trim()
+        .min(1, t('register.v.vatRequired'))
+        .refine((v) => /^\d{9}$/.test(v), { message: t('register.v.vat') }),
       role: z.enum(['attendee', 'organizer']),
     })
     .refine((v) => v.password === v.confirm_password, {
@@ -81,7 +86,8 @@ function mapRegisterError(err: unknown): string {
   const msg = apiErrorMessage(err, '');
   if (msg.includes('username already taken')) return tr('register.e.usernameTaken');
   if (msg.includes('email already taken')) return tr('register.e.emailTaken');
-  if (msg.includes('missing required registration fields')) return tr('register.e.required');
+  if (msg.includes('missing required registration fields') || msg.includes('is required'))
+    return tr('register.e.required');
   if (msg.includes('email address is not valid')) return tr('register.e.email');
   if (msg.includes('phone number is not valid')) return tr('register.e.phone');
   if (msg.includes('VAT number')) return tr('register.e.vat');
@@ -116,6 +122,7 @@ export default function RegisterPage() {
     watch,
     setError,
     clearErrors,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
@@ -139,19 +146,11 @@ export default function RegisterPage() {
 
   const usernameValue = watch('username');
   const roleValue = watch('role');
+  const addressValue = watch('address');
+  const cityValue = watch('city');
+  const countryValue = watch('country');
   const latitudeValue = watch('latitude');
   const longitudeValue = watch('longitude');
-
-  const mapPreviewCoords = useMemo(() => {
-    const latRaw = latitudeValue.trim().replace(',', '.');
-    const lonRaw = longitudeValue.trim().replace(',', '.');
-    if (latRaw === '' || lonRaw === '') return null;
-    const lat = Number.parseFloat(latRaw);
-    const lon = Number.parseFloat(lonRaw);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
-    return { lat, lon };
-  }, [latitudeValue, longitudeValue]);
 
   useEffect(() => {
     if (user) {
@@ -440,7 +439,7 @@ export default function RegisterPage() {
                 htmlFor="reg-phone"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                {t('register.phone')}
+                {t('register.phone')} <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Input
                 id="reg-phone"
@@ -459,7 +458,7 @@ export default function RegisterPage() {
                 htmlFor="reg-vat"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                {t('register.vat')}
+                {t('register.vat')} <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Input
                 id="reg-vat"
@@ -477,14 +476,18 @@ export default function RegisterPage() {
                 htmlFor="reg-address"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                {t('register.address')}
+                {t('register.address')} <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Input
                 id="reg-address"
                 type="text"
                 autoComplete="street-address"
+                className={cn(errors.address && 'border-red-500')}
                 {...register('address')}
               />
+              {errors.address && (
+                <p className="mt-1 text-sm text-[var(--nexus-red)]">{errors.address.message}</p>
+              )}
             </div>
 
             <div>
@@ -492,14 +495,18 @@ export default function RegisterPage() {
                 htmlFor="reg-city"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                {t('register.city')}
+                {t('register.city')} <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Input
                 id="reg-city"
                 type="text"
                 autoComplete="address-level2"
+                className={cn(errors.city && 'border-red-500')}
                 {...register('city')}
               />
+              {errors.city && (
+                <p className="mt-1 text-sm text-[var(--nexus-red)]">{errors.city.message}</p>
+              )}
             </div>
 
             <div>
@@ -507,14 +514,18 @@ export default function RegisterPage() {
                 htmlFor="reg-country"
                 className="mb-1.5 block text-sm font-medium text-neutral-800"
               >
-                {t('register.country')}
+                {t('register.country')} <span className="text-[var(--nexus-red)]">*</span>
               </label>
               <Input
                 id="reg-country"
                 type="text"
                 autoComplete="country-name"
+                className={cn(errors.country && 'border-red-500')}
                 {...register('country')}
               />
+              {errors.country && (
+                <p className="mt-1 text-sm text-[var(--nexus-red)]">{errors.country.message}</p>
+              )}
             </div>
 
             <div>
@@ -549,15 +560,22 @@ export default function RegisterPage() {
               />
             </div>
 
-            {mapPreviewCoords && (
-              <div className="md:col-span-2 overflow-hidden rounded-lg border border-neutral-200">
-                <EventMapEmbed
-                  latitude={mapPreviewCoords.lat}
-                  longitude={mapPreviewCoords.lon}
-                  className="min-h-[220px] rounded-none"
-                />
-              </div>
-            )}
+            <div className="md:col-span-2">
+              <LocationPicker
+                value={{
+                  address: addressValue,
+                  city: cityValue,
+                  country: countryValue,
+                  latitude: latitudeValue,
+                  longitude: longitudeValue,
+                }}
+                onChange={(p) => {
+                  for (const [key, v] of Object.entries(p) as [keyof LocationValue, string][]) {
+                    setValue(key, v, { shouldDirty: true });
+                  }
+                }}
+              />
+            </div>
           </div>
 
           {submitError && (

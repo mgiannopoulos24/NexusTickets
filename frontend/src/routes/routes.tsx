@@ -1,6 +1,5 @@
 import { lazy } from 'react';
 import type { ReactNode } from 'react';
-/* eslint-disable react-refresh/only-export-components */
 
 import type { UserRole } from '@/types/enums';
 

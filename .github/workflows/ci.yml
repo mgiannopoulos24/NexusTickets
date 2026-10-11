@@ -18,8 +18,22 @@ jobs:
         working-directory: backend
 
     # The service-layer tests talk to a real Redis (tokens, unread counters,
-    # rate limiting). Postgres is not needed: repositories are faked in tests.
+    # rate limiting). The integration suite also needs Postgres, where it
+    # creates and drops a scratch database of its own.
     services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
       redis:
         image: redis:7-alpine
         ports:
@@ -57,9 +71,10 @@ jobs:
           # The service tests read this; REDIS_HOST is left unset on purpose
           # because the config tests assert its default.
           TEST_REDIS_ADDR: localhost:6379
+          TEST_DATABASE_URL: postgres://test:test@localhost:5432/test?sslmode=disable
 
   frontend:
-    name: frontend · tsc, eslint, vitest, build
+    name: frontend · tsc, vitest, build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -76,9 +91,6 @@ jobs:
 
       - name: tsc --noEmit
         run: bun run typecheck
-
-      - name: eslint
-        run: bun run lint
 
       - name: vitest
         run: bun run test

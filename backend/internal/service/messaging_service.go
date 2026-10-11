@@ -170,7 +170,18 @@ func (s *MessagingService) syncUnread(ctx context.Context, userID uuid.UUID) (in
 // canCorrespond implements the assignment's §10 rule: organizer/attendee
 // messaging opens up once a booking exists between them, and only then.
 // Requests to the administrators go through support tickets instead.
+//
+// An administrator is also a user who can attend any event, so they may write
+// to the organizer of any event still open for booking without holding a
+// ticket, and that organizer may write back.
 func (s *MessagingService) canCorrespond(ctx context.Context, sender, recipient domain.User) (bool, error) {
+	if ok, err := s.adminToOrganizer(ctx, sender, recipient); ok || err != nil {
+		return ok, err
+	}
+	if ok, err := s.adminToOrganizer(ctx, recipient, sender); ok || err != nil {
+		return ok, err
+	}
+
 	// Either direction: the sender booked one of the recipient's events, or the
 	// recipient booked one of the sender's.
 	booked, err := s.bookings.ExistsBetweenAttendeeAndOrganizer(ctx, sender.ID, recipient.ID)
@@ -183,12 +194,34 @@ func (s *MessagingService) canCorrespond(ctx context.Context, sender, recipient 
 	return s.bookings.ExistsBetweenAttendeeAndOrganizer(ctx, recipient.ID, sender.ID)
 }
 
+// adminToOrganizer reports whether admin is an administrator and organizer
+// runs an event the administrator could still attend.
+func (s *MessagingService) adminToOrganizer(ctx context.Context, admin, organizer domain.User) (bool, error) {
+	if admin.Role != domain.UserRoleAdmin || admin.ID == organizer.ID {
+		return false, nil
+	}
+	return s.events.OrganizesBookableEvent(ctx, organizer.ID, time.Now())
+}
+
 // ListRecipients returns everyone the user may currently write to: the people
-// they share a booking with, in either direction.
+// they share a booking with, in either direction, and for an administrator
+// also the organizers of every event still open for booking.
 func (s *MessagingService) ListRecipients(ctx context.Context, userID uuid.UUID) ([]domain.User, error) {
 	ids, err := s.bookings.ListCorrespondentIDs(ctx, userID)
 	if err != nil {
 		return nil, err
+	}
+
+	me, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if me.Role == domain.UserRoleAdmin {
+		organizers, err := s.events.ListBookableOrganizerIDs(ctx, time.Now())
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, organizers...)
 	}
 
 	byID, err := s.users.ListByIDs(ctx, ids)

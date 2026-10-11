@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -127,19 +128,55 @@ func (m *mockUserRepo) ListByIDs(_ context.Context, ids []uuid.UUID) (map[uuid.U
 	return out, nil
 }
 
+// withContact fills in the contact details §2 makes mandatory, so a test only
+// spells out what it is about.
+func withContact(in RegisterInput) RegisterInput {
+	str := func(v string) *string { return &v }
+	in.Phone = str("+30 210 1234567")
+	in.Address = str("Πανεπιστημίου 30")
+	in.City = str("Αθήνα")
+	in.Country = str("Ελλάδα")
+	in.VATNumber = str("123456789")
+	return in
+}
+
+func TestAuthService_RegisterRequiresContactDetails(t *testing.T) {
+	svc := &AuthService{users: newMockUserRepo(), jwtSecret: "test-secret", accessTTL: 15 * time.Minute, refreshTTL: 7 * 24 * time.Hour}
+	blank := ""
+	cases := map[string]func(*RegisterInput){
+		"phone":      func(in *RegisterInput) { in.Phone = nil },
+		"address":    func(in *RegisterInput) { in.Address = &blank },
+		"city":       func(in *RegisterInput) { in.City = nil },
+		"country":    func(in *RegisterInput) { in.Country = &blank },
+		"VAT number": func(in *RegisterInput) { in.VATNumber = nil },
+	}
+	for field, drop := range cases {
+		in := withContact(RegisterInput{
+			Username: "u", Password: "pass1234", ConfirmPassword: "pass1234",
+			FirstName: "A", LastName: "B", Email: "u@example.com",
+		})
+		drop(&in)
+		_, err := svc.Register(context.Background(), in)
+		var invalid *domain.ValidationError
+		if !errors.As(err, &invalid) || !strings.Contains(err.Error(), field) {
+			t.Errorf("%s missing: got %v", field, err)
+		}
+	}
+}
+
 func TestAuthService_Register(t *testing.T) {
 	users := newMockUserRepo()
 	svc := &AuthService{users: users, jwtSecret: "test-secret", accessTTL: 15 * time.Minute, refreshTTL: 7 * 24 * time.Hour}
 
 	t.Run("success", func(t *testing.T) {
-		user, err := svc.Register(context.Background(), RegisterInput{
+		user, err := svc.Register(context.Background(), withContact(RegisterInput{
 			Username:        "newuser",
 			Password:        "pass1234",
 			ConfirmPassword: "pass1234",
 			FirstName:       "John",
 			LastName:        "Doe",
 			Email:           "john@example.com",
-		})
+		}))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -158,42 +195,42 @@ func TestAuthService_Register(t *testing.T) {
 	})
 
 	t.Run("password mismatch", func(t *testing.T) {
-		_, err := svc.Register(context.Background(), RegisterInput{
+		_, err := svc.Register(context.Background(), withContact(RegisterInput{
 			Username:        "user2",
 			Password:        "pass1",
 			ConfirmPassword: "pass2",
 			FirstName:       "A",
 			LastName:        "B",
 			Email:           "a@b.com",
-		})
+		}))
 		if err == nil {
 			t.Fatal("expected error for mismatched passwords")
 		}
 	})
 
 	t.Run("username taken", func(t *testing.T) {
-		_, err := svc.Register(context.Background(), RegisterInput{
+		_, err := svc.Register(context.Background(), withContact(RegisterInput{
 			Username:        "newuser",
 			Password:        "pass1234",
 			ConfirmPassword: "pass1234",
 			FirstName:       "Jane",
 			LastName:        "Doe",
 			Email:           "jane@example.com",
-		})
+		}))
 		if !errors.Is(err, domain.ErrUsernameTaken) {
 			t.Fatalf("expected ErrUsernameTaken, got %v", err)
 		}
 	})
 
 	t.Run("email taken", func(t *testing.T) {
-		_, err := svc.Register(context.Background(), RegisterInput{
+		_, err := svc.Register(context.Background(), withContact(RegisterInput{
 			Username:        "unique",
 			Password:        "pass1234",
 			ConfirmPassword: "pass1234",
 			FirstName:       "Jane",
 			LastName:        "Doe",
 			Email:           "john@example.com",
-		})
+		}))
 		if !errors.Is(err, domain.ErrEmailTaken) {
 			t.Fatalf("expected ErrEmailTaken, got %v", err)
 		}

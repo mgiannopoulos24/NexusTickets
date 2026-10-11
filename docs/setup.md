@@ -50,6 +50,25 @@ make frontend          # tsc --noEmit + vitest
 make test-full         # starts Postgres/Redis, runs everything, stops them
 ```
 
+The integration suite (`backend/internal/integration`) drives the API end to end against a real Postgres: booking holds and confirmation, concurrent overbooking, event cancellation, messaging over the WebSocket, recommendations, search, registration and the catalogue export. It creates a scratch database through `TEST_DATABASE_URL` and drops it afterwards, and is skipped when that variable is unset or with `-short`. `make backend` points it at the dev compose Postgres; by hand:
+
+```bash
+export TEST_DATABASE_URL="postgres://nexus:<POSTGRES_PASSWORD>@localhost:5432/nexustickets?sslmode=disable"
+cd backend && go test ./internal/integration/
+```
+
+### Browser journeys (Playwright)
+
+`frontend/e2e` drives the app in Chromium against a running stack: registration → admin approval → booking with confirmation, the organizer's booking list, live message delivery, the hero search dropdown and the XML export. The tests create their own users and events, so run them against the dev stack or a throwaway one, never production.
+
+```bash
+cd frontend
+bunx playwright install chromium        # once
+E2E_ADMIN_PASSWORD=<ADMIN_PASSWORD> bun run e2e
+```
+
+`E2E_BASE_URL` (default `https://localhost:5173`) and `E2E_ADMIN_USERNAME` (default `admin`) select another stack. Address lookups to OpenStreetMap are stubbed, so the suite needs no internet access.
+
 The Go service tests talk to a real Redis. With the compose stack running, export its password first:
 
 ```bash

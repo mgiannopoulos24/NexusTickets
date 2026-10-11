@@ -268,6 +268,12 @@ func TestErrorHandler(t *testing.T) {
 	app.Get("/capacity", func(c *fiber.Ctx) error {
 		return domain.ErrCapacityExceeded
 	})
+	app.Get("/booking-not-pending", func(c *fiber.Ctx) error {
+		return domain.ErrBookingNotPending
+	})
+	app.Get("/booking-expired", func(c *fiber.Ctx) error {
+		return domain.ErrBookingExpired
+	})
 	app.Get("/conflict", func(c *fiber.Ctx) error {
 		return domain.ErrUsernameTaken
 	})
@@ -289,6 +295,8 @@ func TestErrorHandler(t *testing.T) {
 		{"/unauthorized", 401},
 		{"/forbidden", 403},
 		{"/capacity", 409},
+		{"/booking-not-pending", 409},
+		{"/booking-expired", 422},
 		{"/conflict", 409},
 		{"/business", 422},
 		{"/fiber-error", 400},

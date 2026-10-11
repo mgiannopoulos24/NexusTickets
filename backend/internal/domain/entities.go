@@ -102,9 +102,21 @@ type Booking struct {
 	TotalCost float64
 	Status    BookingStatus
 
+	// ConfirmedAt is set when the booking is confirmed and kept if the event
+	// is later cancelled, so a cancelled booking that was once held for real
+	// can be told apart from a hold the user abandoned.
+	ConfirmedAt *time.Time
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
+
+// WasConfirmed reports whether the booking was ever confirmed, including one
+// cancelled afterwards because its event was.
+func (b Booking) WasConfirmed() bool { return b.ConfirmedAt != nil }
+
+// HoldExpiresAt is when a PENDING booking lapses.
+func (b Booking) HoldExpiresAt() time.Time { return b.CreatedAt.Add(BookingHoldTTL) }
 
 // Message is one entry of a user's mailbox (assignment §10): a note from one
 // user to another, filed under the sender's "sent" and the recipient's

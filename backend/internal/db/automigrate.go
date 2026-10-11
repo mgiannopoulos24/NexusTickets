@@ -136,6 +136,11 @@ func AutoMigrate(db *gorm.DB) error {
 		`CREATE INDEX IF NOT EXISTS bookings_user_id_created_at_idx ON bookings (user_id, created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS bookings_event_id_created_at_idx ON bookings (event_id, created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS bookings_ticket_type_id_idx ON bookings (ticket_type_id)`,
+		// The hold sweeper scans pending bookings by age.
+		`CREATE INDEX IF NOT EXISTS bookings_pending_created_at_idx ON bookings (created_at) WHERE status = 'pending'`,
+		// Bookings written before the hold step existed were confirmed on the
+		// spot; give them the confirmation time they would have had.
+		`UPDATE bookings SET confirmed_at = created_at WHERE status = 'confirmed' AND confirmed_at IS NULL`,
 		`CREATE INDEX IF NOT EXISTS messages_sender_created_at_idx ON messages (sender_id, created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS messages_recipient_created_at_idx ON messages (recipient_id, created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS messages_recipient_unread_idx ON messages (recipient_id) WHERE read_at IS NULL`,

@@ -165,6 +165,20 @@ describe('EventBookingsPage (§7β, §7δ, §10)', () => {
     expect(screen.getByText('2 κρατήσεις · 3 θέσεις · 52.00 € σύνολο')).toBeInTheDocument();
   });
 
+  it('totals only what was sold, not holds pending or abandoned', async () => {
+    api.on(`/bookings/organizer/events/${EVENT_ID}`, () => [
+      ...bookings,
+      booking({ id: 'bk-held', status: 'pending', quantity: 4, total_cost: 80 }),
+      booking({ id: 'bk-lapsed', status: 'cancelled', quantity: 5, total_cost: 100 }),
+    ]);
+    api.on(`/events/${EVENT_ID}`, () => event());
+    renderWithProviders(<EventBookingsPage />, { route, path });
+
+    expect(await screen.findByText('2 κρατήσεις · 3 θέσεις · 52.00 € σύνολο')).toBeInTheDocument();
+    expect(screen.getByText('Εκκρεμεί')).toBeInTheDocument();
+    expect(screen.getByText('Ακυρωμένη')).toBeInTheDocument();
+  });
+
   it('says so when nobody has booked, and offers no notice to send', async () => {
     api.on(`/bookings/organizer/events/${EVENT_ID}`, () => []);
     api.on(`/events/${EVENT_ID}`, () => event());

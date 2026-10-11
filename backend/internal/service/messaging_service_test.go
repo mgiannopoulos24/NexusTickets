@@ -416,6 +416,64 @@ func TestMessagingService_ListRecipients(t *testing.T) {
 	}
 }
 
+func TestMessagingService_AdminWritesToOrganizersOfOpenEvents(t *testing.T) {
+	f := newMailboxFixture(t)
+	ctx := context.Background()
+	admin := mustUser(t, f.users, domain.UserRoleAdmin)
+	other := mustUser(t, f.users, domain.UserRoleOrganizer)
+	idle := mustUser(t, f.users, domain.UserRoleOrganizer)
+
+	now := time.Now()
+	put := func(org uuid.UUID, status domain.EventStatus, end time.Time) {
+		id := uuid.New()
+		f.events.events[id] = domain.Event{ID: id, OrganizerID: org, Status: status, StartAt: end.Add(-2 * time.Hour), EndAt: end}
+	}
+	put(f.org.ID, domain.EventStatusPublished, now.Add(24*time.Hour))
+	put(other.ID, domain.EventStatusPublished, now.Add(time.Hour))
+	// Nothing the admin could attend: a draft, an ended and a cancelled event.
+	put(idle.ID, domain.EventStatusDraft, now.Add(24*time.Hour))
+	put(idle.ID, domain.EventStatusPublished, now.Add(-time.Hour))
+	put(idle.ID, domain.EventStatusCancelled, now.Add(24*time.Hour))
+
+	send := func(from, to uuid.UUID) error {
+		_, err := f.svc.SendMessage(ctx, SendMessageInput{SenderID: from, RecipientID: to, Subject: "s", Body: "b"})
+		return err
+	}
+
+	// No booking needed in either direction.
+	if err := send(admin.ID, other.ID); err != nil {
+		t.Fatalf("admin -> organizer of an open event: %v", err)
+	}
+	if err := send(other.ID, admin.ID); err != nil {
+		t.Fatalf("organizer replying to the admin: %v", err)
+	}
+	if err := send(admin.ID, idle.ID); !errors.Is(err, domain.ErrMessagingNotAllowed) {
+		t.Fatalf("admin -> organizer with nothing open: %v", err)
+	}
+	if err := send(admin.ID, f.attendee.ID); !errors.Is(err, domain.ErrMessagingNotAllowed) {
+		t.Fatalf("admin -> attendee without a booking: %v", err)
+	}
+	// The organizer rule is for administrators only.
+	if err := send(f.attendee.ID, other.ID); !errors.Is(err, domain.ErrMessagingNotAllowed) {
+		t.Fatalf("attendee -> organizer without a booking: %v", err)
+	}
+
+	people, err := f.svc.ListRecipients(ctx, admin.ID)
+	if err != nil {
+		t.Fatalf("recipients: %v", err)
+	}
+	got := map[uuid.UUID]bool{}
+	for _, p := range people {
+		if got[p.ID] {
+			t.Fatalf("recipient %s listed twice", p.ID)
+		}
+		got[p.ID] = true
+	}
+	if len(got) != 2 || !got[f.org.ID] || !got[other.ID] {
+		t.Fatalf("admin recipients = %v, want the two organizers with open events", got)
+	}
+}
+
 func TestMessagingService_NotifyEventCancellation(t *testing.T) {
 	f := newMailboxFixture(t)
 	ctx := context.Background()

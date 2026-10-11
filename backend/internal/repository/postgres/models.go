@@ -104,6 +104,8 @@ type BookingModel struct {
 	TotalCost float64 `gorm:"not null;type:numeric(12,2)"`
 	Status    string  `gorm:"not null;size:32;index"`
 
+	ConfirmedAt *time.Time `gorm:"column:confirmed_at"`
+
 	CreatedAt time.Time `gorm:"not null;default:now()"`
 	UpdatedAt time.Time `gorm:"not null;default:now()"`
 }

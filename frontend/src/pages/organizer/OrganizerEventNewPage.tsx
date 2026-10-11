@@ -7,7 +7,7 @@ import 'react-time-picker/dist/TimePicker.css';
 import 'react-clock/dist/Clock.css';
 
 import { EventDetailTemplateForm } from '@/components/admin/EventDetailTemplateForm';
-import { EventMapEmbed } from '@/components/events/EventMapEmbed';
+import { LocationPicker } from '@/components/events/LocationPicker';
 import { OrganizerLayout } from '@/components/layout/OrganizerLayout';
 import { apiErrorMessage } from '@/app/apiEnvelope';
 import {
@@ -330,17 +330,6 @@ export default function OrganizerEventNewPage() {
     setEndTime(nextTime);
   };
 
-  const mapPreviewCoords = useMemo(() => {
-    const latRaw = latitude.trim().replace(',', '.');
-    const lonRaw = longitude.trim().replace(',', '.');
-    if (latRaw === '' || lonRaw === '') return null;
-    const lat = Number.parseFloat(latRaw);
-    const lon = Number.parseFloat(lonRaw);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
-    return { lat, lon };
-  }, [latitude, longitude]);
-
   const categoryNames = useMemo(() => (categories ?? []).map((c) => c.name), [categories]);
 
   const toggleCategory = (name: string) => {
@@ -545,20 +534,24 @@ export default function OrganizerEventNewPage() {
                 className="min-h-32"
               />
             </div>
-            {mapPreviewCoords && (
-              <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-                <p className="border-b border-neutral-100 bg-neutral-50 px-4 py-2 text-sm font-medium text-neutral-800 comfortaa-bold">
-                  {t('eventForm.map')}
-                </p>
-                <div className="p-2">
-                  <EventMapEmbed
-                    latitude={mapPreviewCoords.lat}
-                    longitude={mapPreviewCoords.lon}
-                    className="min-h-[280px] rounded-lg"
-                  />
-                </div>
+            <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+              <p className="border-b border-neutral-100 bg-neutral-50 px-4 py-2 text-sm font-medium text-neutral-800 comfortaa-bold">
+                {t('eventForm.map')}
+              </p>
+              <div className="p-3">
+                <LocationPicker
+                  value={{ address, city, country, latitude, longitude }}
+                  onChange={(p) => {
+                    if (p.address !== undefined) setAddress(p.address);
+                    if (p.city !== undefined) setCity(p.city);
+                    if (p.country !== undefined) setCountry(p.country);
+                    if (p.latitude !== undefined) setLatitude(p.latitude);
+                    if (p.longitude !== undefined) setLongitude(p.longitude);
+                  }}
+                  disabled={submitting}
+                />
               </div>
-            )}
+            </div>
             <EventDetailTemplateForm value={detail} onChange={setDetail} disabled={submitting} />
 
             <div className="rounded-2xl border border-neutral-200 p-4">

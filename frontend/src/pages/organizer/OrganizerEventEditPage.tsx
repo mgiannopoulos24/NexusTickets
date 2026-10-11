@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { EventDetailTemplateForm } from '@/components/admin/EventDetailTemplateForm';
-import { EventMapEmbed } from '@/components/events/EventMapEmbed';
+import { LocationPicker } from '@/components/events/LocationPicker';
 import { OrganizerLayout } from '@/components/layout/OrganizerLayout';
 import { apiErrorMessage } from '@/app/apiEnvelope';
 import {
@@ -430,18 +430,6 @@ function OrganizerEventEditForm({
 
   const categoryNames = useMemo(() => categories.map((c) => c.name), [categories]);
 
-  const mapPreviewCoords = useMemo(() => {
-    if (!form) return null;
-    const latRaw = form.latitude.trim().replace(',', '.');
-    const lonRaw = form.longitude.trim().replace(',', '.');
-    if (latRaw === '' || lonRaw === '') return null;
-    const lat = Number.parseFloat(latRaw);
-    const lon = Number.parseFloat(lonRaw);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
-    return { lat, lon };
-  }, [form]);
-
   const toggleCategory = (name: string) => {
     setForm((prev) => {
       if (!prev) return prev;
@@ -713,20 +701,18 @@ function OrganizerEventEditForm({
                 className="min-h-32"
               />
             </div>
-            {mapPreviewCoords && (
-              <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
-                <p className="border-b border-neutral-100 bg-neutral-50 px-4 py-2 text-sm font-medium text-neutral-800 comfortaa-bold">
-                  {t('eventForm.map')}
-                </p>
-                <div className="p-2">
-                  <EventMapEmbed
-                    latitude={mapPreviewCoords.lat}
-                    longitude={mapPreviewCoords.lon}
-                    className="min-h-[280px] rounded-lg"
-                  />
-                </div>
+            <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
+              <p className="border-b border-neutral-100 bg-neutral-50 px-4 py-2 text-sm font-medium text-neutral-800 comfortaa-bold">
+                {t('eventForm.map')}
+              </p>
+              <div className="p-3">
+                <LocationPicker
+                  value={form}
+                  onChange={(p) => setForm((f) => ({ ...f, ...p }))}
+                  disabled={saving || isLocked}
+                />
               </div>
-            )}
+            </div>
             <EventDetailTemplateForm value={detail} onChange={setDetail} disabled={saving} />
           </div>
 

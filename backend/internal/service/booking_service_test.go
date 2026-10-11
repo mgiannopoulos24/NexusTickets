@@ -12,9 +12,13 @@ import (
 
 type mockBookingRepo struct {
 	bookings map[uuid.UUID]domain.Booking
-	byUser   map[uuid.UUID][]domain.Booking
-	byEvent  map[uuid.UUID][]domain.Booking
-	byTT     map[uuid.UUID]int
+	// order keeps insertion order, so lists come back the way they were made.
+	order []uuid.UUID
+	// byTT adds bookings to a ticket type's count without creating them.
+	byTT map[uuid.UUID]int
+	// tickets, when set, has its availability taken and given back as holds
+	// are made and released, like the ticket_types table.
+	tickets *mockTicketTypeRepo
 	// correspondents[{attendee, organizer}] marks an existing booking link,
 	// which is what gates direct messaging.
 	correspondents map[[2]uuid.UUID]bool
@@ -23,42 +27,54 @@ type mockBookingRepo struct {
 func newMockBookingRepo() *mockBookingRepo {
 	return &mockBookingRepo{
 		bookings: make(map[uuid.UUID]domain.Booking),
-		byUser:   make(map[uuid.UUID][]domain.Booking),
-		byEvent:  make(map[uuid.UUID][]domain.Booking),
 		byTT:     make(map[uuid.UUID]int),
 
 		correspondents: make(map[[2]uuid.UUID]bool),
 	}
 }
 
-func (m *mockBookingRepo) add(b domain.Booking) {
+// add stores a booking as-is. A confirmed one gets a confirmation time, as the
+// real repository would have given it.
+func (m *mockBookingRepo) add(b domain.Booking) domain.Booking {
 	b.ID = uuid.New()
+	if b.CreatedAt.IsZero() {
+		b.CreatedAt = time.Now().UTC()
+	}
+	if b.Status == domain.BookingStatusConfirmed && b.ConfirmedAt == nil {
+		at := b.CreatedAt
+		b.ConfirmedAt = &at
+	}
 	m.bookings[b.ID] = b
-	m.byUser[b.UserID] = append(m.byUser[b.UserID], b)
-	m.byEvent[b.EventID] = append(m.byEvent[b.EventID], b)
-	m.byTT[b.TicketTypeID]++
+	m.order = append(m.order, b.ID)
+	return b
+}
+
+func (m *mockBookingRepo) filter(keep func(domain.Booking) bool) []domain.Booking {
+	var out []domain.Booking
+	for _, id := range m.order {
+		if b := m.bookings[id]; keep(b) {
+			out = append(out, b)
+		}
+	}
+	return out
 }
 
 func (m *mockBookingRepo) Create(_ context.Context, booking domain.Booking) (domain.Booking, error) {
-	booking.ID = uuid.New()
-	booking.CreatedAt = time.Now().UTC()
-	m.bookings[booking.ID] = booking
-	return booking, nil
+	return m.add(booking), nil
 }
 
 func (m *mockBookingRepo) CreateBookingWithDecrement(_ context.Context, booking domain.Booking, ttID uuid.UUID, quantity int) (domain.Booking, error) {
 	if quantity <= 0 {
 		return domain.Booking{}, domain.ErrInvalidEventState
 	}
-	booking.ID = uuid.New()
-	booking.CreatedAt = time.Now().UTC()
-	booking.UpdatedAt = time.Now().UTC()
+	if m.tickets != nil {
+		if _, err := m.tickets.DecrementAvailabilityAtomic(context.Background(), ttID, quantity); err != nil {
+			return domain.Booking{}, err
+		}
+	}
 	booking.TicketTypeID = ttID
-	m.bookings[booking.ID] = booking
-	m.byUser[booking.UserID] = append(m.byUser[booking.UserID], booking)
-	m.byEvent[booking.EventID] = append(m.byEvent[booking.EventID], booking)
-	m.byTT[ttID] += quantity
-	return booking, nil
+	booking.UpdatedAt = time.Now().UTC()
+	return m.add(booking), nil
 }
 
 func (m *mockBookingRepo) GetByID(_ context.Context, id uuid.UUID) (domain.Booking, error) {
@@ -70,21 +86,23 @@ func (m *mockBookingRepo) GetByID(_ context.Context, id uuid.UUID) (domain.Booki
 }
 
 func (m *mockBookingRepo) ListByUser(_ context.Context, userID uuid.UUID, limit, offset int) ([]domain.Booking, error) {
-	return m.byUser[userID], nil
+	return m.filter(func(b domain.Booking) bool { return b.UserID == userID }), nil
 }
 
 func (m *mockBookingRepo) ListByEvent(_ context.Context, eventID uuid.UUID, limit, offset int) ([]domain.Booking, error) {
-	return m.byEvent[eventID], nil
+	return m.filter(func(b domain.Booking) bool { return b.EventID == eventID }), nil
 }
 
 func (m *mockBookingRepo) ListConfirmedByEvent(_ context.Context, eventID uuid.UUID, limit, offset int) ([]domain.Booking, error) {
-	return m.byEvent[eventID], nil
+	return m.filter(func(b domain.Booking) bool {
+		return b.EventID == eventID && b.Status == domain.BookingStatusConfirmed
+	}), nil
 }
 
 func (m *mockBookingRepo) ListDistinctConfirmedUserIDsByEvent(_ context.Context, eventID uuid.UUID) ([]uuid.UUID, error) {
 	var ids []uuid.UUID
 	seen := make(map[uuid.UUID]bool)
-	for _, b := range m.byEvent[eventID] {
+	for _, b := range m.filter(func(b domain.Booking) bool { return b.EventID == eventID && b.WasConfirmed() }) {
 		if !seen[b.UserID] {
 			ids = append(ids, b.UserID)
 			seen[b.UserID] = true
@@ -94,21 +112,14 @@ func (m *mockBookingRepo) ListDistinctConfirmedUserIDsByEvent(_ context.Context,
 }
 
 func (m *mockBookingRepo) ListByEventIDs(_ context.Context, eventIDs []uuid.UUID) ([]domain.Booking, error) {
-	var out []domain.Booking
-	for _, b := range m.bookings {
-		for _, eid := range eventIDs {
-			if b.EventID == eid {
-				out = append(out, b)
-			}
-		}
+	want := make(map[uuid.UUID]bool, len(eventIDs))
+	for _, id := range eventIDs {
+		want[id] = true
 	}
-	return out, nil
+	return m.filter(func(b domain.Booking) bool { return want[b.EventID] }), nil
 }
 
 func (m *mockBookingRepo) ExistsBetweenAttendeeAndOrganizer(_ context.Context, attendeeID, organizerID uuid.UUID) (bool, error) {
-	if m.correspondents == nil {
-		return false, nil
-	}
 	return m.correspondents[[2]uuid.UUID{attendeeID, organizerID}], nil
 }
 
@@ -129,27 +140,71 @@ func (m *mockBookingRepo) ListCorrespondentIDs(_ context.Context, userID uuid.UU
 }
 
 func (m *mockBookingRepo) CountByTicketType(_ context.Context, ttID uuid.UUID) (int, error) {
-	return m.byTT[ttID], nil
+	n := len(m.filter(func(b domain.Booking) bool {
+		return b.TicketTypeID == ttID && b.Status != domain.BookingStatusCancelled
+	}))
+	return n + m.byTT[ttID], nil
+}
+
+func (m *mockBookingRepo) CountActiveByEvent(_ context.Context, eventID uuid.UUID) (int, error) {
+	return len(m.filter(func(b domain.Booking) bool {
+		return b.EventID == eventID && b.Status != domain.BookingStatusCancelled
+	})), nil
 }
 
 func (m *mockBookingRepo) ListAllConfirmed(_ context.Context) ([]domain.Booking, error) {
-	out := make([]domain.Booking, 0, len(m.bookings))
-	for _, b := range m.bookings {
-		if b.Status == domain.BookingStatusConfirmed {
-			out = append(out, b)
-		}
-	}
-	return out, nil
+	return m.filter(domain.Booking.WasConfirmed), nil
 }
 
-func (m *mockBookingRepo) SetStatus(_ context.Context, bid uuid.UUID, status domain.BookingStatus) error {
-	b, ok := m.bookings[bid]
-	if !ok {
-		return domain.ErrNotFound
+func (m *mockBookingRepo) Confirm(_ context.Context, id uuid.UUID, holdCutoff time.Time) (domain.Booking, error) {
+	b, ok := m.bookings[id]
+	if !ok || b.Status != domain.BookingStatusPending || !b.CreatedAt.After(holdCutoff) {
+		return domain.Booking{}, domain.ErrBookingNotPending
 	}
-	b.Status = status
-	m.bookings[bid] = b
+	now := time.Now().UTC()
+	b.Status = domain.BookingStatusConfirmed
+	b.ConfirmedAt = &now
+	m.bookings[id] = b
+	return b, nil
+}
+
+func (m *mockBookingRepo) Release(_ context.Context, id uuid.UUID) error {
+	if m.releaseWhere(func(b domain.Booking) bool { return b.ID == id }) == 0 {
+		return domain.ErrBookingNotPending
+	}
 	return nil
+}
+
+func (m *mockBookingRepo) ReleaseExpired(_ context.Context, holdCutoff time.Time) (int64, error) {
+	return m.releaseWhere(func(b domain.Booking) bool { return !b.CreatedAt.After(holdCutoff) }), nil
+}
+
+func (m *mockBookingRepo) CancelByEvent(_ context.Context, eventID uuid.UUID) error {
+	m.releaseWhere(func(b domain.Booking) bool { return b.EventID == eventID })
+	for _, b := range m.filter(func(b domain.Booking) bool {
+		return b.EventID == eventID && b.Status == domain.BookingStatusConfirmed
+	}) {
+		b.Status = domain.BookingStatusCancelled
+		m.bookings[b.ID] = b
+	}
+	return nil
+}
+
+func (m *mockBookingRepo) releaseWhere(match func(domain.Booking) bool) int64 {
+	var n int64
+	for _, b := range m.filter(func(b domain.Booking) bool {
+		return b.Status == domain.BookingStatusPending && match(b)
+	}) {
+		b.Status = domain.BookingStatusCancelled
+		m.bookings[b.ID] = b
+		if m.tickets != nil {
+			tt := m.tickets.types[b.TicketTypeID]
+			tt.Available += b.Quantity
+			m.tickets.types[b.TicketTypeID] = tt
+		}
+		n++
+	}
+	return n
 }
 
 type mockTicketTypeRepo struct {
@@ -256,8 +311,8 @@ func TestBookingService_CreateBooking(t *testing.T) {
 		if b.TotalCost != 20.0 {
 			t.Fatalf("expected total 20.0, got %f", b.TotalCost)
 		}
-		if b.Status != domain.BookingStatusConfirmed {
-			t.Fatalf("expected confirmed, got %s", b.Status)
+		if b.Status != domain.BookingStatusPending {
+			t.Fatalf("expected pending, got %s", b.Status)
 		}
 	})
 
@@ -429,4 +484,255 @@ func TestBookingService_GetEventBookings(t *testing.T) {
 			t.Fatalf("expected ErrForbidden, got %v", err)
 		}
 	})
+}
+
+// bookingFixture is a published event with one ticket type, booked through a
+// repository that tracks seats the way the database does.
+type bookingFixture struct {
+	svc      *BookingService
+	events   *mockEventRepo
+	tickets  *mockTicketTypeRepo
+	bookings *mockBookingRepo
+	eventID  uuid.UUID
+	ttID     uuid.UUID
+	userID   uuid.UUID
+}
+
+func newBookingFixture(t *testing.T) bookingFixture {
+	t.Helper()
+	f := bookingFixture{
+		events:   newMockEventRepo(),
+		tickets:  newMockTicketTypeRepo(),
+		bookings: newMockBookingRepo(),
+		eventID:  uuid.New(),
+		ttID:     uuid.New(),
+		userID:   uuid.New(),
+	}
+	f.bookings.tickets = f.tickets
+	f.svc = NewBookingService(f.events, f.tickets, f.bookings, newMockUserRepo())
+	f.events.events[f.eventID] = domain.Event{
+		ID:          f.eventID,
+		OrganizerID: uuid.New(),
+		Status:      domain.EventStatusPublished,
+		Capacity:    10,
+		StartAt:     time.Now().Add(24 * time.Hour),
+		EndAt:       time.Now().Add(26 * time.Hour),
+	}
+	f.tickets.add(domain.TicketType{ID: f.ttID, EventID: f.eventID, Name: "General", Price: 5, Quantity: 10, Available: 10})
+	return f
+}
+
+// hold books qty seats and returns the pending booking.
+func (f bookingFixture) hold(t *testing.T, qty int) domain.Booking {
+	t.Helper()
+	b, err := f.svc.CreateBooking(context.Background(), f.userID, domain.UserRoleAttendee, CreateBookingInput{
+		EventID: f.eventID, TicketTypeID: f.ttID, Quantity: qty,
+	})
+	if err != nil {
+		t.Fatalf("create booking: %v", err)
+	}
+	return b
+}
+
+func (f bookingFixture) available() int { return f.tickets.types[f.ttID].Available }
+
+// age moves a booking's creation time into the past.
+func (f bookingFixture) age(id uuid.UUID, by time.Duration) {
+	b := f.bookings.bookings[id]
+	b.CreatedAt = b.CreatedAt.Add(-by)
+	f.bookings.bookings[id] = b
+}
+
+func TestBookingService_HoldTakesSeats(t *testing.T) {
+	f := newBookingFixture(t)
+	b := f.hold(t, 3)
+
+	if b.Status != domain.BookingStatusPending {
+		t.Fatalf("status = %s, want pending", b.Status)
+	}
+	if b.WasConfirmed() {
+		t.Fatal("a fresh hold must not carry a confirmation time")
+	}
+	if got := f.available(); got != 7 {
+		t.Fatalf("available = %d, want 7 while held", got)
+	}
+	if want := b.CreatedAt.Add(domain.BookingHoldTTL); !b.HoldExpiresAt().Equal(want) {
+		t.Fatalf("hold expires at %v, want %v", b.HoldExpiresAt(), want)
+	}
+}
+
+func TestBookingService_ConfirmBooking(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("confirms a live hold and keeps the seats", func(t *testing.T) {
+		f := newBookingFixture(t)
+		b := f.hold(t, 2)
+
+		got, err := f.svc.ConfirmBooking(ctx, f.userID, b.ID)
+		if err != nil {
+			t.Fatalf("confirm: %v", err)
+		}
+		if got.Status != domain.BookingStatusConfirmed || !got.WasConfirmed() {
+			t.Fatalf("got status %s, confirmed_at %v", got.Status, got.ConfirmedAt)
+		}
+		if f.available() != 8 {
+			t.Fatalf("available = %d, want 8", f.available())
+		}
+	})
+
+	t.Run("a confirmed booking cannot be confirmed or cancelled again", func(t *testing.T) {
+		f := newBookingFixture(t)
+		b := f.hold(t, 1)
+		if _, err := f.svc.ConfirmBooking(ctx, f.userID, b.ID); err != nil {
+			t.Fatalf("confirm: %v", err)
+		}
+		if _, err := f.svc.ConfirmBooking(ctx, f.userID, b.ID); !errors.Is(err, domain.ErrBookingNotPending) {
+			t.Fatalf("second confirm: got %v, want ErrBookingNotPending", err)
+		}
+		if _, err := f.svc.CancelBooking(ctx, f.userID, b.ID); !errors.Is(err, domain.ErrBookingNotPending) {
+			t.Fatalf("cancel after confirm: got %v, want ErrBookingNotPending", err)
+		}
+		if f.available() != 9 {
+			t.Fatalf("available = %d, want 9: a confirmed seat stays sold", f.available())
+		}
+	})
+
+	t.Run("only the booker may confirm", func(t *testing.T) {
+		f := newBookingFixture(t)
+		b := f.hold(t, 1)
+		if _, err := f.svc.ConfirmBooking(ctx, uuid.New(), b.ID); !errors.Is(err, domain.ErrForbidden) {
+			t.Fatalf("got %v, want ErrForbidden", err)
+		}
+	})
+
+	t.Run("unknown booking", func(t *testing.T) {
+		f := newBookingFixture(t)
+		if _, err := f.svc.ConfirmBooking(ctx, f.userID, uuid.New()); !errors.Is(err, domain.ErrNotFound) {
+			t.Fatalf("got %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("an expired hold is released instead", func(t *testing.T) {
+		f := newBookingFixture(t)
+		b := f.hold(t, 4)
+		f.age(b.ID, domain.BookingHoldTTL+time.Second)
+
+		if _, err := f.svc.ConfirmBooking(ctx, f.userID, b.ID); !errors.Is(err, domain.ErrBookingExpired) {
+			t.Fatalf("got %v, want ErrBookingExpired", err)
+		}
+		if got := f.bookings.bookings[b.ID].Status; got != domain.BookingStatusCancelled {
+			t.Fatalf("status = %s, want cancelled", got)
+		}
+		if f.available() != 10 {
+			t.Fatalf("available = %d, want the 4 seats back", f.available())
+		}
+	})
+
+	t.Run("a hold on an event cancelled meanwhile is released", func(t *testing.T) {
+		f := newBookingFixture(t)
+		b := f.hold(t, 1)
+		ev := f.events.events[f.eventID]
+		ev.Status = domain.EventStatusCancelled
+		f.events.events[f.eventID] = ev
+
+		if _, err := f.svc.ConfirmBooking(ctx, f.userID, b.ID); !errors.Is(err, domain.ErrEventNotBookable) {
+			t.Fatalf("got %v, want ErrEventNotBookable", err)
+		}
+		if got := f.bookings.bookings[b.ID].Status; got != domain.BookingStatusCancelled {
+			t.Fatalf("status = %s, want cancelled", got)
+		}
+	})
+
+	t.Run("a hold on an event that has ended is released", func(t *testing.T) {
+		f := newBookingFixture(t)
+		b := f.hold(t, 1)
+		ev := f.events.events[f.eventID]
+		ev.EndAt = time.Now().Add(-time.Minute)
+		f.events.events[f.eventID] = ev
+
+		if _, err := f.svc.ConfirmBooking(ctx, f.userID, b.ID); !errors.Is(err, domain.ErrEventEnded) {
+			t.Fatalf("got %v, want ErrEventEnded", err)
+		}
+		if f.available() != 10 {
+			t.Fatalf("available = %d, want 10", f.available())
+		}
+	})
+}
+
+func TestBookingService_CancelBooking(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("returns the seats", func(t *testing.T) {
+		f := newBookingFixture(t)
+		b := f.hold(t, 5)
+
+		got, err := f.svc.CancelBooking(ctx, f.userID, b.ID)
+		if err != nil {
+			t.Fatalf("cancel: %v", err)
+		}
+		if got.Status != domain.BookingStatusCancelled || got.WasConfirmed() {
+			t.Fatalf("got status %s, confirmed_at %v", got.Status, got.ConfirmedAt)
+		}
+		if f.available() != 10 {
+			t.Fatalf("available = %d, want 10", f.available())
+		}
+	})
+
+	t.Run("twice is refused and returns nothing more", func(t *testing.T) {
+		f := newBookingFixture(t)
+		b := f.hold(t, 2)
+		if _, err := f.svc.CancelBooking(ctx, f.userID, b.ID); err != nil {
+			t.Fatalf("cancel: %v", err)
+		}
+		if _, err := f.svc.CancelBooking(ctx, f.userID, b.ID); !errors.Is(err, domain.ErrBookingNotPending) {
+			t.Fatalf("got %v, want ErrBookingNotPending", err)
+		}
+		if f.available() != 10 {
+			t.Fatalf("available = %d, want 10", f.available())
+		}
+	})
+
+	t.Run("only the booker may cancel", func(t *testing.T) {
+		f := newBookingFixture(t)
+		b := f.hold(t, 1)
+		if _, err := f.svc.CancelBooking(ctx, uuid.New(), b.ID); !errors.Is(err, domain.ErrForbidden) {
+			t.Fatalf("got %v, want ErrForbidden", err)
+		}
+		if f.available() != 9 {
+			t.Fatalf("available = %d, want 9", f.available())
+		}
+	})
+}
+
+func TestBookingService_ReleaseExpiredHolds(t *testing.T) {
+	f := newBookingFixture(t)
+	stale := f.hold(t, 2)
+	fresh := f.hold(t, 3)
+	confirmed := f.hold(t, 1)
+	if _, err := f.svc.ConfirmBooking(context.Background(), f.userID, confirmed.ID); err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	f.age(stale.ID, domain.BookingHoldTTL+time.Minute)
+	f.age(confirmed.ID, domain.BookingHoldTTL+time.Minute)
+
+	n, err := f.svc.ReleaseExpiredHolds(context.Background())
+	if err != nil {
+		t.Fatalf("release: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("released %d holds, want 1", n)
+	}
+	want := map[uuid.UUID]domain.BookingStatus{
+		stale.ID:     domain.BookingStatusCancelled,
+		fresh.ID:     domain.BookingStatusPending,
+		confirmed.ID: domain.BookingStatusConfirmed,
+	}
+	for id, status := range want {
+		if got := f.bookings.bookings[id].Status; got != status {
+			t.Errorf("booking %s: status %s, want %s", id, got, status)
+		}
+	}
+	if f.available() != 6 {
+		t.Fatalf("available = %d, want 6 (3 held + 1 sold)", f.available())
+	}
 }

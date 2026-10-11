@@ -58,14 +58,14 @@ func NewRecommendationService(bookings repo.BookingRepository, views repo.UserEv
 // StartPeriodicRetraining trains once immediately and then re-trains every
 // retrainInterval. Intended to run in its own goroutine.
 func (s *RecommendationService) StartPeriodicRetraining() {
-	s.train(context.Background())
+	s.Train(context.Background())
 	ticker := time.NewTicker(retrainInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
 			log.Println("recommendation: periodic retraining triggered")
-			s.train(context.Background())
+			s.Train(context.Background())
 		case <-s.stopCh:
 			return
 		}
@@ -82,8 +82,8 @@ type ratingKey struct {
 	event uuid.UUID
 }
 
-// train rebuilds the model from the current DB state and atomically swaps it in.
-func (s *RecommendationService) train(ctx context.Context) {
+// Train rebuilds the model from the current DB state and atomically swaps it in.
+func (s *RecommendationService) Train(ctx context.Context) {
 	start := time.Now()
 
 	bookings, err := s.bookings.ListAllConfirmed(ctx)

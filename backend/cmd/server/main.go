@@ -17,7 +17,6 @@ import (
 
 	"nexustickets/internal/config"
 	"nexustickets/internal/db"
-	"nexustickets/internal/handler"
 	"nexustickets/internal/middleware"
 	"nexustickets/internal/redis"
 	"nexustickets/internal/service"
@@ -27,31 +26,36 @@ import (
 )
 
 // completionSweepInterval is how often published events that have already
-// ended are moved to the COMPLETED state (assignment §7).
+// ended are moved to the COMPLETED state (assignment §7). Booking also checks
+// the clock directly, so a stale status between sweeps cannot let anyone book
+// an event that has already ended.
 const completionSweepInterval = 15 * time.Minute
 
-// runCompletionSweeper advances finished events to COMPLETED on a ticker.
-// Booking also checks the clock directly, so a stale status between sweeps
-// cannot let anyone book an event that has already ended.
-func runCompletionSweeper(events *service.EventService, log *zap.Logger) {
-	sweep := func() {
+// holdSweepInterval is how often lapsed booking holds are cancelled and their
+// seats put back on sale. Confirming checks the hold's age itself, so this
+// only bounds how long abandoned seats stay off sale past the hold.
+const holdSweepInterval = time.Minute
+
+// runSweeper runs sweep now and then on every tick, logging what it changed.
+func runSweeper(name string, interval time.Duration, sweep func(context.Context) (int64, error), log *zap.Logger) {
+	run := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		n, err := events.SweepCompleted(ctx)
+		n, err := sweep(ctx)
 		if err != nil {
-			log.Error("completion sweep failed", zap.Error(err))
+			log.Error(name+" sweep failed", zap.Error(err))
 			return
 		}
 		if n > 0 {
-			log.Info("events marked completed", zap.Int64("count", n))
+			log.Info(name+" sweep", zap.Int64("count", n))
 		}
 	}
 
-	sweep()
-	ticker := time.NewTicker(completionSweepInterval)
+	run()
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for range ticker.C {
-		sweep()
+		run()
 	}
 }
 
@@ -166,17 +170,10 @@ func main() {
 
 	go deps.Hub.Run()
 	go deps.RecommendationService.StartPeriodicRetraining()
-	go runCompletionSweeper(deps.EventService, log)
+	go runSweeper("event completion", completionSweepInterval, deps.EventService.SweepCompleted, log)
+	go runSweeper("booking hold", holdSweepInterval, deps.BookingService.ReleaseExpiredHolds, log)
 
-	v1 := app.Group("/api/v1")
-	handler.RegisterAuthRoutes(v1, deps.AuthHandler, redisClient.Raw)
-	handler.RegisterUserRoutes(v1, deps.UserHandler, cfg.JWTSecret)
-	handler.RegisterEventRoutes(v1, deps.EventHandler, cfg.JWTSecret)
-	handler.RegisterCategoryRoutes(v1, deps.CategoryHandler)
-	handler.RegisterBookingRoutes(v1, deps.BookingHandler, cfg.JWTSecret)
-	handler.RegisterMessageRoutes(v1, deps.MessageHandler, cfg.JWTSecret)
-	handler.RegisterAdminExportRoutes(v1, deps.AdminExportHandler, cfg.JWTSecret)
-	handler.RegisterSupportRoutes(v1, deps.SupportHandler, cfg.JWTSecret)
+	deps.RegisterRoutes(app.Group("/api/v1"), cfg, redisClient.Raw)
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return response.OK(c, fiber.Map{"status": "ok\n"})

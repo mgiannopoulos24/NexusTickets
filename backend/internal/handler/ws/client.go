@@ -34,6 +34,20 @@ func NewClient(hub *Hub, conn *fiberws.Conn, userID uuid.UUID) *Client {
 	}
 }
 
+// Serve runs the connection until it closes. It returns only once both pumps
+// have stopped: the websocket middleware recycles the Conn as soon as its
+// handler returns, so a writer still running then would write to whichever
+// connection reuses it next.
+func (c *Client) Serve() {
+	written := make(chan struct{})
+	go func() {
+		defer close(written)
+		c.WritePump()
+	}()
+	c.ReadPump()
+	<-written
+}
+
 // ReadPump drains the connection until it closes or errors, which is what
 // keeps the pong handler (and so the liveness check) running.
 func (c *Client) ReadPump() {

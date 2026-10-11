@@ -35,10 +35,13 @@ export default function EventBookingsPage() {
   const { data: event } = useGetEventQuery(eventId, { skip: !eventId });
   const [notifyOpen, setNotifyOpen] = useState(false);
 
-  const confirmedCount = (bookings ?? []).filter((b) => b.status === 'confirmed').length;
+  // The figures count what was actually sold: confirmed bookings, including
+  // those cancelled with the event, but not holds still pending or abandoned.
+  const sold = (bookings ?? []).filter((b) => Boolean(b.confirmed_at));
+  const confirmedCount = sold.length;
 
-  const totalSeats = (bookings ?? []).reduce((acc, b) => acc + b.quantity, 0);
-  const totalRevenue = (bookings ?? []).reduce((acc, b) => acc + b.total_cost, 0);
+  const totalSeats = sold.reduce((acc, b) => acc + b.quantity, 0);
+  const totalRevenue = sold.reduce((acc, b) => acc + b.total_cost, 0);
 
   return (
     <OrganizerLayout>
@@ -57,7 +60,7 @@ export default function EventBookingsPage() {
             {(bookings ?? []).length > 0 && (
               <p className="comfortaa-regular mt-1 text-sm text-neutral-600">
                 {t('eventBookings.summary', {
-                  count: bookings?.length ?? 0,
+                  count: confirmedCount,
                   seats: totalSeats,
                   revenue: totalRevenue.toFixed(2),
                 })}

@@ -393,6 +393,9 @@ func (s *EventService) bookedByUser(ctx context.Context, userID uuid.UUID) (map[
 	}
 	booked := make(map[uuid.UUID]bool, len(bookings))
 	for _, b := range bookings {
+		if b.Status == domain.BookingStatusCancelled && !b.WasConfirmed() {
+			continue // an abandoned hold says little about the user
+		}
 		booked[b.EventID] = true
 	}
 	return booked, nil
@@ -710,11 +713,12 @@ func (s *EventService) Delete(ctx context.Context, organizerID, eventID uuid.UUI
 	case domain.EventStatusDraft:
 		return s.events.Delete(ctx, eventID)
 	case domain.EventStatusPublished:
-		bookings, listErr := s.bookings.ListByEvent(ctx, eventID, 1, 0)
-		if listErr != nil {
-			return listErr
+		// Lapsed holds do not count: nobody holds a ticket through them.
+		active, countErr := s.bookings.CountActiveByEvent(ctx, eventID)
+		if countErr != nil {
+			return countErr
 		}
-		if len(bookings) > 0 {
+		if active > 0 {
 			return domain.ErrEventNotDeletable
 		}
 		return s.events.Delete(ctx, eventID)
@@ -768,6 +772,9 @@ func (s *EventService) Cancel(ctx context.Context, organizerID, eventID uuid.UUI
 		return domain.Event{}, nil, domain.ErrEventNotCancellable
 	}
 	if err := s.events.SetStatus(ctx, eventID, domain.EventStatusCancelled); err != nil {
+		return domain.Event{}, nil, err
+	}
+	if err := s.bookings.CancelByEvent(ctx, eventID); err != nil {
 		return domain.Event{}, nil, err
 	}
 	if s.messaging != nil {

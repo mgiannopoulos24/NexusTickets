@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Search } from 'lucide-react';
-import Awesomplete from 'awesomplete';
 
 import { CategoryFilterStrip, SECTION_TABS_HEIGHT_PX } from '@/components/home/CategoryFilterStrip';
+import { HeroSearch } from '@/components/home/HeroSearch';
 import { HeroSlider } from '@/components/home/HeroSlider';
 import { heroBandColor } from '@/components/home/heroBand';
 import type { HomeSectionTab } from '@/components/home/CategoryFilterStrip';
 import HomeQuickNav from '@/components/home/HomeQuickNav';
 import EventCard from '@/components/events/EventCard';
-import { Input } from '@/components/ui/input';
 import { SectionSwiper } from '@/components/ui/section-swiper';
 import {
   homeSectionLabel,
@@ -51,10 +49,6 @@ export default function Home() {
   const { t } = useLang();
   const [active, setActive] = useState<HomeSliderKey>('popular');
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
-  const searchRef = useRef<HTMLInputElement | null>(null);
-  const awesompleteRef = useRef<Awesomplete | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const suggestTimerRef = useRef<number | null>(null);
 
   const sectionTabs = useMemo<HomeSectionTab[]>(
     () =>
@@ -155,83 +149,6 @@ export default function Home() {
   }, [eventsBySection]);
   const [heroIndex, setHeroIndex] = useState(0);
 
-  useEffect(() => {
-    const input = searchRef.current;
-    if (!input) return;
-
-    const a = new Awesomplete(input, {
-      minChars: 2,
-      maxItems: 8,
-      autoFirst: true,
-      replace: (text) => {
-        input.value = text;
-      },
-    });
-    awesompleteRef.current = a;
-
-    const onSelect = (ev: Event) => {
-      void ev;
-    };
-
-    input.addEventListener('awesomplete-selectcomplete', onSelect as unknown as EventListener);
-    return () => {
-      input.removeEventListener('awesomplete-selectcomplete', onSelect as unknown as EventListener);
-      awesompleteRef.current?.destroy();
-      awesompleteRef.current = null;
-    };
-  }, []);
-
-  const fetchSuggestions = useCallback((raw: string) => {
-    const q = raw.trim();
-    if (suggestTimerRef.current !== null) {
-      window.clearTimeout(suggestTimerRef.current);
-      suggestTimerRef.current = null;
-    }
-    suggestTimerRef.current = window.setTimeout(async () => {
-      suggestTimerRef.current = null;
-      const a = awesompleteRef.current;
-      if (!a) return;
-      abortRef.current?.abort();
-      if (q.length < 2) {
-        a.list = [];
-        a.evaluate();
-        return;
-      }
-
-      const controller = new AbortController();
-      abortRef.current = controller;
-      try {
-        const res = await fetch(
-          `/api/v1/events/search?limit=8&offset=0&q=${encodeURIComponent(q)}`,
-          {
-            signal: controller.signal,
-          },
-        );
-        const json = (await res.json()) as {
-          data: Array<Pick<EventModel, 'id' | 'title' | 'venue' | 'city'>> | null;
-          error?: { code: string; message: string } | null;
-        };
-        if (!res.ok || json.error) {
-          a.list = [];
-          a.evaluate();
-          return;
-        }
-        const items = Array.isArray(json.data)
-          ? json.data.map((ev) => ({
-              label: `${ev.title} — ${ev.venue}${ev.city ? `, ${ev.city}` : ''}`,
-              value: ev.title,
-            }))
-          : [];
-        a.list = items;
-        a.evaluate();
-      } catch (err: unknown) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        a.list = [];
-        a.evaluate();
-      }
-    }, 220);
-  }, []);
-
   const scrollToSection = (key: HomeSliderKey) => {
     const id = sectionDomId(key);
     const el = sectionRefs.current[id];
@@ -246,8 +163,11 @@ export default function Home() {
       {/* Hero, after more.com: text + pill search on the left; on the right a
           half-pill colour band (cycling per slide) with a cross-fading poster
           slider straddling its edge. Below md the band goes and the slider
-          stacks under the text. */}
-      <section className="relative overflow-hidden border-b border-neutral-100 bg-white md:h-[min(80vh,550px)]">
+          stacks under the text. Clipped sideways only, so the search results
+          can drop below the hero. Stacked above the sticky category strip
+          (z-30) so those results are not hidden under it, and below the
+          navbar (z-50). */}
+      <section className="relative z-40 overflow-x-clip border-b border-neutral-100 bg-white md:h-[min(80vh,550px)]">
         <div
           className="pointer-events-none absolute inset-y-0 right-0 hidden w-[44vw] rounded-l-full transition-colors duration-1000 md:block"
           style={{ backgroundColor: heroBandColor(heroIndex) }}
@@ -262,32 +182,7 @@ export default function Home() {
               {t('hero.lead')}
             </p>
             <div className="mt-8">
-              <label htmlFor="home-search" className="sr-only">
-                {t('hero.search')}
-              </label>
-              <div className="home-search relative flex items-center">
-                <Search
-                  className="pointer-events-none absolute left-5 z-10 size-[18px] text-[var(--nexus-purple)]"
-                  aria-hidden={true}
-                />
-                <Input
-                  id="home-search"
-                  type="search"
-                  placeholder={t('hero.searchPlaceholder')}
-                  ref={searchRef}
-                  onChange={(e) => fetchSuggestions(e.target.value)}
-                  className={cn(
-                    'h-[60px] w-full rounded-full border-0 bg-white pl-[50px] pr-6 text-[16px] max-[600px]:text-[14px]',
-                    'comfortaa-regular text-neutral-900 ring-0 placeholder:text-neutral-500',
-                    'max-[600px]:placeholder:text-[14px]',
-                    'transition-shadow duration-300 ease-out motion-reduce:transition-none',
-                    'shadow-[0_0_0_1px_rgba(0,0,0,0.1),0_4px_6px_rgba(0,0,0,0.12)]',
-                    'hover:shadow-[0_0_0_1px_rgba(0,0,0,0.15),0_6px_9px_rgba(0,0,0,0.2)]',
-                    'focus-visible:shadow-[0_0_0_2px_var(--nexus-purple),0_4px_6px_rgba(0,0,0,0.2)]',
-                    'focus-visible:ring-0 focus-visible:outline-none',
-                  )}
-                />
-              </div>
+              <HeroSearch />
             </div>
           </div>
 

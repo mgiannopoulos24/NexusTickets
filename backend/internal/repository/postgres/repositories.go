@@ -308,7 +308,15 @@ func (r *eventRepositoryPostgres) Search(ctx context.Context, params repo.Search
 		q = q.Where("title ILIKE ?", "%"+params.Title+"%")
 	}
 	if params.FullText != "" {
-		q = q.Where("search_vector @@ plainto_tsquery('greek', ?)", params.FullText)
+		// Search-as-you-type: words may be half typed, so each matches as a
+		// prefix. The stemmed index does not fold accents or catch every
+		// partial word, so a plain substring match on the short fields backs it up.
+		like := "%" + strings.TrimSpace(params.FullText) + "%"
+		if tsq := prefixTSQuery(params.FullText); tsq != "" {
+			q = q.Where("(search_vector @@ to_tsquery('greek', ?) OR title ILIKE ? OR venue ILIKE ? OR city ILIKE ?)", tsq, like, like, like)
+		} else {
+			q = q.Where("(title ILIKE ? OR venue ILIKE ? OR city ILIKE ?)", like, like, like)
+		}
 	}
 	if params.City != "" {
 		q = q.Where("city ILIKE ?", "%"+params.City+"%")
@@ -544,14 +552,19 @@ func (r *eventRepositoryPostgres) Update(ctx context.Context, event domain.Event
 }
 
 func (r *eventRepositoryPostgres) Delete(ctx context.Context, id uuid.UUID) error {
-	res := r.db.WithContext(ctx).Delete(&EventModel{}, "id = ?", id)
-	if res.Error != nil {
-		return fmt.Errorf("delete event: %w", res.Error)
-	}
-	if res.RowsAffected == 0 {
-		return domain.ErrNotFound
-	}
-	return nil
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := dropAbandonedHolds(tx, "event_id IN ?", []uuid.UUID{id}); err != nil {
+			return err
+		}
+		res := tx.Delete(&EventModel{}, "id = ?", id)
+		if res.Error != nil {
+			return fmt.Errorf("delete event: %w", res.Error)
+		}
+		if res.RowsAffected == 0 {
+			return domain.ErrNotFound
+		}
+		return nil
+	})
 }
 
 func (r *eventRepositoryPostgres) SetStatus(ctx context.Context, id uuid.UUID, status domain.EventStatus) error {
@@ -577,6 +590,32 @@ func (r *eventRepositoryPostgres) MarkCompleted(ctx context.Context, before time
 		return 0, fmt.Errorf("mark events completed: %w", res.Error)
 	}
 	return res.RowsAffected, nil
+}
+
+// bookableEvents narrows a query to published events still running at now.
+func bookableEvents(q *gorm.DB, now time.Time) *gorm.DB {
+	return q.Where("status = ? AND end_time > ?", string(domain.EventStatusPublished), now.UTC())
+}
+
+func (r *eventRepositoryPostgres) ListBookableOrganizerIDs(ctx context.Context, now time.Time) ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := bookableEvents(r.db.WithContext(ctx).Model(&EventModel{}), now).
+		Distinct().Pluck("organizer_id", &ids).Error
+	if err != nil {
+		return nil, fmt.Errorf("list bookable organizers: %w", err)
+	}
+	return ids, nil
+}
+
+func (r *eventRepositoryPostgres) OrganizesBookableEvent(ctx context.Context, organizerID uuid.UUID, now time.Time) (bool, error) {
+	var count int64
+	err := bookableEvents(r.db.WithContext(ctx).Model(&EventModel{}), now).
+		Where("organizer_id = ?", organizerID).
+		Limit(1).Count(&count).Error
+	if err != nil {
+		return false, fmt.Errorf("check bookable events: %w", err)
+	}
+	return count > 0, nil
 }
 
 func (r *eventRepositoryPostgres) SetCategories(ctx context.Context, eventID uuid.UUID, categoryIDs []uuid.UUID) error {
@@ -685,6 +724,9 @@ func (r *eventRepositoryPostgres) SetTicketTypes(ctx context.Context, eventID uu
 			}
 		}
 		if len(removed) > 0 {
+			if err := dropAbandonedHolds(tx, "ticket_type_id IN ?", removed); err != nil {
+				return err
+			}
 			if err := tx.Where("id IN ?", removed).Delete(&TicketTypeModel{}).Error; err != nil {
 				return fmt.Errorf("delete ticket types: %w", err)
 			}
@@ -803,14 +845,19 @@ func (r *ticketTypeRepositoryPostgres) Update(ctx context.Context, ticketType do
 }
 
 func (r *ticketTypeRepositoryPostgres) Delete(ctx context.Context, id uuid.UUID) error {
-	res := r.db.WithContext(ctx).Delete(&TicketTypeModel{}, "id = ?", id)
-	if res.Error != nil {
-		return fmt.Errorf("delete ticket type: %w", res.Error)
-	}
-	if res.RowsAffected == 0 {
-		return domain.ErrNotFound
-	}
-	return nil
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := dropAbandonedHolds(tx, "ticket_type_id IN ?", []uuid.UUID{id}); err != nil {
+			return err
+		}
+		res := tx.Delete(&TicketTypeModel{}, "id = ?", id)
+		if res.Error != nil {
+			return fmt.Errorf("delete ticket type: %w", res.Error)
+		}
+		if res.RowsAffected == 0 {
+			return domain.ErrNotFound
+		}
+		return nil
+	})
 }
 
 func (r *ticketTypeRepositoryPostgres) DecrementAvailabilityAtomic(ctx context.Context, ticketTypeID uuid.UUID, quantity int) (bool, error) {
@@ -953,7 +1000,7 @@ func (r *bookingRepositoryPostgres) ListDistinctConfirmedUserIDsByEvent(ctx cont
 	var ids []uuid.UUID
 	err := r.db.WithContext(ctx).
 		Model(&BookingModel{}).
-		Where("event_id = ? AND status = ?", eventID, string(domain.BookingStatusConfirmed)).
+		Where("event_id = ? AND confirmed_at IS NOT NULL", eventID).
 		Distinct("user_id").
 		Pluck("user_id", &ids).Error
 	if err != nil {
@@ -984,7 +1031,7 @@ func (r *bookingRepositoryPostgres) ListByEventIDs(ctx context.Context, eventIDs
 func (r *bookingRepositoryPostgres) ListAllConfirmed(ctx context.Context) ([]domain.Booking, error) {
 	var models []BookingModel
 	err := r.db.WithContext(ctx).
-		Where("status = ?", string(domain.BookingStatusConfirmed)).
+		Where("confirmed_at IS NOT NULL").
 		Order("created_at ASC").
 		Find(&models).Error
 	if err != nil {
@@ -1005,7 +1052,7 @@ func (r *bookingRepositoryPostgres) ExistsBetweenAttendeeAndOrganizer(ctx contex
 	err := r.db.WithContext(ctx).
 		Model(&BookingModel{}).
 		Joins("JOIN events e ON e.id = bookings.event_id").
-		Where("bookings.user_id = ? AND e.organizer_id = ?", attendeeID, organizerID).
+		Where("bookings.user_id = ? AND e.organizer_id = ? AND bookings.confirmed_at IS NOT NULL", attendeeID, organizerID).
 		Count(&count).Error
 	if err != nil {
 		return false, fmt.Errorf("check booking between users: %w", err)
@@ -1022,12 +1069,12 @@ func (r *bookingRepositoryPostgres) ListCorrespondentIDs(ctx context.Context, us
 		SELECT DISTINCT e.organizer_id AS id
 		FROM bookings b
 		JOIN events e ON e.id = b.event_id
-		WHERE b.user_id = ? AND e.organizer_id <> ?
+		WHERE b.user_id = ? AND e.organizer_id <> ? AND b.confirmed_at IS NOT NULL
 		UNION
 		SELECT DISTINCT b.user_id AS id
 		FROM bookings b
 		JOIN events e ON e.id = b.event_id
-		WHERE e.organizer_id = ? AND b.user_id <> ?
+		WHERE e.organizer_id = ? AND b.user_id <> ? AND b.confirmed_at IS NOT NULL
 	`, userID, userID, userID, userID).Scan(&ids).Error
 	if err != nil {
 		return nil, fmt.Errorf("list correspondents: %w", err)
@@ -1039,7 +1086,7 @@ func (r *bookingRepositoryPostgres) CountByTicketType(ctx context.Context, ticke
 	var count int64
 	err := r.db.WithContext(ctx).
 		Model(&BookingModel{}).
-		Where("ticket_type_id = ?", ticketTypeID).
+		Where("ticket_type_id = ? AND status <> ?", ticketTypeID, string(domain.BookingStatusCancelled)).
 		Count(&count).Error
 	if err != nil {
 		return 0, fmt.Errorf("count bookings by ticket type: %w", err)
@@ -1047,17 +1094,16 @@ func (r *bookingRepositoryPostgres) CountByTicketType(ctx context.Context, ticke
 	return int(count), nil
 }
 
-func (r *bookingRepositoryPostgres) SetStatus(ctx context.Context, bookingID uuid.UUID, status domain.BookingStatus) error {
-	res := r.db.WithContext(ctx).Model(&BookingModel{}).
-		Where("id = ?", bookingID).
-		Update("status", string(status))
-	if res.Error != nil {
-		return fmt.Errorf("set booking status: %w", res.Error)
+func (r *bookingRepositoryPostgres) CountActiveByEvent(ctx context.Context, eventID uuid.UUID) (int, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&BookingModel{}).
+		Where("event_id = ? AND status <> ?", eventID, string(domain.BookingStatusCancelled)).
+		Count(&count).Error
+	if err != nil {
+		return 0, fmt.Errorf("count active bookings by event: %w", err)
 	}
-	if res.RowsAffected == 0 {
-		return domain.ErrNotFound
-	}
-	return nil
+	return int(count), nil
 }
 
 // NewMessageRepositoryPostgres creates a MessageRepository backed by GORM.

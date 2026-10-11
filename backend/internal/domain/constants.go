@@ -1,5 +1,7 @@
 package domain
 
+import "time"
+
 // UserRole represents the role stored in the users table (and embedded into JWT claims).
 type UserRole string
 
@@ -59,6 +61,11 @@ func ValidAssignableRole(r UserRole) bool {
 }
 
 // BookingStatus represents the booking lifecycle stored in bookings.status.
+//
+// A booking starts PENDING: the seats are held while the user reviews it. The
+// explicit confirmation step (§9) moves it to CONFIRMED, after which it cannot
+// be undone. Backing out of the confirmation, letting the hold expire, or the
+// event being cancelled moves it to CANCELLED.
 type BookingStatus string
 
 const (
@@ -66,3 +73,7 @@ const (
 	BookingStatusConfirmed BookingStatus = "confirmed"
 	BookingStatusCancelled BookingStatus = "cancelled"
 )
+
+// BookingHoldTTL is how long a PENDING booking holds its seats before it
+// lapses to CANCELLED and the seats go back on sale.
+const BookingHoldTTL = 10 * time.Minute

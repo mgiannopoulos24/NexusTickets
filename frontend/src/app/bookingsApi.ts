@@ -16,6 +16,19 @@ export interface BookingsPageArgs {
 
 const DEFAULT_LIMIT = 50;
 
+function bookingChangedTags(id: string, booking: Booking | undefined) {
+  return [
+    { type: 'Booking' as const, id },
+    { type: 'Booking' as const, id: 'MINE' },
+    ...(booking
+      ? [
+          { type: 'Booking' as const, id: booking.event_id },
+          { type: 'Event' as const, id: booking.event_id },
+        ]
+      : ['Event' as const]),
+  ];
+}
+
 export const bookingsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     createBooking: builder.mutation<Booking, CreateBookingRequest>({
@@ -28,6 +41,20 @@ export const bookingsApi = baseApi.injectEndpoints({
         'Event',
         { type: 'Event', id: event_id },
       ],
+    }),
+
+    // Confirming or releasing a hold changes the booking, the user's list and,
+    // for a release, the seats left on the event.
+    confirmBooking: builder.mutation<Booking, string>({
+      query: (id) => ({ url: `/bookings/${encodeURIComponent(id)}/confirm`, method: 'PATCH' }),
+      transformResponse: (response: unknown): Booking => unwrap<Booking>(response),
+      invalidatesTags: (result, _err, id) => bookingChangedTags(id, result),
+    }),
+
+    cancelBooking: builder.mutation<Booking, string>({
+      query: (id) => ({ url: `/bookings/${encodeURIComponent(id)}/cancel`, method: 'PATCH' }),
+      transformResponse: (response: unknown): Booking => unwrap<Booking>(response),
+      invalidatesTags: (result, _err, id) => bookingChangedTags(id, result),
     }),
 
     getMyBookings: builder.query<Booking[], BookingsPageArgs | void>({
@@ -63,6 +90,8 @@ export const bookingsApi = baseApi.injectEndpoints({
 
 export const {
   useCreateBookingMutation,
+  useConfirmBookingMutation,
+  useCancelBookingMutation,
   useGetMyBookingsQuery,
   useGetBookingQuery,
   useGetEventBookingsQuery,

@@ -4,7 +4,6 @@
 @import './typography.css';
 @import 'swiper/css';
 @import 'swiper/css/navigation';
-@import 'awesomplete/awesomplete.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -242,13 +241,5 @@ body {
   [aria-disabled='true'],
   [data-disabled] {
     cursor: not-allowed;
-  }
-}
-
-@layer components {
-  /* Awesomplete wraps the search input in an inline-block; let it fill the row. */
-  .home-search .awesomplete {
-    display: block;
-    width: 100%;
   }
 }

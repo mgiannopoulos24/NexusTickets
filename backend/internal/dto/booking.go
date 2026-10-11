@@ -45,6 +45,11 @@ type BookingResponse struct {
 	Status       string  `json:"status"`
 	CreatedAt    string  `json:"created_at"`
 	UpdatedAt    string  `json:"updated_at"`
+	// ConfirmedAt is set once the booking has been confirmed.
+	ConfirmedAt *string `json:"confirmed_at,omitempty"`
+	// HoldExpiresAt is set while the booking is pending: past it, the hold
+	// lapses and the seats go back on sale.
+	HoldExpiresAt *string `json:"hold_expires_at,omitempty"`
 
 	Event      *BookingEventSummary `json:"event,omitempty"`
 	Attendee   *BookingAttendee     `json:"attendee,omitempty"`

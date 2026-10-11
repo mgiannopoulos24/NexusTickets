@@ -108,6 +108,10 @@ export interface Booking {
   status: BookingStatus;
   created_at: string;
   updated_at: string;
+  /** Set once the booking is confirmed; kept if the event is cancelled later. */
+  confirmed_at?: string;
+  /** Set while the booking is pending: when the seat hold lapses. */
+  hold_expires_at?: string;
 
   event?: BookingEventSummary;
   attendee?: BookingAttendee;

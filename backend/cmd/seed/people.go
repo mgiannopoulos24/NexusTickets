@@ -88,6 +88,7 @@ func seedPeople(d *gorm.DB) {
 		if tt.Available < b.qty {
 			continue
 		}
+		created := now.Add(-time.Duration(len(b.n)*7) * time.Hour)
 		err := d.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Model(&postgres.TicketTypeModel{}).Where("id = ? AND available >= ?", tt.ID, b.qty).
 				Update("available", gorm.Expr("available - ?", b.qty)).Error; err != nil {
@@ -96,7 +97,7 @@ func seedPeople(d *gorm.DB) {
 			return tx.Create(&postgres.BookingModel{
 				ID: id, UserID: userID, EventID: eventID, TicketTypeID: tt.ID,
 				Quantity: b.qty, TotalCost: tt.Price * float64(b.qty), Status: "confirmed",
-				CreatedAt: now.Add(-time.Duration(len(b.n)*7) * time.Hour), UpdatedAt: now,
+				ConfirmedAt: &created, CreatedAt: created, UpdatedAt: now,
 			}).Error
 		})
 		if err != nil {
@@ -144,7 +145,13 @@ func seedPeople(d *gorm.DB) {
 	}
 
 	// Support tickets in every state, with threads.
-	admin := mustUUID("00000000-0000-0000-0000-000000000001")
+	// The server creates the built-in admin on startup with a random id, and
+	// seeding keeps that account when it already exists, so look it up.
+	var adminRow postgres.UserModel
+	if err := d.Select("id").Where("username = ?", "admin").First(&adminRow).Error; err != nil {
+		panic(fmt.Errorf("seed tickets: no admin account: %w", err))
+	}
+	admin := adminRow.ID
 	type ticket struct {
 		n, user, subject, status string
 		thread                   []struct {

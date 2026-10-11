@@ -208,8 +208,7 @@ func (h *MessageHandler) ServeWebSocket(c *fiberws.Conn) {
 
 	client := wshub.NewClient(h.hub, c, userID)
 	h.hub.Register(client)
-	go client.WritePump()
-	client.ReadPump()
+	client.Serve()
 }
 
 // mapMessageError turns the service's validation errors into 400s; everything

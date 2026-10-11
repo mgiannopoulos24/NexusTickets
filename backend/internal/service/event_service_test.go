@@ -56,6 +56,31 @@ func (m *mockEventRepo) ListOrganizer(_ context.Context, orgID uuid.UUID, limit,
 	return out, nil
 }
 
+func (m *mockEventRepo) bookable(e domain.Event, now time.Time) bool {
+	return e.Status == domain.EventStatusPublished && e.EndAt.After(now)
+}
+
+func (m *mockEventRepo) ListBookableOrganizerIDs(_ context.Context, now time.Time) ([]uuid.UUID, error) {
+	seen := map[uuid.UUID]bool{}
+	var out []uuid.UUID
+	for _, e := range m.events {
+		if m.bookable(e, now) && !seen[e.OrganizerID] {
+			seen[e.OrganizerID] = true
+			out = append(out, e.OrganizerID)
+		}
+	}
+	return out, nil
+}
+
+func (m *mockEventRepo) OrganizesBookableEvent(_ context.Context, organizerID uuid.UUID, now time.Time) (bool, error) {
+	for _, e := range m.events {
+		if e.OrganizerID == organizerID && m.bookable(e, now) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (m *mockEventRepo) ListPublic(_ context.Context, limit, offset int) ([]domain.Event, error) {
 	var out []domain.Event
 	for _, e := range m.events {
@@ -751,5 +776,59 @@ func TestEventService_RecordEventView(t *testing.T) {
 	err := svc.RecordEventView(context.Background(), uuid.New(), uuid.New())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestEventService_CancelCancelsBookings(t *testing.T) {
+	ctx := context.Background()
+	events := newMockEventRepo()
+	bookings := newMockBookingRepo()
+	svc := NewEventService(events, bookings, newMockCategoryRepo(), newMockEventPhotoRepo(), newMockViewsRepo(), "", nil)
+
+	orgID := uuid.New()
+	ev := domain.Event{ID: uuid.New(), OrganizerID: orgID, Status: domain.EventStatusPublished}
+	events.events[ev.ID] = ev
+	other := domain.Event{ID: uuid.New(), OrganizerID: orgID, Status: domain.EventStatusPublished}
+	events.events[other.ID] = other
+
+	confirmed := bookings.add(domain.Booking{EventID: ev.ID, UserID: uuid.New(), Quantity: 1, Status: domain.BookingStatusConfirmed})
+	pending := bookings.add(domain.Booking{EventID: ev.ID, UserID: uuid.New(), Quantity: 1, Status: domain.BookingStatusPending})
+	elsewhere := bookings.add(domain.Booking{EventID: other.ID, UserID: uuid.New(), Quantity: 1, Status: domain.BookingStatusConfirmed})
+
+	if _, _, err := svc.Cancel(ctx, orgID, ev.ID); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+
+	got := bookings.bookings[confirmed.ID]
+	if got.Status != domain.BookingStatusCancelled || !got.WasConfirmed() {
+		t.Fatalf("confirmed booking: status %s, confirmed_at %v; want cancelled and still marked confirmed", got.Status, got.ConfirmedAt)
+	}
+	if got := bookings.bookings[pending.ID]; got.Status != domain.BookingStatusCancelled || got.WasConfirmed() {
+		t.Fatalf("pending booking: status %s, confirmed_at %v", got.Status, got.ConfirmedAt)
+	}
+	if got := bookings.bookings[elsewhere.ID].Status; got != domain.BookingStatusConfirmed {
+		t.Fatalf("booking on another event changed to %s", got)
+	}
+}
+
+func TestEventService_DeleteIgnoresLapsedHolds(t *testing.T) {
+	ctx := context.Background()
+	events := newMockEventRepo()
+	bookings := newMockBookingRepo()
+	svc := NewEventService(events, bookings, newMockCategoryRepo(), newMockEventPhotoRepo(), newMockViewsRepo(), "", nil)
+
+	orgID := uuid.New()
+	lapsed := domain.Event{ID: uuid.New(), OrganizerID: orgID, Status: domain.EventStatusPublished}
+	held := domain.Event{ID: uuid.New(), OrganizerID: orgID, Status: domain.EventStatusPublished}
+	events.events[lapsed.ID] = lapsed
+	events.events[held.ID] = held
+	bookings.add(domain.Booking{EventID: lapsed.ID, UserID: uuid.New(), Quantity: 1, Status: domain.BookingStatusCancelled})
+	bookings.add(domain.Booking{EventID: held.ID, UserID: uuid.New(), Quantity: 1, Status: domain.BookingStatusPending})
+
+	if err := svc.Delete(ctx, orgID, lapsed.ID); err != nil {
+		t.Fatalf("delete with only a lapsed hold: %v", err)
+	}
+	if err := svc.Delete(ctx, orgID, held.ID); !errors.Is(err, domain.ErrEventNotDeletable) {
+		t.Fatalf("delete with a live hold: got %v, want ErrEventNotDeletable", err)
 	}
 }

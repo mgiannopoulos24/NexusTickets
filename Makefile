@@ -5,6 +5,9 @@ COMPOSE_DEV  := $(COMPOSE) -f docker-compose.dev.yml
 DB_HOST     ?= localhost
 DB_PORT     ?= 5432
 GO           := cd backend && go
+# The integration tests create (and drop) a scratch database through this
+# account; the default is the dev compose superuser.
+TEST_DATABASE_URL ?= postgres://$${POSTGRES_USER:-nexus}:$${POSTGRES_PASSWORD:-nexus_dev_password_change_me}@$(DB_HOST):$(DB_PORT)/$${POSTGRES_DB:-nexustickets}?sslmode=disable
 BUN          := cd frontend && bun
 
 .PHONY: help dev build test test-full test-short lint backend backend-short frontend db-reset seed certs wire
@@ -19,8 +22,8 @@ dev: ## Start full dev environment (Docker Compose)
 build: ## Build production images
 	$(COMPOSE) build
 
-backend: ## Run backend tests (requires DB)
-	$(GO) test ./... -count=1
+backend: ## Run backend tests, integration suite included (requires DB)
+	cd backend && TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test ./... -count=1
 
 backend-short: ## Run backend tests without DB
 	$(GO) test -short ./... -count=1
@@ -61,7 +64,6 @@ test-short: backend-short frontend ## Run all tests without DB
 
 lint: ## Run linters
 	@cd backend && golangci-lint run
-	@cd frontend && bun run lint
 
 db-reset: ## Delete postgres/redis volumes and recreate
 	@echo "This will delete local postgres/redis volumes (DATA LOSS)."

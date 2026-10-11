@@ -10,9 +10,11 @@ import {
   Sofa,
   Ticket,
   Car,
+  MessageSquare,
 } from 'lucide-react';
 
 import { EventMapEmbed } from '@/components/events/EventMapEmbed';
+import { addressQueryText, type AddressQuery } from '@/lib/geocode';
 import { PhotoGallery } from '@/components/events/PhotoGallery';
 import { BookingForm } from '@/components/bookings/BookingForm';
 import { Button } from '@/components/ui/button';
@@ -152,10 +154,36 @@ export default function EventDetailPage() {
     return null;
   }, [event, user]);
 
+  // An administrator may write to the organizer of any event they could still
+  // attend, booking or not; everyone else goes through My Bookings (§10).
+  const adminMessageHref = useMemo(() => {
+    if (!event || user?.role !== 'admin' || user.id === event.organizer_id) return null;
+    if (event.status !== 'published' || hasEnded) return null;
+    const subject = t('myBookings.messageSubject', { title: event.title });
+    return `/messages?compose=1&to=${encodeURIComponent(event.organizer_id)}&event=${encodeURIComponent(event.id)}&subject=${encodeURIComponent(subject)}`;
+  }, [event, user, hasEnded, t]);
+
+  // Where the event is in words: the street address when there is one, else
+  // the venue's name. The map falls back to it when there are no coordinates.
+  const placeQuery = useMemo<AddressQuery | null>(
+    () =>
+      event
+        ? {
+            address: event.address?.trim() || event.venue,
+            city: event.city,
+            country: event.country,
+          }
+        : null,
+    [event],
+  );
+
   const mapsHref = useMemo(() => {
-    if (event?.latitude == null || event?.longitude == null) return null;
-    return `https://www.openstreetmap.org/?mlat=${event.latitude}&mlon=${event.longitude}#map=16/${event.latitude}/${event.longitude}`;
-  }, [event]);
+    if (event?.latitude != null && event?.longitude != null) {
+      return `https://www.openstreetmap.org/?mlat=${event.latitude}&mlon=${event.longitude}#map=16/${event.latitude}/${event.longitude}`;
+    }
+    const text = placeQuery ? addressQueryText(placeQuery) : '';
+    return text ? `https://www.openstreetmap.org/search?query=${encodeURIComponent(text)}` : null;
+  }, [event, placeQuery]);
 
   if (loading) {
     return (
@@ -266,6 +294,18 @@ export default function EventDetailPage() {
                 >
                   <Pencil className="mr-2 size-4" />
                   {t('eventDetail.edit')}
+                </Link>
+              </Button>
+            ) : null}
+            {adminMessageHref ? (
+              <Button
+                asChild
+                variant="outline"
+                className="comfortaa-regular border-neutral-300 text-neutral-800"
+              >
+                <Link to={adminMessageHref}>
+                  <MessageSquare className="mr-2 size-4" aria-hidden />
+                  {t('myBookings.messageOrganizer')}
                 </Link>
               </Button>
             ) : null}
@@ -481,9 +521,13 @@ export default function EventDetailPage() {
                 <p className="mt-2 text-sm font-medium text-neutral-800 comfortaa-regular">
                   {event.venue}
                 </p>
-                {event.latitude != null && event.longitude != null ? (
+                {(event.latitude != null && event.longitude != null) || mapsHref ? (
                   <div className="relative mt-3 overflow-hidden rounded-lg">
-                    <EventMapEmbed latitude={event.latitude} longitude={event.longitude} />
+                    <EventMapEmbed
+                      latitude={event.latitude}
+                      longitude={event.longitude}
+                      address={placeQuery ?? undefined}
+                    />
                     {mapsHref && (
                       <a
                         href={mapsHref}

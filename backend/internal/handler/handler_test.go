@@ -184,3 +184,38 @@ func TestToMessageResponse_NilReadAt(t *testing.T) {
 		t.Fatal("expected nil ReadAt")
 	}
 }
+
+func TestToBookingResponse_Lifecycle(t *testing.T) {
+	created := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
+	base := domain.Booking{ID: uuid.New(), CreatedAt: created, UpdatedAt: created}
+
+	pending := base
+	pending.Status = domain.BookingStatusPending
+	r := toBookingResponse(pending)
+	if r.HoldExpiresAt == nil || *r.HoldExpiresAt != created.Add(domain.BookingHoldTTL).Format(time.RFC3339) {
+		t.Fatalf("pending: hold_expires_at = %v", r.HoldExpiresAt)
+	}
+	if r.ConfirmedAt != nil {
+		t.Fatalf("pending: confirmed_at = %v", *r.ConfirmedAt)
+	}
+
+	at := created.Add(time.Minute)
+	confirmed := base
+	confirmed.Status = domain.BookingStatusConfirmed
+	confirmed.ConfirmedAt = &at
+	r = toBookingResponse(confirmed)
+	if r.HoldExpiresAt != nil {
+		t.Fatalf("confirmed: hold_expires_at = %v", *r.HoldExpiresAt)
+	}
+	if r.ConfirmedAt == nil || *r.ConfirmedAt != at.Format(time.RFC3339) {
+		t.Fatalf("confirmed: confirmed_at = %v", r.ConfirmedAt)
+	}
+
+	// Cancelled with its event: still shows when it was confirmed, no hold.
+	cancelled := confirmed
+	cancelled.Status = domain.BookingStatusCancelled
+	r = toBookingResponse(cancelled)
+	if r.Status != "cancelled" || r.ConfirmedAt == nil || r.HoldExpiresAt != nil {
+		t.Fatalf("cancelled: %+v", r)
+	}
+}

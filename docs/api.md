@@ -36,7 +36,7 @@ not bookable, ticket types exceed capacity, cannot delete/cancel in this state),
 | Method | Path | Body / query | Notes |
 |---|---|---|---|
 | GET | `/auth/username-available?username=` | | `{ "available": bool }` — live check on the register form |
-| POST | `/auth/register` | `username, password, confirm_password, first_name, last_name, email, phone?, address?, city?, country?, latitude?, longitude?, vat_number?, role?` (`attendee` default or `organizer`) | 201, account is `pending` |
+| POST | `/auth/register` | `username, password, confirm_password, first_name, last_name, email, phone, address, city, country, vat_number` (9 digits), `latitude?, longitude?, role?` (`attendee` default or `organizer`) | 201, account is `pending` |
 | POST | `/auth/login` | `username, password` | `access_token, refresh_token, token_type, access_expires_in, refresh_expires_in` |
 | POST | `/auth/refresh` | `refresh_token` | new pair; the old refresh token is revoked; picks up role changes |
 | POST | `/auth/logout` | `refresh_token` | revokes it |
@@ -65,7 +65,7 @@ Public:
 | GET | `/events/:id` | full event with ticket types and photos; records a view for signed-in users; drafts only visible to their organizer / admin |
 | GET | `/categories` | all categories |
 
-Search filters (`/events/search`): `q` (full-text over title, description, venue, city — Greek stemming), `title` (substring), `category_ids` (comma-separated), `city`, `start_at` / `end_at` (RFC 3339 range), `min_price` / `max_price` (any ticket type in range), plus `limit`/`offset` or `after_start`+`after_id`.
+Search filters (`/events/search`): `q` (full-text over title, description, venue, city — Greek stemming, every word matched as a prefix so it works while typing; also a substring match on title, venue and city), `title` (substring), `category_ids` (comma-separated), `city`, `start_at` / `end_at` (RFC 3339 range), `min_price` / `max_price` (any ticket type in range), plus `limit`/`offset` or `after_start`+`after_id`.
 
 Organizer (`/events/organizer`, roles `organizer` and `admin`, own events only):
 
@@ -76,10 +76,10 @@ Organizer (`/events/organizer`, roles `organizer` and `admin`, own events only):
 | PATCH | `/events/organizer/:id` | any subset of the above; `ticket_types` with `id` updates, without creates, omitted ones are deleted (refused if booked) | not allowed on `cancelled` / `completed` |
 | DELETE | `/events/organizer/:id` | | only `draft`, or `published` with zero bookings |
 | PATCH | `/events/organizer/:id/publish` | | `draft → published`; needs ≥1 category and ≥1 ticket type |
-| PATCH | `/events/organizer/:id/cancel` | | `published → cancelled`; bookings kept; every confirmed booker gets a cancellation message |
+| PATCH | `/events/organizer/:id/cancel` | | `published → cancelled`; its bookings become `cancelled` (rows kept, held seats returned); every confirmed booker gets a cancellation message |
 | POST | `/events/organizer/:id/ticket-types` | `{name, price, quantity}` | |
 | PATCH | `/events/organizer/:id/ticket-types/:ticketTypeId` | `{name?, price?, quantity?}` | quantity cannot drop below sold seats |
-| DELETE | `/events/organizer/:id/ticket-types/:ticketTypeId` | | refused if it has bookings |
+| DELETE | `/events/organizer/:id/ticket-types/:ticketTypeId` | | refused while it has pending or confirmed bookings |
 | POST | `/events/organizer/:id/featured-image` | multipart `file` | JPEG/PNG/WebP/GIF by content, ≤ 5 MB |
 | POST | `/events/organizer/:id/photos` | multipart `file` | gallery (`<Media><Photo>`) |
 | DELETE | `/events/organizer/:id/photos/:photoId` | | |
@@ -92,14 +92,18 @@ Event lifecycle: `draft → published → completed` (automatic when `end_at` pa
 
 | Method | Path | Role | Notes |
 |---|---|---|---|
-| POST | `/bookings` | attendee, organizer, admin | `{ event_id, ticket_type_id, quantity }` → 201; event must be `published` and not ended; availability is decremented atomically (`UPDATE … WHERE available >= n`), `409` when short; `total_cost` computed server-side; a booking is final |
+| POST | `/bookings` | attendee, organizer, admin | `{ event_id, ticket_type_id, quantity }` → 201 with a **`pending`** booking that holds the seats for 10 minutes (`hold_expires_at`); event must be `published` and not ended; availability is decremented atomically (`UPDATE … WHERE available >= n`), `409` when short; `total_cost` computed server-side |
+| PATCH | `/bookings/:id/confirm` | the booker | `pending → confirmed` (sets `confirmed_at`); final from then on (§9). `409 booking_not_pending` if not pending; `422` if the hold has lapsed or the event can no longer be booked (the hold is released) |
+| PATCH | `/bookings/:id/cancel` | the booker | `pending → cancelled`, seats returned at once; `409 booking_not_pending` for a confirmed booking |
 | GET | `/bookings/me?limit&offset` | same | own bookings with event / ticket type summaries (`event.organizer_id` lets the client open a message to the organizer) |
 | GET | `/bookings/:id` | attendee, organizer | own booking, or a booking on one of the organizer's events |
 | GET | `/bookings/organizer/events/:eventId?limit&offset` | organizer | all bookings of one of my events, with attendee identity |
 
+**Lifecycle.** `pending` (seats held) → `confirmed` by the booker, or → `cancelled` when the booker backs out, the hold lapses (a sweeper runs every minute) or the event is cancelled. A confirmed booking keeps `confirmed_at` even if its event is cancelled later; that is what opens messaging, counts towards the organizer's totals and feeds the recommender. Holds that lapsed without confirmation do not block deleting the event or its ticket types.
+
 ## Messages — `/messages` (auth; assignment §10)
 
-Two users may write to each other once a booking links them (attendee ↔ organizer of a booked event) — nothing else opens the channel. Requests to the administration are **support tickets** (below), not messages.
+Two users may write to each other once a confirmed booking links them (attendee ↔ organizer of a booked event). The one other opening: an administrator, who can attend any event, may write to the organizer of any event still open for booking (published, not ended) without a booking, and that organizer may reply. Requests to the administration are **support tickets** (below), not messages.
 
 | Method | Path | Notes |
 |---|---|---|
@@ -107,7 +111,7 @@ Two users may write to each other once a booking links them (attendee ↔ organi
 | GET | `/messages/sent?limit&offset` | sent, newest first |
 | GET | `/messages/:id` | one message; for the recipient this **marks it read** and updates the unread counter |
 | GET | `/messages/unread-count` | `{ "count": n }` (Redis-cached) |
-| GET | `/messages/recipients` | who the caller may write to: their booking contacts |
+| GET | `/messages/recipients` | who the caller may write to: their booking contacts, plus, for an administrator, the organizers of every open event |
 | POST | `/messages` | `{ recipient_id, subject, body, event_id? }` → 201; `403` without a booking link |
 | POST | `/messages/events/:eventId/notify` | organizer of the event only; `{ subject, body }` → `{ "recipients": n }`; one message per confirmed booker |
 | DELETE | `/messages/:id` | removes the message from the **caller's** folder only |

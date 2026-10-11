@@ -92,6 +92,7 @@ erDiagram
         int quantity
         numeric total_cost
         varchar status "pending | confirmed | cancelled"
+        timestamptz confirmed_at "nullable: set on confirmation"
         timestamptz created_at
     }
     messages {
